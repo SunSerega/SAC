@@ -2,6 +2,10 @@
 {$reference System.Windows.Forms.dll}
 {$reference System.Drawing.dll}
 
+{$resource 'Icon.ico'}
+{$resource 'SAC.exe'}
+{$resource 'Editor.exe'}
+
 uses System.Windows.Forms;
 uses System.Drawing;
 uses Microsoft.Win32;
@@ -51,6 +55,8 @@ type
     SubParStateChanged: procedure;
     
     
+    
+    function GetCBChecked: boolean; virtual := false;
     
     function AddParams(params a: array of Parameter): Parameter;
     begin
@@ -150,6 +156,13 @@ type
           cb_p.SetChecked;
     end;
     
+    function GetCBChecked: boolean; override;
+    begin
+      if (Parent is CBParameter) and not Parent.GetCBChecked then exit;
+      
+      Result := CB.CheckState <> CheckState.Unchecked;
+    end;
+    
     procedure ValidatePos(x:integer; var y, maxw:integer); override;
     begin
       CB.Location := new Point(x, y);
@@ -195,9 +208,11 @@ type
       
       SubParStateChanged +=
       procedure->
-      if SubPar.All(p->(not (p is CBParameter)) or ((p as CBParameter).CB.CheckState = CheckState.Checked)) then
-        self.CB.CheckState := CheckState.Checked else
-        self.CB.CheckState := CheckState.Indeterminate;
+      if SubPar.Count <> 0 then
+        if SubPar.All(p->  (not (p is CBParameter)) or ((p as CBParameter).CB.CheckState = CheckState.Checked)  ) then
+          self.CB.CheckState := CheckState.Checked else
+        if SubPar.Any(p->  (not (p is CBParameter)) or ((p as CBParameter).CB.CheckState = CheckState.Checked)  ) then
+          self.CB.CheckState := CheckState.Indeterminate;
     end;
   
   end;
@@ -327,24 +342,101 @@ type
       System.IO.Directory.Delete(dir);
     end;
     
+    class procedure FileFromStream(fname: string; str: System.IO.Stream);
+    begin
+      var bw := new System.IO.BinaryWriter(System.IO.File.Create(fname));
+      var br := new System.IO.BinaryReader(str);
+      bw.BaseStream.SetLength(str.Length);
+      while str.Position < str.Length do
+      begin
+        bw.Write(br.ReadBytes(4096));
+        br.BaseStream.Flush;
+        bw.BaseStream.Flush;
+      end;
+      br.Close;
+      bw.Close;
+    end;
+    
+    procedure Load;
+    begin
+      
+      if not System.IO.File.Exists('Icon.ico') then FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
+      if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
+      if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
+      
+      System.IO.Directory.CreateDirectory('Lib');
+      
+      
+      
+      var root := Registry.ClassesRoot;
+      
+      
+      
+      var key := root.OpenSubKey('.sac');
+      
+      var DotSac := (key <> nil) and (key.GetValue('') as string = RegName);
+      if not (DotSac or root.ExistsSubKey(RegName)) then
+      begin
+        if key <> nil then key.Close;
+        exit;
+      end;
+      (Parameter.All['AssociateDotSAC'] as CBParameter).CB.Checked := DotSac;
+      
+      if key <> nil then
+      begin
+        
+        (Parameter.All['AddCreateNew'] as CBParameter).CB.Checked := key.ExistsSubKey('ShellNew');
+        
+        key.Close;
+      end;
+      
+      
+      
+      key := root.OpenSubKey(RegName);
+      if key <> nil then
+      begin
+        
+        (Parameter.All['AddIcon'] as CBParameter).CB.Checked := key.ExistsSubKey('DefaultIcon');
+        
+        var shell := key.OpenSubKey('shell');
+        if shell <> nil then
+        begin
+          
+          (Parameter.All['AddConfLaunch'] as CBParameter).CB.Checked := shell.ExistsSubKey('params_exec');
+          (Parameter.All['AddEdit'] as CBParameter).CB.Checked := shell.ExistsSubKey('edit');
+          
+          shell.Close;
+        end;
+        
+        key.Close;
+      end;
+      
+      
+      
+      foreach var p in Parameter.All.Values do
+        if p.SubParStateChanged <> nil then
+          p.SubParStateChanged();
+      
+    end;
+    
     procedure Save;
     begin
-      if (Parameter.All['AssociateDotSAC'] as CBParameter).CB.CheckState <> CheckState.Unchecked then
+      if Parameter.All['AssociateDotSAC'].GetCBChecked then
       begin
         var key := Registry.ClassesRoot.OpenSubKey('.sac');
         if key <> nil then
         begin
           
           while (key <> nil) and (key.GetValue('') as string <> RegName) do
-          begin
-            var res := MessageBox.Show(string.Format(Translate('Text|reg used'), key.GetValue('')),Translate('Cap|reg used'),MessageBoxButtons.AbortRetryIgnore);
-            if res = System.Windows.Forms.DialogResult.Abort then exit else
-            if res = System.Windows.Forms.DialogResult.Ignore then break else
-            begin
-              key.Close;
-              key := Registry.ClassesRoot.OpenSubKey('.sac');
+            case MessageBox.Show(string.Format(Translate('Text|reg used'), key.GetValue('')),Translate('Cap|reg used'),MessageBoxButtons.AbortRetryIgnore) of
+              System.Windows.Forms.DialogResult.Ignore: break;
+              System.Windows.Forms.DialogResult.Retry:
+              begin
+                key.Close;
+                key := Registry.ClassesRoot.OpenSubKey('.sac');
+              end;
+              else exit;
             end;
-          end;
           
           if key <> nil then key.Close;
           if Registry.ClassesRoot.ExistsSubKey('.sac') then
@@ -354,7 +446,7 @@ type
         key := Registry.ClassesRoot.CreateSubKey('.sac');
         key.SetValue('', RegName);
         
-        if (Parameter.All['AddCreateNew'] as CBParameter).CB.Checked then
+        if Parameter.All['AddCreateNew'].GetCBChecked then
         begin
           var ShellNew := key.OpenOrCreate('ShellNew');
           ShellNew.SetValue('NullFile','');
@@ -375,12 +467,13 @@ type
           if key.GetValue('version') is integer(var val) then
             if val > version then
               if
-                MessageBox.Show(string.Format(Translate('Text|reg ver'), val, version),Translate('Cap|reg ver'),MessageBoxButtons.OKCancel) =
-                System.Windows.Forms.DialogResult.Cancel
+                MessageBox.Show(string.Format(Translate('Text|reg ver'), val, version),Translate('Cap|reg ver'),MessageBoxButtons.OKCancel) <>
+                System.Windows.Forms.DialogResult.OK
               then exit;
         end else
           key := Registry.ClassesRoot.CreateSubKey(RegName);
         
+        key.SetValue('', 'SAC Script');
         key.SetValue('version', version);
         
         var shell := key.OpenOrCreate('shell');
@@ -394,7 +487,7 @@ type
         exec_com.Close;
         exec.Close;
         
-        if (Parameter.All['AddIcon'] as CBParameter).CB.Checked then
+        if Parameter.All['AddIcon'].GetCBChecked then
         begin
           System.IO.File.Copy('Icon.ico',ProgFilesName+'\Icon.ico', true);
           
@@ -409,7 +502,7 @@ type
             shell.DeleteSubKey('DefaultIcon');
         end;
         
-        if (Parameter.All['AddConfLaunch'] as CBParameter).CB.Checked then
+        if Parameter.All['AddConfLaunch'].GetCBChecked then
         begin
           var params_exec := shell.OpenOrCreate('params_exec');
           params_exec.SetValue('', Translate('ConfLaunch'));
@@ -423,7 +516,7 @@ type
             shell.DeleteSubKeyTree('params_exec');
         end;
         
-        if (Parameter.All['AddEdit'] as CBParameter).CB.Checked then
+        if Parameter.All['AddEdit'].GetCBChecked then
         begin
           System.IO.File.Copy('Editor.exe',ProgFilesName+'\Editor.exe', true);
           
@@ -441,10 +534,6 @@ type
         
         shell.Close;
         key.Close;
-        
-//        if MessageBox.Show('text','cap',MessageBoxButtons.YesNo) = System.Windows.Forms.DialogResult.Yes then
-//          writeln('+') else
-//          writeln('-');
         
       end else
       begin
@@ -465,6 +554,12 @@ type
         end;
         
         DeleteFolder(ProgFilesName);
+        if System.IO.Directory.EnumerateFileSystemEntries('Lib').Count = 0 then
+          System.IO.Directory.Delete('Lib');
+        
+        System.IO.File.Delete('Icon.ico');
+        System.IO.File.Delete('SAC.exe');
+        System.IO.File.Delete('Editor.exe');
       end;
     end;
     
@@ -498,6 +593,7 @@ type
       
       
       
+      Load;
       Parameter.ValidateNameAll;
     end;
   

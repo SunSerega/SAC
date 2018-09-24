@@ -11,9 +11,8 @@ type
     
     procedure Start;
     begin
-      var ToDo := 0;
-      writeln('Типо запускаюсь');
-      readln;
+      var s := new Script(path);
+      s.Start;
     end;
     
     constructor(fname: string);
@@ -137,45 +136,90 @@ type
     
   end;
 
+procedure OpenLib;
+begin
+  
+  System.Console.SetWindowSize(60,50);
+  System.Console.SetBufferSize(60,50);
+  WW := System.Console.BufferWidth;
+  WH := System.Console.BufferHeight;
+  
+  var root := new Lib;
+  while true do
+  begin
+    var ans := root.AskUser;
+    if ans is ScriptFile(var sf) then
+      sf.Start else
+      root := ans as Lib;
+  end;
+  
+end;
+
+procedure WriteHelp;
+begin
+  
+  Writeln('No lib folder found');
+  Writeln('You can still start script from random folder');
+  Writeln('Start this .exe with Command line arguments, like this:');
+  Writeln('"folder_of_this_exe\SAC.exe" "YourScriptName.sac"');
+  Writeln('You can also specify arguments, after .sac file name');
+  Writeln('Here is list of them:');
+  Writeln('"!conf" - will start program to help add arguments');
+  Writeln('"!line=5" - will start script from line 5');
+  Writeln('"!debug" - will start script with debug (slower, but more info)');
+  Writeln('Thats all for now, press Enter to exit');
+  Readln;
+  Halt;
+  
+end;
+
+procedure HelpWithArgs;
+begin
+  var ToDo := 0;
+  writeln('Nothing in "!conf" start yet');
+  writeln('Press Enter to continue without config');
+  readln;
+end;
+
+procedure StartScript;
+begin
+  
+  WW := Max(60,CommandLineArgs[0].Length+5+1);
+  WH := System.Console.LargestWindowHeight-1;
+  System.Console.SetWindowSize(WW,WH);
+  System.Console.SetBufferSize(WW,WH);
+  writeln($'File {CommandLineArgs[0]}');
+  
+  var debug := false;
+  var conf := false;
+  var line := 0;
+  
+  foreach var arg:string in CommandLineArgs.Skip(1) do
+    if arg = '!conf' then conf := true else
+    if arg = '!debug' then debug := true else
+    if arg.StartsWith('!line=') then
+    begin
+      if not TryStrToInt(arg.Split('=')[1], line) then
+        Writeln($'Error parsing {arg.Split(''='')[1]} to integer in "!line" arg');
+    end else
+  ;
+  
+  if conf then HelpWithArgs;
+  
+  var s := new Script(CommandLineArgs[0], debug, line);
+  s.Start;
+  
+end;
+
 begin
   try
-    if CommandLineArgs.Length = 0 then
-      if System.IO.Directory.Exists('lib') then
-      begin
-        System.Console.SetWindowSize(60,50);
-        System.Console.SetBufferSize(60,50);
-        WW := System.Console.BufferWidth;
-        WH := System.Console.BufferHeight;
-        
-        var root := new Lib;
-        while true do
-        begin
-          var ans := root.AskUser;
-          if ans is ScriptFile(var sf) then
-            sf.Start else
-            root := ans as Lib;
-        end;
-      end else
-      begin
-        
-        Writeln('No lib folder found');
-        Writeln('You can still start script from random folder');
-        Writeln('Start this .exe with Command line arguments, like this:');
-        Writeln('"folder_of_this_exe\SAC.exe" "YourScriptName.sac"');
-        Writeln('You can also specify arguments, after .sac file name');
-        Writeln('Here is list of them:');
-        Writeln('"!conf" - will start program to help add arguments');
-        Writeln('"!line=5" - will start script from line 5');
-        Writeln('Thats all for now, press Enter to exit');
-        Readln;
-        Halt;
-        
-      end else
-    begin
-      
-      writeln($'File {CommandLineArgs[0]}');
-      
-    end;
+    
+    if CommandLineArgs.Any then
+      StartScript else
+    if System.IO.Directory.Exists('lib') then
+      OpenLib else
+      WriteHelp;
+    
   except
     on e: Exception do
     begin

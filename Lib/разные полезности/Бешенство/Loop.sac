@@ -1,0 +1,14 @@
+
+MoveMouse sx+d sy+0
+Sleep 1000
+
+MoveMouse sx+0 sy+d
+Sleep 1000
+
+MoveMouse sx-d sy+0
+Sleep 1000
+
+MoveMouse sx+0 sy-d
+Sleep 1000
+
+Next Loop.txt

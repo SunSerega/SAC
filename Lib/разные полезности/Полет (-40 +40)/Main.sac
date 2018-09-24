@@ -1,0 +1,21 @@
+MoveMouse WW/2 WH/2-(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2-(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2-(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2-(400/3)
+
+Susp
+
+MoveMouse WW/2 WH/2+(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2+(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2+(400/3)
+Sleep 500
+MoveMouse WW/2 WH/2+(400/3)
+
+Susp
+
+Next Main.txt

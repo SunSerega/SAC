@@ -1,0 +1,11 @@
+Key 70 1
+Key 70 2
+Sleep 1
+Key 13 1
+Key 13 2
+Sleep 30
+Key 13 1
+Key 13 2
+Sleep 1
+ Sleep 1000/15000
+Next Main.txt
