@@ -4,7 +4,7 @@ How to install/uninstall:
 - Automatic method:
 
 Installing:
-1. Download [Config.exe](http://Download/Config.exe);
+1. Download [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe);
 2. Place it in folder, you want SAC to be installed to;
 3. Launch it, check all modules, you want to be installed, and press OK;
 4. Restart your computer, for all icons and context menu shortcuts to be properly allocated.
@@ -13,7 +13,7 @@ Some space in ProgramFiles and in Registry would be used.
 Uninstalling would clear everything that was created.
 
 Uninstalling:
-1. Download [Config.exe](http://Download/Config.exe) (skip first 2 if you still have it);
+1. Download [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe) (skip first 2 if you still have it);
 2. Place it in folder, you installed SAC to;
 3. Launch it, uncheck all and press OK.
 4. Restart your computer, for all icons and context menu shortcuts to be properly deleted.
@@ -26,8 +26,8 @@ If "Lib" folder is not empty - it would not be deleted when uninstalling.
 
 Installing:
 1. Download all modules you need:
-	- [SAC.exe](http://Download/SAC.exe) - runs scripts;
-	- [Editor.exe](http://Download/Editor.exe) - editor for scripts;
+	- [SAC.exe](http://github.com/SunSerega/SAC/raw/master/SAC.exe) - runs scripts;
+	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/Editor.exe) - editor for scripts;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts;
 
 To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line, like this:
