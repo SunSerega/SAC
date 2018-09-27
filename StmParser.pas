@@ -1,6 +1,8 @@
 ﻿unit StmParser;
 //ToDo файлы могут быть подключены и динамичным связыванием. Это надо предусмотреть
 //ToDo Добавить DeduseVarsTypes и Instatiate в ExprParser
+//ToDo удобный способ смотреть изначальный и оптимизированный вариант
+//ToDo контекст ошибок, то есть при оптимизации надо сохранять номер строки
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly

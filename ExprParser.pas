@@ -1,12 +1,14 @@
 ﻿unit ExprParser;
-//ToDo программа - тестировщик
+//ToDo больше регионов. БОЛЬШЕ
+//ToDo переделать ToString
+//ToDo ""+0.0 выводит "0,0"
 
 //ToDo Исключения:  Переделать все исключение (надо общий source и т.п.)
-//ToDo Исключения:  Рантайм исключения как отдельный набор
 //ToDo Calc:        Обрабатывать значения nil - как строку "" и число 0 сразу
 //ToDo Openup:      Реализовать. "a"+(5+3) нельзя открывать
 //ToDo Optimize:    ClampLists
 //ToDo Optimize:    вызов функции для литералов
+//ToDo функции:     что то для нарезания строк
 
 //ToDo Optimize:    оптимизация 5*(i+0) => 5*(+i) => 5*i
 // -Если константа 1 и она =0 - удалить
@@ -92,7 +94,7 @@ type
     
     //ToDo 1/"abc" and "abc"/1 - same error
     public constructor(exprs: List<IOptExpr>) :=
-    inherited Create($'Can''t divide string expressions (was divided by {exprs.SkipLast.JoinIntoString('','')} and {exprs.Last})');
+    inherited Create($'Can''t divide string expressions (was divided by *error**error**error**error**error**err&%@^*$&%^');
     
   end;
   CannotMltALotStringsException = class(ExprCompilingException)
@@ -107,10 +109,10 @@ type
     inherited Create($'Can''t use operator^ on string ({e})');
     
   end;
-  CanNotConvertRTIException = class(ExprCompilingException)
+  TooBigStringException = class(ExprCompilingException)
     
-    public constructor(e: IOptExpr; r: real) :=
-    inherited Create($'*error text under construction*');
+  end;
+  CanNotMltNegStringException = class(ExprCompilingException)
     
   end;
   
@@ -295,7 +297,9 @@ type
     self.res := val;
     
     public function ToString: string; override :=
-    $'"{res}"';
+    (res.Length < 100)?
+    $'"{res}"':
+    $'"{res.Substring(0,100)}..."[{res.Length}]';
     
   end;
   
@@ -465,11 +469,15 @@ type
     
     private procedure Calc;
     begin
-      res := '';
+      var sb := new StringBuilder;
       
       for var i := 0 to Positive.Count-1 do
-        res += Positive[i].GetRes.ToString;
+      begin
+        var r := Positive[i].GetRes;
+        if r <> nil then sb += r.ToString;
+      end;
       
+      res := sb.ToString;
     end;
     
     
@@ -558,21 +566,33 @@ type
       if Positive.Concat(Negative).Any(oe->oe.GetRes is string) then
       begin
         if Negative.Any then raise new CannotSubStringExprException(nil);
-        var nres := '';
+        var nres := new StringBuilder;
         
         for var i := 0 to Positive.Count-1 do
-          nres += Positive[i].GetRes.ToString;
+        begin
+          var r := Positive[i].GetRes;
+          if r <> nil then
+            nres += r.ToString;
+        end;
         
-        res := nres;
+        res := nres.ToString;
       end else
       begin
         var nres: real := 0;
         
         for var i := 0 to Positive.Count-1 do
-          nres += real(Positive[i].GetRes);
+        begin
+          var r := Positive[i].GetRes;
+          if r <> nil then
+            nres += real(r);
+        end;
         
         for var i := 0 to Negative.Count-1 do
-          nres -= real(Negative[i].GetRes);
+        begin
+          var r := Negative[i].GetRes;
+          if r <> nil then
+            nres -= real(r);
+        end;
         
         res := nres;
       end;
@@ -717,6 +737,71 @@ type
     $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
     
   end;
+  OptSNMltExpr = class(OptSExprBase, IOptMltExpr)
+    
+    public Base: OptSExprBase;
+    public Positive: OptNExprBase;
+    
+    private procedure Calc;
+    begin
+      var r := Base.res;
+      var cr := Positive.res;
+      var ci := BigInteger.Create(cr);
+      if ci < 0 then raise new CanNotMltNegStringException;
+      var cap := ci * r.Length;
+      if cap > integer.MaxValue then raise new TooBigStringException;
+      var sb := new StringBuilder(integer(cap));
+      loop integer(ci) do sb += res;
+      res := sb.ToString;
+    end;
+    
+    
+    
+    public function AnyNegative := false;
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
+    begin
+      Base := Base.FixVarExprs(sn,ss,so,nn,ns,no) as OptSExprBase;
+      Positive := Positive.FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
+      Result := self;
+    end;
+    
+    public function Optimize: IOptExpr; override;
+    begin
+      Base := Base.Optimize as OptSExprBase;
+      Positive := Positive.Optimize as OptNExprBase;
+      
+      if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(nil);
+      
+      if
+        (Base is IOptLiteralExpr) and
+        (Positive is IOptLiteralExpr)
+      then
+      begin
+        var r := Base.res;
+        var cr := Positive.res;
+        var ci := BigInteger.Create(cr);
+        if ci < 0 then raise new CanNotMltNegStringException;
+        var cap := ci * r.Length;
+        if cap > integer.MaxValue then raise new TooBigStringException;
+        var sb := new StringBuilder(integer(cap));
+        loop integer(ci) do sb += r;
+        Result := new OptSLiteralExpr(sb.ToString);
+      end else
+        Result := self;
+    end;
+    
+    public function GetCalc:Action0; override;
+    begin
+      Result += Base.GetCalc();
+      Result += Positive.GetCalc();
+      Result += self.Calc;
+    end;
+    
+    public function ToString: string; override :=
+    $'( {Base}*{Positive} )';
+    
+  end;
   OptSOMltExpr = class(OptSExprBase, IOptMltExpr)
     
     public Base: OptSExprBase;
@@ -724,18 +809,17 @@ type
     
     private procedure Calc;
     begin
-      
-      var ro := Positive.GetRes;
-      if ro.GetType = typeof(string) then raise new CannotMltALotStringsException(nil,0);
-      var rn: integer;
-      try
-        rn := System.Convert.ToInt32(ro);
-        if rn < 0 then raise new CanNotConvertRTIException(nil,0);
-      except
-        on System.ArgumentException do raise new CanNotConvertRTIException(nil,0);
-      end;
-      
-      res := Base.res * rn;
+      var r := Base.res;
+      var co := Positive.GetRes;
+      if co = nil then co := 0.0;
+      if not (co is real) then raise new CannotMltALotStringsException(nil,0);
+      var ci := BigInteger.Create(real(co));
+      if ci < 0 then raise new CanNotMltNegStringException;
+      var cap := ci * r.Length;
+      if cap > integer.MaxValue then raise new TooBigStringException;
+      var sb := new StringBuilder(integer(cap));
+      loop integer(ci) do sb += r;
+      res := sb.ToString;
     end;
     
     
@@ -757,20 +841,12 @@ type
       if Positive is OptSExprBase then raise new CannotMltALotStringsException(nil,0);
       if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(nil);
       
-      if
-        (Base is IOptLiteralExpr) and
-        (Positive is IOptLiteralExpr)
-      then
+      if Positive is OptNExprBase then
       begin
-        var cr := (Positive as OptNExprBase).res;
-        var ci: integer;
-        try
-          ci := System.Convert.ToInt32(cr);
-          if ci < 0 then raise new CanNotConvertRTIException(nil,0);
-        except
-          on System.ArgumentException do raise new CanNotConvertRTIException(self, cr);
-        end;
-        Result := new OptSLiteralExpr(Base.res * ci);
+        var res := new OptSNMltExpr;
+        res.Base := self.Base;
+        res.Positive := self.Positive as OptNExprBase;
+        Result := res;
       end else
         Result := self;
     end;
@@ -793,10 +869,10 @@ type
     
     private procedure Calc;
     begin
-      if Positive.Concat(Negative).Any(oe->oe is OptSExprBase) then
+      if Positive.Concat(Negative).Any(oe->oe.GetRes is string) then
       begin
         if Negative.Any then raise new CannotDivStringExprException(nil);
-        var n := 1;
+        var n := 1.0;
         var nres: string := nil;
         
         for var i := 0 to Positive.Count-1 do
@@ -806,24 +882,42 @@ type
             if nres = nil then
               nres := ro as string else
               raise new CannotMltALotStringsException(nil,0) else
-            try
-              n *= System.Convert.ToInt32(ro);
-              if n < 0 then raise new CanNotConvertRTIException(nil,0);
-            except
-              on System.ArgumentException do raise new CanNotConvertRTIException(nil,0);
+            begin
+              if ro = nil then
+              begin
+                res := '';
+                exit;
+              end;
+              n *= real(ro);
             end;
         end;
         
-        res := nres * n;
+        var ci := BigInteger.Create(n);
+        if ci < 0 then raise new CanNotMltNegStringException;
+        var cap := ci * nres.Length;
+        if cap > integer.MaxValue then raise new TooBigStringException;
+        var sb := new StringBuilder(integer(cap));
+        loop integer(ci) do sb += nres;
+        res := sb.ToString;
       end else
       begin
-        var nres: real := 1;
+        var nres := 1.0;
         
         for var i := 0 to Positive.Count-1 do
-          nres *= (Positive[i].GetRes as OptNExprBase).res;
+        begin
+          var ro := Positive[i].GetRes;
+          if ro = nil then
+            nres := 0.0 else
+            nres *= real(ro);
+        end;
         
         for var i := 0 to Negative.Count-1 do
-          nres /= (Negative[i].GetRes as OptNExprBase).res;
+        begin
+          var ro := Negative[i].GetRes;
+          if ro = nil then
+            nres /= 0.0 else
+            nres /= real(ro);
+        end;
         
         res := nres;
       end;
@@ -851,7 +945,8 @@ type
       
       if sc = 1 then
       begin
-        if Negative.Any then raise new CannotDivStringExprException(nil);
+        if Negative.Any then
+          raise new CannotDivStringExprException(nil);
         var res := new OptSOMltExpr;
         var rp := new OptOMltExpr;
         
@@ -991,13 +1086,22 @@ type
     
     private procedure Calc;
     begin
-      if Positive.Any(oe->oe is OptSExprBase) then raise new CannotPowStringException(nil);
-      var nres: real := 1;
+      var nres := 1.0;
       
       for var i := 1 to Positive.Count-1 do
-        nres *= (Positive[i] as OptNExprBase).res;
+      begin
+        var ro := Positive[i].GetRes;
+        if ro = nil then
+          nres := 0 else
+        if ro is string then
+          raise new CannotPowStringException(nil) else
+          nres *= real(ro);
+      end;
       
-      res := Power((Positive[0] as OptNExprBase).res, nres);
+      var ro := Positive[0].GetRes;
+      if ro = nil then ro := 0.0 else
+      if ro is string then raise new CannotPowStringException(nil);
+      res := Power(real(ro), nres);
     end;
     
     
@@ -1018,7 +1122,7 @@ type
       begin
         var res := new OptNPowExpr;
         res.Positive := self.Positive.ConvertAll(oe->oe as OptNExprBase);
-        Result := res;
+        Result := res.Optimize;
       end else
       if Positive.Count(oe->oe is IOptLiteralExpr) < 2 then
         Result := self else
@@ -1076,14 +1180,17 @@ type
     
     
     
+    public function GetTps: array of System.Type; abstract;
+    
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
       for var i := 0 to par.Length-1 do par[i] := par[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
       Result := self;
     end;
     
-    procedure CheckParamsBase(params tps: array of System.Type);
+    protected procedure CheckParamsBase;
     begin
+      var tps := GetTps;
       if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self.name, tps.Length, par.Length);
       
       for var i := 0 to tps.Length-1 do
@@ -1097,7 +1204,14 @@ type
     begin
       for var i := 0 to par.Length-1 do par[i] := par[i].Optimize as OptExprBase;
       CheckParams;
-      Result := self;
+      if par.All(oe->oe is IOptLiteralExpr) then
+      begin
+        var res := new OptNLiteralExpr;
+        GetCalc()();
+        res.res := self.res;//-_-
+        Result := res;
+      end else
+        Result := self;
     end;
     
     public function GetCalc: Action0; override;
@@ -1117,14 +1231,17 @@ type
     
     
     
+    public function GetTps: array of System.Type; abstract;
+    
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
       for var i := 0 to par.Length-1 do par[i] := par[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
       Result := self;
     end;
     
-    procedure CheckParamsBase(params tps: array of System.Type);
+    protected procedure CheckParamsBase;
     begin
+      var tps := GetTps;
       if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self.name, tps.Length, par.Length);
       
       for var i := 0 to tps.Length-1 do
@@ -1138,7 +1255,14 @@ type
     begin
       for var i := 0 to par.Length-1 do par[i] := par[i].Optimize as OptExprBase;
       CheckParams;
-      Result := self;
+      if par.All(oe->oe is IOptLiteralExpr) then
+      begin
+        var res := new OptSLiteralExpr;
+        GetCalc()();
+        res.res := self.res;//-_-
+        Result := res;
+      end else
+        Result := self;
     end;
     
     public function GetCalc: Action0; override;
@@ -1202,8 +1326,6 @@ type
   end;
   UnOptNVarExpr = class(OptNExprBase, IOptVarExpr)
     
-    public souce: array of real;
-    public id: integer;
     public name: string;
     
     
@@ -1225,13 +1347,11 @@ type
     self.name := name;
     
     public function ToString: string; override :=
-    $'int_var[{id}]';
+    $'int_var[?]';
     
   end;
   UnOptSVarExpr = class(OptSExprBase, IOptVarExpr)
     
-    public souce: array of string;
-    public id: integer;
     public name: string;
     
     
@@ -1253,13 +1373,11 @@ type
     self.name := name;
     
     public function ToString: string; override :=
-    $'str_var[{id}]';
+    $'str_var[?]';
     
   end;
   UnOptOVarExpr = class(OptOExprBase, IOptVarExpr)
     
-    public souce: array of object;
-    public id: integer;
     public name: string;
     
     
@@ -1281,7 +1399,7 @@ type
     self.name := name;
     
     public function ToString: string; override :=
-    $'obj_var[{id}]';
+    $'obj_var[?]';
     
   end;
   
@@ -1317,10 +1435,8 @@ type
       for var i := 0 to o_vars_names.Count-1 do
       begin
         var name := o_vars_names[i];
-        if n_vars.ContainsKey(name) then
-          self.o_vars[i] := n_vars[name] else
-        if s_vars.ContainsKey(name) then
-          self.o_vars[i] := s_vars[name];
+        if o_vars.ContainsKey(name) then
+          self.o_vars[i] := o_vars[name];
       end;
       
       if MainCalcProc <> nil then MainCalcProc;
@@ -1359,6 +1475,9 @@ type
       self.Main := Main;
     end;
     
+    public function ToString: string; override :=
+    Main.ToString;
+    
   end;
   OptSExprWrapper = class(OptExprWrapper)
     
@@ -1382,6 +1501,9 @@ type
       self.Main := Main;
     end;
     
+    public function ToString: string; override :=
+    Main.ToString;
+    
   end;
   OptOExprWrapper = class(OptExprWrapper)
     
@@ -1401,6 +1523,9 @@ type
       inherited Create;
       self.Main := Main;
     end;
+    
+    public function ToString: string; override :=
+    Main.ToString;
     
   end;
   
@@ -1696,7 +1821,10 @@ type
   OptFunc_Length = class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
-    CheckParamsBase(
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
       typeof(string)
     );
     
@@ -1726,7 +1854,10 @@ type
   OptFunc_Num = class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
-    CheckParamsBase(
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
       typeof(string)
     );
     
@@ -1755,7 +1886,10 @@ type
   OptFunc_Ord = class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
-    CheckParamsBase(
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
       typeof(string)
     );
     
@@ -1789,6 +1923,11 @@ type
     if par.Length <> 1 then
       raise new InvalidFuncParamCountException(self.name, 1, par.Length);
     
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
+      typeof(Object)
+    );
+    
     public procedure Calc;
     begin
       self.res := par[0].GetRes.ToString;
@@ -1810,16 +1949,15 @@ type
     
   end;
   
-  //ToDo функции: *что то для нарезания строк*
   OptConverter = {static} class
     
     class g_n_vars_names: List<string>;
     class g_s_vars_names: List<string>;
     class g_o_vars_names: List<string>;
     
-    class l_n_vars_names := new List<string>;
-    class l_s_vars_names := new List<string>;
-    class l_o_vars_names := new List<string>;
+    class l_n_vars_names: List<string>;
+    class l_s_vars_names: List<string>;
+    class l_o_vars_names: List<string>;
     
     
     
@@ -1922,6 +2060,10 @@ type
       OptConverter.g_n_vars_names := g_n_vars_names;
       OptConverter.g_s_vars_names := g_s_vars_names;
       OptConverter.g_o_vars_names := g_o_vars_names;
+      
+      l_n_vars_names := new List<string>;
+      l_s_vars_names := new List<string>;
+      l_o_vars_names := new List<string>;
       
       var Main := GetOptExpr(e);
       
