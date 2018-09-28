@@ -1,128 +1,197 @@
 ﻿unit ExprParser;
 //ToDo больше регионов. БОЛЬШЕ
-//ToDo переделать ToString
-//ToDo ""+0.0 выводит "0,0"
+//ToDo проверить, не исправили ли issue
+// - #1279
+// - #1280
 
-//ToDo Исключения:  Переделать все исключение (надо общий source и т.п.)
-//ToDo Calc:        Обрабатывать значения nil - как строку "" и число 0 сразу
 //ToDo Openup:      Реализовать. "a"+(5+3) нельзя открывать
 //ToDo Optimize:    ClampLists
-//ToDo Optimize:    вызов функции для литералов
 //ToDo функции:     что то для нарезания строк
+//ToDo ToString:    переделать 
 
 //ToDo Optimize:    оптимизация 5*(i+0) => 5*(+i) => 5*i
-// -Если константа 1 и она =0 - удалить
-// -Если осталось 1 выражение в скобочка - можно и открыть
+// - Если константа 1 и она =0 - удалить
+// - Если осталось 1 выражение в скобочка - можно и открыть
 
 interface
 
 type
   {$region Exception's}
   
-  Expr=class;
-  IOptExpr=interface;
+  {$region General}
   
-  CannotCalcLoadedExpr = class(Exception)
+  InnerException = abstract class(Exception)
     
-    public constructor(sender: Expr) :=
-    inherited Create($'Can''t calculate unprecompiled expr: {sender}');
+    public Sender: object;
+    public ExtraInfo := new Dictionary<string, object>;
+    
+    public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
+    begin
+      inherited Create($'Inner exception in {sender}: ' + text);
+      self.Sender := Sender;
+      foreach var kvp in d do
+        ExtraInfo.Add(kvp.Key, kvp.Value);
+    end;
+    
+  end;
+  CannotCalcLoadedExpr = class(InnerException)
+    
+    public constructor :=
+    inherited Create(nil, 'Unprecompiled expr calculation not implemented');
+    
+  end;
+  ReadingOutOfRangeException = class(InnerException)
+    
+    public constructor(text: string; i: integer) :=
+    inherited Create(text, $'Was trying to read after text end, at #{i}', KV('i'+'', object(i)));
+    
+  end;
+  UnexpectedNegativePow = class(InnerException)
+    
+    public constructor(source: object) :=
+    inherited Create($'[> {source} <]', $'Pow Loaded Expr had negative params');
+    
+  end;
+  UnexpectedExprTypeException = class(InnerException)
+    
+    public constructor(source: object; t: System.Type) :=
+    inherited Create($'[> {source} <]', $'Undefined expr type: {t}', KV('t'+'', object(t)));
     
   end;
   
-  ExprParsingException = abstract class(Exception) end;
+  {$endregion General}
+  
+  {$region Parsing}
+  
+  ExprParsingException = abstract class(Exception)
+    
+    public Sender: object;
+    public ExtraInfo := new Dictionary<string, object>;
+    
+    public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
+    begin
+      inherited Create($'Error parsing [> {sender} <]: ' + text);
+      self.Sender := Sender;
+      foreach var kvp in d do
+        ExtraInfo.Add(kvp.Key, kvp.Value);
+    end;
+    
+  end;
   CorrespondingCharNotFoundException = class(ExprParsingException)
     
-    public constructor(ch: char; str: string) :=
-    inherited Create($'Corresponding [> {ch} <] not found in string [> {str} <]');
+    public constructor(str: string; ch: char; from: integer) :=
+    inherited Create(str, $'Corresponding [> {ch} <] not found, starting from symbol #{from}', KV('ch', object(ch)), KV('from', object(from)));
     
   end;
   InvalidCharException = class(ExprParsingException)
     
     public constructor(str: string; pos: integer) :=
-    inherited Create($'Invalid char [> {str[pos]} <] in [> {str} <] at #{pos}');
+    inherited Create(str, $'Invalid char [> {str[pos]} <] at #{pos}', KV('pos', object(pos)));
     
   end;
   ExtraCharsException = class(ExprParsingException)
     
     public constructor(str: string; i1,im,i2: integer) :=
-    inherited Create($'Unconvertible chars [> {str.Substring(im-1, i2-im+1)} <] in [> {str.Substring(i1-1, i2-i1+1)} <]');
+    inherited Create(str, $'Unconvertible chars [> {str.Substring(im-1, i2-im+1)} <] in expression [> {str.Substring(i1-1, i2-i1+1)} <]', KV('i1', object(i1)), KV('im', object(im)), KV('i2', object(i2)));
     
   end;
   EmptyExprException = class(ExprParsingException)
     
     public constructor(str: string; pos: integer) :=
-    inherited Create($'Empty expression in [> {str} <] at #{pos}');
+    inherited Create(str, $'Empty expression at #{pos}', KV('pos', object(pos)));
     
   end;
   CanNotParseException = class(ExprParsingException)
     public constructor(str:string) :=
-    inherited Create($'Can''t parse "{str}"');
+    inherited Create(str, $'Expression can''t be parsed');
   end;
   
-  ExprCompilingException = abstract class(Exception) end;
-  UnknownFunctionNameException = class(ExprCompilingException)
+  {$endregion Parsing}
+  
+  {$region Compiling}
+  
+  ExprCompilingException = abstract class(Exception)
     
-    public constructor(func_name: string) :=
-    inherited Create($'Function "{func_name}" not found');
+    public Sender: object;
+    public ExtraInfo := new Dictionary<string, object>;
+    
+    public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
+    begin
+      inherited Create($'Compiling exception in [> {sender} <]: ' + text);
+      self.Sender := Sender;
+      foreach var kvp in d do
+        ExtraInfo.Add(kvp.Key, kvp.Value);
+    end;
     
   end;
-  UnknownVarNameException = class(ExprCompilingException)
+  UnknownFunctionNameException = class(ExprCompilingException)
     
-    public constructor(name: string) :=
-    inherited Create($'Variable "{name}" not defined');
+    public constructor(sender: object; func_name: string) :=
+    inherited Create(sender, $'Function "{func_name}" not defined', KV('func_name', object(func_name)));
     
   end;
   InvalidFuncParamCountException = class(ExprCompilingException)
     
-    public constructor(func_name: string; exp_c, fnd_c: integer) :=
-    inherited Create($'Function "{func_name}" got {fnd_c} parameters, when expected {exp_c}');
+    public constructor(sender: object; func_name: string; exp_c, fnd_c: integer) :=
+    inherited Create(sender, $'Function "{func_name}" had {fnd_c} parameters, when expected {exp_c}', KV('func_name', object(func_name)), KV('exp_c', object(exp_c)), KV('fnd_c', object(fnd_c)));
     
   end;
   InvalidFuncParamTypesException = class(ExprCompilingException)
     
-    public constructor(func_name: string; param_n: integer; exp_t, fnd_t: System.Type) :=
-    inherited Create($'Function "{func_name}" parameter #{param_n} had type {fnd_t}, when expected {exp_t}');
+    public constructor(sender: object; func_name: string; param_n: integer; exp_t, fnd_t: System.Type) :=
+    inherited Create(sender, $'Function "{func_name}" parameter #{param_n} had type {fnd_t}, when expected {exp_t}', KV('func_name', object(func_name)), KV('param_n', object(param_n)), KV('exp_t', object(exp_t)), KV('fnd_t', object(fnd_t)));
     
   end;
   CannotSubStringExprException = class(ExprCompilingException)
     
-    public constructor(exprs: List<IOptExpr>) :=
-    inherited Create($'Can''t substract expressions from strings ({exprs.SkipLast.JoinIntoString('','')} and {exprs.Last})');
+    public constructor(sender: object; sub: object) :=
+    inherited Create(sender, $'Can''t substruct expressions from strings. Was substructing [> {sub} <]', KV('sub', sub));
     
   end;
   CannotDivStringExprException = class(ExprCompilingException)
     
-    //ToDo 1/"abc" and "abc"/1 - same error
-    public constructor(exprs: List<IOptExpr>) :=
-    inherited Create($'Can''t divide string expressions (was divided by *error**error**error**error**error**err&%@^*$&%^');
+    public constructor(sender: object; numr, denomr: object) :=
+    inherited Create(sender, $'Can''t divide expressions with strings. Was dividing [> {numr} <] by [> {denomr} <]', KV('numr', numr), KV('denomr', denomr));
     
   end;
   CannotMltALotStringsException = class(ExprCompilingException)
     
-    public constructor(e: Expr; str_c: integer) :=
-    inherited Create($'Can multiply string only by numbers. In Expression {e} there is {str_c} strings');
+    public constructor(sender: object; strs: object) :=
+    inherited Create(sender, $'Can''t multiply string by strings. Expressions with strings: [> strs <]', KV('strs', strs));
     
   end;
   CannotPowStringException = class(ExprCompilingException)
     
-    public constructor(e: Expr) :=
-    inherited Create($'Can''t use operator^ on string ({e})');
+    public constructor(sender: object) :=
+    inherited Create(sender, $'Can''t use operator^ on string');
     
   end;
   TooBigStringException = class(ExprCompilingException)
     
+    public constructor(sender: object; str_l: BigInteger) :=
+    inherited Create(sender, 'Resulting string had length {str_l}. Can''t save string with length > (2^31-1)=2147483647', KV('str_l', object(str_l)));
+    
   end;
   CanNotMltNegStringException = class(ExprCompilingException)
     
+    public constructor(sender: object; k: BigInteger) :=
+    inherited Create(sender, 'Can''t muliply string and {k}, number can''t be negative', KV(''+'k', object(k)));
+    
   end;
   
+  {$endregion Compiling}
+  
   {$endregion Exception's}
-
+  
+  {$region General}
+  
   IExpr = interface
     
     function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object;
     
   end;
+  
+  {$endregion General}
   
   {$region Load}
   
@@ -136,7 +205,8 @@ type
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object;
     begin
       Result := nil;
-      raise new CannotCalcLoadedExpr(self);
+      var ToDo := 0;
+      raise new CannotCalcLoadedExpr;
     end;
     
   end;
@@ -220,6 +290,8 @@ type
   
   {$region Optimize}
   
+  {$region Base}
+  
   IOptExpr = interface
     
     function GetRes: Object;
@@ -279,6 +351,10 @@ type
     
   end;
   
+  {$endregion Base}
+  
+  {$region Literal}
+  
   IOptLiteralExpr = interface(IOptExpr)
     
   end;
@@ -302,6 +378,10 @@ type
     $'"{res.Substring(0,100)}..."[{res.Length}]';
     
   end;
+  
+  {$endregion Literal}
+  
+  {$region Plus}
   
   IOptPlusExpr = interface(IOptExpr)
     
@@ -467,14 +547,19 @@ type
     
     public Positive := new List<OptExprBase>;
     
+    private class nfi := new System.Globalization.NumberFormatInfo;
+    
     private procedure Calc;
     begin
       var sb := new StringBuilder;
       
       for var i := 0 to Positive.Count-1 do
       begin
-        var r := Positive[i].GetRes;
-        if r <> nil then sb += r.ToString;
+        var r: object := Positive[i].GetRes;
+        if r <> nil then
+          if r is real(var n) then
+            sb += n.ToString(nfi) else
+            sb += r as string;
       end;
       
       res := sb.ToString;
@@ -565,7 +650,7 @@ type
     begin
       if Positive.Concat(Negative).Any(oe->oe.GetRes is string) then
       begin
-        if Negative.Any then raise new CannotSubStringExprException(nil);
+        if Negative.Any then raise new CannotSubStringExprException(self, Negative);
         var nres := new StringBuilder;
         
         for var i := 0 to Positive.Count-1 do
@@ -611,11 +696,11 @@ type
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize as OptExprBase;
       for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Optimize as OptExprBase;
-      if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(Lst&<IOptExpr>(self));
+      if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(self, Negative);
       
       if Positive.Any(oe->oe is OptSExprBase) then
       begin
-        if Negative.Any then raise new CannotSubStringExprException(Lst&<IOptExpr>(self));
+        if Negative.Any then raise new CannotSubStringExprException(self, Negative);
         
         var res := new OptSOPlusExpr;
         res.Positive := self.Positive.ConvertAll(oe->
@@ -652,9 +737,16 @@ type
     
   end;
   
+  {$endregion Plus}
+  
+  {$region Mlt}
+  
   IOptMltExpr = interface(IOptExpr)
     
     function AnyNegative: boolean;
+    
+    function GetPositive: sequence of OptExprBase;
+    function GetNegative: sequence of OptExprBase;
     
   end;
   OptNNMltExpr = class(OptNExprBase, IOptMltExpr)
@@ -677,6 +769,9 @@ type
     
     
     public function AnyNegative := Negative.Any;
+    
+    function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
+    function GetNegative: sequence of OptExprBase := Negative.Select(oe->oe as OptExprBase);
     
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
@@ -746,18 +841,21 @@ type
     begin
       var r := Base.res;
       var cr := Positive.res;
-      var ci := BigInteger.Create(cr);
-      if ci < 0 then raise new CanNotMltNegStringException;
+      var ci := BigInteger.Create(cr+0.5);
+      if ci < 0 then raise new CanNotMltNegStringException(self, ci);
       var cap := ci * r.Length;
-      if cap > integer.MaxValue then raise new TooBigStringException;
+      if cap > integer.MaxValue then raise new TooBigStringException(self, cap);
       var sb := new StringBuilder(integer(cap));
-      loop integer(ci) do sb += res;
+      loop integer(ci) do sb += r;
       res := sb.ToString;
     end;
     
     
     
     public function AnyNegative := false;
+    
+    function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
+    function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
@@ -771,7 +869,7 @@ type
       Base := Base.Optimize as OptSExprBase;
       Positive := Positive.Optimize as OptNExprBase;
       
-      if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(nil);
+      if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if
         (Base is IOptLiteralExpr) and
@@ -780,10 +878,10 @@ type
       begin
         var r := Base.res;
         var cr := Positive.res;
-        var ci := BigInteger.Create(cr);
-        if ci < 0 then raise new CanNotMltNegStringException;
+        var ci := BigInteger.Create(cr+0.5);
+        if ci < 0 then raise new CanNotMltNegStringException(self, ci);
         var cap := ci * r.Length;
-        if cap > integer.MaxValue then raise new TooBigStringException;
+        if cap > integer.MaxValue then raise new TooBigStringException(self, cap);
         var sb := new StringBuilder(integer(cap));
         loop integer(ci) do sb += r;
         Result := new OptSLiteralExpr(sb.ToString);
@@ -812,11 +910,11 @@ type
       var r := Base.res;
       var co := Positive.GetRes;
       if co = nil then co := 0.0;
-      if not (co is real) then raise new CannotMltALotStringsException(nil,0);
-      var ci := BigInteger.Create(real(co));
-      if ci < 0 then raise new CanNotMltNegStringException;
+      if not (co is real) then raise new CannotMltALotStringsException(self, new object[](Base, co));
+      var ci := BigInteger.Create(real(co)+0.5);
+      if ci < 0 then raise new CanNotMltNegStringException(self, ci);
       var cap := ci * r.Length;
-      if cap > integer.MaxValue then raise new TooBigStringException;
+      if cap > integer.MaxValue then raise new TooBigStringException(self, cap);
       var sb := new StringBuilder(integer(cap));
       loop integer(ci) do sb += r;
       res := sb.ToString;
@@ -825,6 +923,9 @@ type
     
     
     public function AnyNegative := false;
+    
+    function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
+    function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
@@ -838,8 +939,8 @@ type
       Base := Base.Optimize as OptSExprBase;
       Positive := Positive.Optimize as OptExprBase;
       
-      if Positive is OptSExprBase then raise new CannotMltALotStringsException(nil,0);
-      if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(nil);
+      if Positive is OptSExprBase then raise new CannotMltALotStringsException(self, new object[](Base, Positive));
+      if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if Positive is OptNExprBase then
       begin
@@ -871,7 +972,7 @@ type
     begin
       if Positive.Concat(Negative).Any(oe->oe.GetRes is string) then
       begin
-        if Negative.Any then raise new CannotDivStringExprException(nil);
+        if Negative.Any then raise new CannotDivStringExprException(self, Positive, Negative);
         var n := 1.0;
         var nres: string := nil;
         
@@ -881,7 +982,7 @@ type
           if ro is string then
             if nres = nil then
               nres := ro as string else
-              raise new CannotMltALotStringsException(nil,0) else
+              raise new CannotMltALotStringsException(self, Positive.Select(oe->oe.GetRes).Where(r->r is string)) else
             begin
               if ro = nil then
               begin
@@ -892,10 +993,10 @@ type
             end;
         end;
         
-        var ci := BigInteger.Create(n);
-        if ci < 0 then raise new CanNotMltNegStringException;
+        var ci := BigInteger.Create(n+0.5);
+        if ci < 0 then raise new CanNotMltNegStringException(self,ci);
         var cap := ci * nres.Length;
-        if cap > integer.MaxValue then raise new TooBigStringException;
+        if cap > integer.MaxValue then raise new TooBigStringException(self,cap);
         var sb := new StringBuilder(integer(cap));
         loop integer(ci) do sb += nres;
         res := sb.ToString;
@@ -927,6 +1028,9 @@ type
     
     public function AnyNegative := Negative.Any;
     
+    function GetPositive: sequence of OptExprBase := Positive;
+    function GetNegative: sequence of OptExprBase := Negative;
+    
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
@@ -941,12 +1045,12 @@ type
       
       var pn := Positive.Concat(Negative);
       var sc := pn.Count(oe->oe is OptSExprBase);
-      if sc > 1 then raise new CannotMltALotStringsException(nil, sc);
+      if sc > 1 then raise new CannotMltALotStringsException(self, pn.Where(oe->oe is OptSExprBase));
       
       if sc = 1 then
       begin
         if Negative.Any then
-          raise new CannotDivStringExprException(nil);
+          raise new CannotDivStringExprException(self, Positive, Negative);
         var res := new OptSOMltExpr;
         var rp := new OptOMltExpr;
         
@@ -998,6 +1102,10 @@ type
     $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
     
   end;
+  
+  {$endregion Mlt}
+  
+  {$region Pow}
   
   IOptPowExpr = interface(IOptExpr)
     
@@ -1094,13 +1202,13 @@ type
         if ro = nil then
           nres := 0 else
         if ro is string then
-          raise new CannotPowStringException(nil) else
+          raise new CannotPowStringException(self) else
           nres *= real(ro);
       end;
       
       var ro := Positive[0].GetRes;
       if ro = nil then ro := 0.0 else
-      if ro is string then raise new CannotPowStringException(nil);
+      if ro is string then raise new CannotPowStringException(self);
       res := Power(real(ro), nres);
     end;
     
@@ -1116,7 +1224,7 @@ type
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize as OptExprBase;
       
-      if Positive.Any(oe->oe is OptSExprBase) then raise new CannotPowStringException(nil);
+      if Positive.Any(oe->oe is OptSExprBase) then raise new CannotPowStringException(self);
       
       if Positive.All(oe->oe is OptNExprBase) then
       begin
@@ -1168,6 +1276,10 @@ type
     
   end;
   
+  {$endregion Pow}
+  
+  {$region Func}
+  
   IOptFuncExpr = interface(IOptExpr)
     
     procedure CheckParams;
@@ -1191,11 +1303,11 @@ type
     protected procedure CheckParamsBase;
     begin
       var tps := GetTps;
-      if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self.name, tps.Length, par.Length);
+      if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self, self.name, tps.Length, par.Length);
       
       for var i := 0 to tps.Length-1 do
         if (par[i].GetResType <> tps[i]) and (par[i].GetResType <> typeof(Object)) then
-          raise new InvalidFuncParamTypesException(self.name, i, tps[i], par[i].GetRes.GetType);
+          raise new InvalidFuncParamTypesException(self, self.name, i, tps[i], par[i].GetResType);
     end;
     
     public procedure CheckParams; abstract;
@@ -1242,11 +1354,11 @@ type
     protected procedure CheckParamsBase;
     begin
       var tps := GetTps;
-      if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self.name, tps.Length, par.Length);
+      if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self, self.name, tps.Length, par.Length);
       
       for var i := 0 to tps.Length-1 do
-        if par[i].GetRes.GetType <> tps[i] then
-          raise new InvalidFuncParamTypesException(self.name, i, tps[i], par[i].GetRes.GetType);
+        if par[i].GetResType <> tps[i] then
+          raise new InvalidFuncParamTypesException(self, self.name, i, tps[i], par[i].GetResType);
     end;
     
     public procedure CheckParams; abstract;
@@ -1275,6 +1387,10 @@ type
     '{s}'+$'{name}({par.JoinIntoString('','')})';
     
   end;
+  
+  {$endregion Func}
+  
+  {$region Var}
   
   IOptVarExpr = interface(IOptExpr)
     
@@ -1403,6 +1519,10 @@ type
     
   end;
   
+  {$endregion Var}
+  
+  {$region Wrappers}
+  
   OptExprWrapper = abstract class(IExpr)
     
     public n_vars: array of real;
@@ -1529,6 +1649,8 @@ type
     
   end;
   
+  {$endregion Wrappers}
+  
   {$endregion Optimize}
   
 implementation
@@ -1537,6 +1659,7 @@ implementation
 
 function FindNext(self: string; from: integer; ch: char): integer; extensionmethod;
 begin
+  var nfrom := from;
   while true do
   begin
     
@@ -1553,7 +1676,7 @@ begin
     
     from += 1;
     if from > self.Length then
-      raise new CorrespondingCharNotFoundException(ch, self);
+      raise new CorrespondingCharNotFoundException(self, ch, nfrom);
     
   end;
 end;
@@ -1739,7 +1862,7 @@ begin
   var cl := new List<ExprCoord>;
   var curr: ExprCoord;
   
-  if i1 > i2 then raise new EmptyExprException('*EmptyString*', 0);
+  if i1 > i2 then raise new EmptyExprException(text, i1);
   case text[i1] of
     '+':
     begin
@@ -1782,9 +1905,8 @@ begin
   while true do
   begin
     
-    if i1 = i2 then break;
     if i1 = i2+1 then break;
-    if i1 > i2+1 then raise new Exception('This is unexpected...');
+    if i1 > i2+1 then raise new ReadingOutOfRangeException(text, i1);
     
     case text[i1] of
       '(': i1 := text.FindNext(i1+1,')') + 1;
@@ -1833,7 +1955,7 @@ type
       var pr := par[0].GetRes;
       if pr is string then
         self.res := (pr as string).Length else
-        raise new InvalidFuncParamTypesException(self.name, -1, typeof(string), pr.GetType);
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -1864,8 +1986,8 @@ type
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if not ( (pr is string) and (TryStrToFloat(pr as string,self.res)) ) then
-        raise new InvalidFuncParamTypesException(self.name, -1, typeof(string), pr.GetType);
+      if not ( (pr is string) and (TryStrToFloat(pr as string, self.res)) ) then
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -1896,9 +2018,9 @@ type
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if not ( (pr is string) and ((pr as string).Length = 1) ) then
-        self.res := word((pr as string)[1]) else
-        raise new InvalidFuncParamTypesException(self.name, -1, typeof(string), pr.GetType);
+      if not ( (pr is string(var s)) and (s.Length = 1) ) then
+        self.res := word(s[1]) else
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -1921,7 +2043,7 @@ type
     
     public procedure CheckParams; override :=
     if par.Length <> 1 then
-      raise new InvalidFuncParamCountException(self.name, 1, par.Length);
+      raise new InvalidFuncParamCountException(self, self.name, 1, par.Length);
     
     public function GetTps: array of System.Type; override :=
     new System.Type[](
@@ -1949,7 +2071,7 @@ type
     
   end;
   
-  OptConverter = {static} class
+  OptConverter = {static} class//ToDo #1279
     
     class g_n_vars_names: List<string>;
     class g_s_vars_names: List<string>;
@@ -1961,18 +2083,16 @@ type
     
     
     
-    //ToDo sequence заменить на array, #1210
-    class FuncTypes := new Dictionary<string, Func<sequence of OptExprBase,IOptFuncExpr>>;
+    class FuncTypes := new Dictionary<string, Func<array of OptExprBase,IOptFuncExpr>>;
     
     class constructor;
     begin
       
-      //ToDo убрать .ToArray, #1210
-      FuncTypes.Add('length', par->new OptFunc_Length(par.ToArray));
-      FuncTypes.Add('Num', par->new OptFunc_Num(par.ToArray));
-      FuncTypes.Add('Ord', par->new OptFunc_Ord(par.ToArray));
+      FuncTypes.Add('length', par->new OptFunc_Length(par));
+      FuncTypes.Add('Num', par->new OptFunc_Num(par));
+      FuncTypes.Add('Ord', par->new OptFunc_Ord(par));
       
-      FuncTypes.Add('Str', par->new OptFunc_Str(par.ToArray));
+      FuncTypes.Add('Str', par->new OptFunc_Str(par));
       
     end;
     
@@ -2000,7 +2120,7 @@ type
     
     class function GetOptPowExpr(e: PowExpr): IOptPowExpr;
     begin
-      if e.Negative.Any then raise new Exception('этого не должно было произойти');
+      if e.Negative.Any then raise new UnexpectedNegativePow(e);
       
       var res := new OptOPowExpr;
       res.Positive := e.Positive.ConvertAll(se->GetOptExpr(se) as OptExprBase);
@@ -2016,7 +2136,7 @@ type
         var pars := e.par.ConvertAll(p->GetOptExpr(p) as OptExprBase);
         Result := func(pars);
       end else
-        raise new UnknownFunctionNameException(e.name);
+        raise new UnknownFunctionNameException(e, e.name);
     end;
     
     class function GetOptVarExpr(e: VarExpr): IOptVarExpr;
@@ -2031,12 +2151,10 @@ type
         Result := new UnOptSVarExpr(e.name);
         l_s_vars_names.Add(e.name);
       end else
-      if g_o_vars_names.Contains(e.name) then
       begin
         Result := new UnOptOVarExpr(e.name);
         l_o_vars_names.Add(e.name);
-      end else
-        raise new UnknownVarNameException(e.name);
+      end;
       
     end;
     
@@ -2050,7 +2168,7 @@ type
         PowExpr(var p): Result := GetOptPowExpr(p);
         FuncExpr(var f): Result := GetOptFuncExpr(f);
         VarExpr(var v): Result := GetOptVarExpr(v);
-        else raise new Exception;
+        else raise new UnexpectedExprTypeException(e, e=nil?nil:e.GetType);
       end;
     end;
     

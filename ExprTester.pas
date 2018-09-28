@@ -103,20 +103,41 @@ type
     
     res: object;
     
+    property ResNil: boolean read res=nil;
+    property ResType: System.Type read res=nil?nil:res.GetType;
+    
     class function operator explicit(o: object): ExprRes;
     begin
       Result := new ExprRes;
       Result.res := o;
     end;
     
+    class function StrEql(s1,s2:string): boolean;
+    begin
+      var ToDo := 0;//ToDo это не хорошо, по нормальному - надо находить куски которые одинаковые, и сравивать промежутки между ними
+      //Чтоб "1.23abcdefg" было= "1.234abcdefg"
+      if s1.Length < s2.Length then s2 := s2.Substring(0, s1.Length) else
+      if s2.Length < s1.Length then s1 := s1.Substring(0, s2.Length);
+      
+      var nok := 0;
+      for var i := 1 to s1.Length do
+        if s1[i] <> s2[i] then
+          nok += 1;
+      
+      Result := nok <= s1.Length/5;
+    end;
+    
     class function operator=(r1,r2: ExprRes): boolean;
     begin
+      //var t1 := r1.res?.GetType;
+      //var t2 := r2.res?.GetType;
+      
       if r1.res = nil then
         Result := r2.res = nil else
       if r1.res is real(var n1) then
         Result := (r2.res is real(var n2)) and ( (n1=n2) or ((real.IsNaN(n1)) and (real.IsNaN(n2))) or (abs(n1-n2) < 0.1)) else
       if r1.res is string(var s1) then
-        Result := (r2.res is string(var s2)) and (s1=s2) else
+        Result := (r2.res is string(var s2)) and StrEql(s1,s2) else
         Result := false;
     end;
     
@@ -191,9 +212,16 @@ type
       foreach var e in se do
       begin
         e.FindAllVars;
-        foreach var kvp in e.nvs do if self.nvs.ContainsKey(kvp.Key) then raise new OkException else self.nvs.Add(kvp.Key, kvp.Value);
-        foreach var kvp in e.svs do if self.svs.ContainsKey(kvp.Key) then raise new OkException else self.svs.Add(kvp.Key, kvp.Value);
-        foreach var kvp in e.ovs do if self.ovs.ContainsKey(kvp.Key) then raise new OkException else self.ovs.Add(kvp.Key, kvp.Value);
+        var check_name: string->string := s->
+        begin
+          if self.nvs.ContainsKey(s) then raise new OkException;
+          if self.svs.ContainsKey(s) then raise new OkException;
+          if self.ovs.ContainsKey(s) then raise new OkException;
+          Result := s;
+        end;
+        foreach var kvp in e.nvs do self.nvs.Add(check_name(kvp.Key), kvp.Value);
+        foreach var kvp in e.svs do self.svs.Add(check_name(kvp.Key), kvp.Value);
+        foreach var kvp in e.ovs do self.ovs.Add(check_name(kvp.Key), kvp.Value);
         e.nvs := nil;
         e.svs := nil;
         e.ovs := nil;
@@ -209,17 +237,18 @@ type
       if ress.Any(o->o is string) then
         Result := ress.Where(o->o<>nil).JoinIntoString('') else
         Result := ress.ConvertAll(function(o,i)->
-        try
-          Result := o=nil?0.0:(pn_tbl[i]?real(o):-real(o));
-        except
-          on e: System.InvalidCastException do
-          begin
-            writeln(o);
-            writeln(o.GetType);
-            var ToDo_Remove := 0;
-            raise e;
-          end;
-        end
+//        try
+//          Result :=
+          o=nil?0.0:(pn_tbl[i]?real(o):-real(o))
+//        except
+//          on e: System.InvalidCastException do
+//          begin
+//            writeln(o);
+//            writeln(o.GetType);
+//            var ToDo_Remove := 0;
+//            raise e;
+//          end;
+//        end
         ).Sum;
     end;
     
@@ -415,7 +444,12 @@ end;
 
 begin
   Randomize(0);
-  var skiping := 7755+1;
+  
+  //TestExpr.GetAnyExprs(true, 3).Count.Print;
+  //exit;
+  
+  var skiping: integer;
+  skiping := 1023000+1;
   var n := 0;
   
   foreach var te in TestExpr.GetAnyExprs(true, 3) do
@@ -444,15 +478,17 @@ begin
       writeln($'Прочитано:      {e}');
       writeln($'Оптимизировано: {oe}');
       writeln;
-      writeln($'Числа:          {nvs}');
-      writeln($'Строки:         {svs}');
-      writeln($'Объекты:        {ovs}');
+      writeln($'Числа:          ',nvs);
+      writeln($'Строки:         ',svs);
+      writeln($'Объекты:        ',ovs);
       writeln;
       writeln($'Ожидалось:      {res1}');
       writeln($'Получили:       {res2}');
       write('-'*50);
       oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList, ovs.Keys.ToList);
-      var o := oe.Calc(nvs, svs, ovs);
+      res1 := ExprRes(te.GetExpRes);
+      res2 := ExprRes(oe.Calc(nvs, svs, ovs));
+      var b := res1=res2;
       readln;
     end;
   except
