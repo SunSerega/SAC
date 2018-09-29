@@ -199,8 +199,8 @@ begin
     if arg = '!debug' then debug := true else
     if arg.StartsWith('!line=') then//ToDo заменить, прыгать можно только на лейблы
     begin//ToDo StartsWith это криво. Надо заменить на .Split('=',2) в начале цикла
-      if not TryStrToInt(arg.Split('=',2)[1], line) then
-        Writeln($'Error parsing {arg.Split(''='',2)[1]} to integer in "!line" arg');
+      if not TryStrToInt(arg.Split(new char[]('='),2)[1], line) then
+        Writeln($'Error parsing {arg.Split(new char[](''=''),2)[1]} to integer in "!line" arg');
     end else
       writeln($'unknown arg: {arg}');
   

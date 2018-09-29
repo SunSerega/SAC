@@ -600,5 +600,16 @@ type
   end;
 
 begin
-  Application.Run(new MForm);
+  if (CommandLineArgs.Length=1) and (CommandLineArgs[0]='SkipUAC') then
+    Application.Run(new MForm) else
+  begin
+    var startInfo := new System.Diagnostics.ProcessStartInfo();
+    startInfo.UseShellExecute := true;
+    startInfo.WorkingDirectory := System.Environment.CurrentDirectory;
+    startInfo.FileName := Application.ExecutablePath;
+    startInfo.Verb := 'runas';
+    startInfo.Arguments := 'SkipUAC';
+    System.Diagnostics.Process.Start(startInfo);
+    Halt;
+  end;
 end.
