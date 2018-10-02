@@ -1,4 +1,5 @@
 ﻿uses ScriptExecutor;
+{$mainresource 'SAC_res.res'}
 
 var
   WW, WH: integer;

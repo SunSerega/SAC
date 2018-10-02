@@ -3,9 +3,10 @@
 //ToDo Добавить DeduseVarsTypes и Instatiate в ExprParser
 //ToDo удобный способ смотреть изначальный и оптимизированный вариант
 //ToDo контекст ошибок, то есть при оптимизации надо сохранять номер строки
+//ToDo убрать понятие файла, файл это лишь набор вблоков + в конце полседнего блока - оператор Retr
 
 //ToDo Directives:  !NoOpt/!Opt
-//ToDo Directives:  !SngDef:i1=num:readonly
+//ToDo Directives:  !SngDef:i1=num:readonly/const
 
 //ToDo bug track:   "ExprStm.Create" broken in code analyzer
 //ToDo bug track:   formating adds newline for "class function"
@@ -15,9 +16,17 @@ interface
 uses ExprParser;
 
 type
-  {$region Exception's}
+  {$region pre desc}
   
+  StmBase = class;
+  
+  StmBlock = class;
   ScriptFile = class;
+  Script = class;
+  
+  {$endregion pre desc}
+  
+  {$region Exception's}
   
   PrecompilingException = abstract class(Exception)
     
@@ -42,9 +51,11 @@ type
   {$region Single stm}
   
   StmBase = abstract class
-  
-  
-  
+    
+    public bl: StmBlock;
+    public fl: ScriptFile;
+    public scr: Script;
+    
   end;
   ExprStm = sealed class(StmBase)
     
@@ -74,18 +85,24 @@ type
   StmBlock = class
     
     public stms := new List<StmBase>;
+    public nvn := new List<string>;
+    public svn := new List<string>;
+    
+    public fl: ScriptFile;
+    public scr: Script;
+    
+    public prev: StmBlock;
+    public refs := new List<StmBlock>;//блоки которые ссылаются на этот. не считая prev
     
     public procedure Optimize;
-    begin
-      
-    end;
     
   end;
   ScriptFile = class
     
     public name, full_name: string;
     public bls := new Dictionary<string, StmBlock>;
-    public refs := new Dictionary<(ScriptFile, string), integer>;
+    
+    public scr: Script;
     
     private class RefNotLoadedFiles := new List<IOptExpr>;
     
@@ -108,9 +125,13 @@ type
   end;
   Script = class
     
-    fls := new List<ScriptFile>;
+    public fls := new List<ScriptFile>;
+    public fQu := new Queue<OptExprBase>;
+    public nvn := new List<string>;
+    public svn := new List<string>;
+    public ovn := new List<string>;
     
-    constructor(fname: string);
+    public constructor(fname: string);
     
   end;
   
@@ -220,23 +241,35 @@ end;
 
 constructor Script.Create(fname: string);
 begin
-  fls.Add(new ScriptFile(fname));
   
-  var nloaded := true;
-  while nloaded do
+  var fQu: Queue<OptExprBase>;
+  
+  fQu.Enqueue(new OptSLiteralExpr(fname));
+  var failed := 0;
+  while failed < fQu.Count do
   begin
-    nloaded := false;
+    var ce := fQu.Dequeue;
+    ce.Optimize;//ToDo это должна быть процедура
+    if false{failed get literal value} then
+    begin
+      fQu.Enqueue(ce);
+      failed += 1;
+      continue;
+    end else
+      failed := false;
     
-    foreach var f in fls do
-      foreach var bl: StmBlock in f.bls.Values do
-      begin
-        var Main_ToDo := 0;
-      end;
+    var Main_ToDo := 0;//ToDo fQu должно быть <ContextExpr>, которое хранит выражение и его контекст (блок, положение и т.п., чтоб можно было оптимизировать)
+    //ToDo читать файл
     
   end;
 end;
 
 {$endregion constructor's}
+
+procedure StmBlock.Optimize;
+begin
+  
+end;
 
 {$region temp_reg}
 
