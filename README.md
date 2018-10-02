@@ -81,10 +81,11 @@ How to feedback
 
 Please, do Not put anything except issues and feature requests in issues.
 
-For other types of feedback you can use:\
+For other types of feedback you can use:
+
 [PABC.Net forum page of SAC (\*Comming soon, with release\*)]()\
-My email: latchenko3@yandex.ru\
-[My vk](https://vk.com/sun_serega).
+My email: `latchenko3@yandex.ru`\
+[My vk](https://vk.com/sun_serega)
 
 ---
 
