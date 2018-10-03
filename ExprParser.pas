@@ -1,11 +1,8 @@
 ﻿unit ExprParser;
 //ToDo Больше регионов. БОЛЬШЕ
 //ToDo Больше шорткатов при res=nil
-//ToDo При инициализации врапера - список глобальных имён объектов ненужен, всё что не числа и не строки приписывает к объектам
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 
-//ToDo Openup:      Реализовать. Продолжить с Pow
-//ToDo Openup:      хоть "a"+(1+2) нельзя раскрывать, "a"+("b"+2) - можно. Надо предусмотреть.
 //ToDo ClampLists:  Реализовать
 //ToDo функции:     что то для нарезания строк
 //ToDo ToString:    переделать для выражений (обоих видов)
@@ -21,84 +18,15 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
-// - #1280
 
 interface
 
 type
-  {$region General}
-  
-  IExpr = interface
-    
-    function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object;
-    
-  end;
-  
-  ExprContextArea = abstract class
-    
-    public debug_name: string;
-    
-    public function GetSubAreas: IList<ExprContextArea>; abstract;
-    
-  end;
-  ComplexExprContextArea = class(ExprContextArea)
-    
-    public sas: IList<ExprContextArea>;
-    
-    public function GetSubAreas: IList<ExprContextArea>; override := sas;
-    
-    public constructor(sas: IList<ExprContextArea>; debug_name: string := '');
-    begin
-      self.sas := sas;
-      self.debug_name := debug_name;
-    end;
-    
-    public constructor(params sas: array of ExprContextArea);
-    begin
-      self.sas := sas;
-      self.debug_name := '';
-    end;
-    
-    public constructor(debug_name: string; params sas: array of ExprContextArea);
-    begin
-      self.sas := sas;
-      self.debug_name := debug_name;
-    end;
-    
-  end;
-  SimpleExprContextArea = class(ExprContextArea)
-    
-    public p1,p2: integer;
-    
-    public function GetSubAreas: IList<ExprContextArea>; override := new ExprContextArea[](self);
-    
-    public class function GetAllSimpleAreas(a: ExprContextArea): List<SimpleExprContextArea>;
-    begin
-      var res := a.GetSubAreas.ToList;
-      while not res.All(sa->sa is SimpleExprContextArea) do
-        res := res.SelectMany(
-          sa->
-          (sa is SimpleExprContextArea)?
-          IEnumerable&<ExprContextArea>(new ExprContextArea[](sa)):
-          (sa as ComplexExprContextArea).sas
-        ).ToList;
-      Result := res.ConvertAll(sa->sa as SimpleExprContextArea);
-    end;
-    
-    public constructor(p1,p2: integer; debug_name: string := '');
-    begin
-      self.p1 := p1;
-      self.p2 := p2;
-      self.debug_name := debug_name;
-    end;
-    
-  end;
-  
-  {$endregion General}
-  
   {$region Exception's}
   
   {$region General}
+  
+  ExprContextArea = class;
   
   InnerException = abstract class(Exception)
     
@@ -142,6 +70,31 @@ type
     
     public constructor(source: object) :=
     inherited Create($'[> {source} <]', $'Unexpected OExprBase');
+    
+  end;
+  
+  {$endregion General}
+  
+  {$region ContextCreation}
+  
+  ContextCreationException = abstract class(Exception)
+    
+    public Sender: object;
+    public ExtraInfo := new Dictionary<string, object>;
+    
+    public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
+    begin
+      inherited Create($'Error {sender}: ' + text);
+      self.Sender := Sender;
+      foreach var kvp in d do
+        ExtraInfo.Add(kvp.Key, kvp.Value);
+    end;
+    
+  end;
+  UnexpectedExprContextDataException = class(ContextCreationException)
+    
+    public constructor(data: ExprContextArea) :=
+    inherited Create(data, $'Unexpected expression context data');
     
   end;
   
@@ -275,6 +228,117 @@ type
   
   {$endregion Exception's}
   
+  {$region General}
+  
+  IExpr = interface
+    
+    function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object;
+    
+  end;
+  
+  ExprContextArea = abstract class
+    
+    public debug_name: string;
+    
+    public function GetSubAreas: IList<ExprContextArea>; abstract;
+    
+  end;
+  SimpleExprContextArea = class(ExprContextArea)
+    
+    public p1,p2: integer;
+    
+    public function GetSubAreas: IList<ExprContextArea>; override := new ExprContextArea[](self);
+    
+    public class function GetAllSimpleAreas(a: ExprContextArea): sequence of SimpleExprContextArea :=
+    a.GetSubAreas.SelectMany(
+      sa->
+      (sa is SimpleExprContextArea)?
+      Seq(sa as SimpleExprContextArea):
+      GetAllSimpleAreas(sa)
+    );
+    
+    public class function TryCombine(var a1: SimpleExprContextArea; a2: SimpleExprContextArea): boolean;
+    begin
+      Result :=
+        ( (a1.p1 >= a2.p1-1) and (a1.p1 <= a2.p2+1) ) or
+        ( (a1.p2 >= a2.p1-1) and (a1.p2 <= a2.p2+1) );
+      
+      if Result then
+        a1 := new SimpleExprContextArea(
+          Min(a1.p1,a2.p1),
+          Max(a1.p2,a2.p2),
+          (new string[](a1.debug_name,a2.debug_name))
+          .Where(s->s<>'')
+          .JoinIntoString('+')
+        );
+    end;
+    
+    public constructor(p1,p2: integer; debug_name: string := '');
+    begin
+      self.p1 := p1;
+      self.p2 := p2;
+      self.debug_name := debug_name;
+      if p2 < p1 then raise new UnexpectedExprContextDataException(self);
+    end;
+    
+  end;
+  ComplexExprContextArea = class(ExprContextArea)
+    
+    public sas: IList<ExprContextArea>;
+    
+    public function GetSubAreas: IList<ExprContextArea>; override := sas;
+    
+    public class function Combine(debug_name:string; params a: array of ExprContextArea): ExprContextArea;
+    begin
+      var scas := a.SelectMany(SimpleExprContextArea.GetAllSimpleAreas).ToList;
+      scas.ForEach(procedure(ca)->ca.debug_name := '');
+      
+      var try_smpl: List<SimpleExprContextArea> -> boolean :=
+      l->
+      begin
+        Result := false;
+        for var i1 := l.Count-2 downto 0 do
+          for var i2 := l.Count-1 downto i1+1 do
+          begin
+            var a1 := l[i1];
+            if SimpleExprContextArea.TryCombine(a1, l[i2]) then
+            begin
+              l[i1] := a1;
+              l.RemoveAt(i2);
+              Result := true;
+              exit;
+            end;
+          end;
+      end;
+      
+      while try_smpl(scas) do;
+      
+      if scas.Count=1 then
+      begin
+        Result := scas[0];
+        Result.debug_name := debug_name;
+      end else
+      begin
+        var res := new ComplexExprContextArea;
+        res.sas := scas.ConvertAll(ca->ca as ExprContextArea);
+        res.debug_name := debug_name;
+        Result := res;
+      end;
+    end;
+    
+    public class function Combine(params a: array of ExprContextArea): ExprContextArea :=
+    Combine(
+      a
+      .Select(ca->ca.debug_name)
+      .Where(s->s<>'')
+      .JoinIntoString('+'),
+      a
+    );
+    
+  end;
+  
+  {$endregion General}
+  
   {$region Load}
   
   Expr = abstract class(IExpr)
@@ -284,7 +348,7 @@ type
     
     public class function FromString(text:string; i1,i2:integer): Expr;
     
-    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object;
+    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object;
     begin
       Result := nil;
       var ToDo := 0;
@@ -632,12 +696,8 @@ type
         var res := new OptSSPlusExpr;
         
         foreach var oe in Positive do
-          if oe is IOptPlusExpr(var ope) then
-            res.Positive.AddRange(ope.GetPositive.Select(oe->
-              (oe is OptSExprBase)?
-              (oe as OptSExprBase):
-              (AsStrExpr(oe) as OptSExprBase)
-            )) else
+          if (oe is IOptPlusExpr(var ope)) and (ope.GetPositive.All(noe->noe is OptSExprBase)) then
+            res.Positive.AddRange(ope.GetPositive.Select(oe->oe as OptSExprBase)) else
             res.Positive.Add(oe);
         
         Result := res;
@@ -900,10 +960,18 @@ type
         
         var res := new OptSOPlusExpr;
         res.Positive := self.Positive.ConvertAll(oe->
-          (oe is IOptLiteralExpr)?
-          (new OptSLiteralExpr(oe.GetRes.ToString) as OptExprBase):
-          oe
-        );
+        begin
+          if oe is IOptLiteralExpr then
+          begin
+            var res := oe.GetRes;
+            if res is real then
+              res := real(res).ToString(nfi) else
+            if res = nil then
+              res := '';
+            Result := new OptSLiteralExpr(res as string) as OptExprBase;
+          end else
+            Result := oe;
+        end);
         Result := res.Optimize;//Тут оптимизации не провели, только изменили тип
       end else
       begin
@@ -1434,6 +1502,8 @@ type
   
   IOptPowExpr = interface(IOptExpr)
     
+    function GetPositive: sequence of OptExprBase;
+    
   end;
   OptNPowExpr = class(OptNExprBase, IOptPowExpr)
     
@@ -1451,6 +1521,8 @@ type
     
     
     
+    public function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
+    
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
@@ -1460,8 +1532,20 @@ type
     public function Openup: IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
-      Result := self;
-      var ToDo := 0;//ToDo (1^2)^3^4 => 1^(2*3*4)
+      
+      if Positive[0] is IOptPowExpr(var ope) then
+      begin
+        var res := new OptNPowExpr;
+        
+        foreach var oe in ope.GetPositive do
+          if oe is OptNExprBase then
+            res.Positive.Add(oe as OptNExprBase) else
+            res.Positive.Add(AsDefinitelyNumExpr(oe) as OptNExprBase);
+        
+        res.Positive.AddRange(self.Positive.Skip(1));
+        Result := res;
+      end else
+        Result := self;
     end;
     
     public function Optimize: IOptExpr; override;
@@ -1546,6 +1630,8 @@ type
     
     
     
+    public function GetPositive: sequence of OptExprBase := Positive;
+    
     public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
@@ -1554,8 +1640,18 @@ type
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptExprBase;
-      Result := self;
+      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
+      
+      if Positive[0] is IOptPowExpr(var ope) then
+      begin
+        var res := new OptOPowExpr;
+        
+        res.Positive.AddRange(ope.GetPositive);
+        res.Positive.AddRange(self.Positive.Skip(1));
+        
+        Result := res;
+      end else
+        Result := self;
     end;
     
     public function Optimize: IOptExpr; override;
@@ -1873,37 +1969,42 @@ type
     
     public MainCalcProc: procedure;
     
-    protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>);
+    protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
       
       for var i := 0 to n_vars_names.Count-1 do
       begin
         var name := n_vars_names[i];
         if n_vars.ContainsKey(name) then
-          self.n_vars[i] := n_vars[name];
+          self.n_vars[i] := n_vars[name] else
+          self.n_vars[i] := 0;
       end;
       
       for var i := 0 to s_vars_names.Count-1 do
       begin
         var name := s_vars_names[i];
         if s_vars.ContainsKey(name) then
-          self.s_vars[i] := s_vars[name];
+          self.s_vars[i] := s_vars[name] else
+          self.s_vars[i] := '';
       end;
       
       for var i := 0 to o_vars_names.Count-1 do
       begin
         var name := o_vars_names[i];
-        if o_vars.ContainsKey(name) then
-          self.o_vars[i] := o_vars[name];
+        if n_vars.ContainsKey(name) then
+          self.o_vars[i] := n_vars[name] else
+        if s_vars.ContainsKey(name) then
+          self.o_vars[i] := s_vars[name] else
+          self.o_vars[i] := nil;
       end;
       
       if MainCalcProc <> nil then MainCalcProc;
       
     end;
     
-    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object; abstract;
+    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; abstract;
     
-    public class function FromExpr(e: Expr; n_vars_names, s_vars_names, o_vars_names: List<string>): OptExprWrapper;
+    public class function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>): OptExprWrapper;
     
     public constructor;
     begin
@@ -1915,17 +2016,17 @@ type
     
     public Main: OptNExprBase;
     
-    public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): real;
+    public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
       
-      inherited StartCalc(n_vars, s_vars, o_vars);
+      inherited StartCalc(n_vars, s_vars);
       
       Result := Main.res;
       
     end;
     
-    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object; override :=
-    CalcN(n_vars, s_vars, o_vars);
+    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override :=
+    CalcN(n_vars, s_vars);
     
     public constructor(Main: OptNExprBase);
     begin
@@ -1941,17 +2042,17 @@ type
     
     public Main: OptSExprBase;
     
-    public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): string;
+    public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
       
-      inherited StartCalc(n_vars, s_vars, o_vars);
+      inherited StartCalc(n_vars, s_vars);
       
       Result := Main.res;
       
     end;
     
-    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object; override :=
-    CalcN(n_vars, s_vars, o_vars);
+    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override :=
+    CalcN(n_vars, s_vars);
     
     public constructor(Main: OptSExprBase);
     begin
@@ -1967,10 +2068,10 @@ type
     
     public Main: OptOExprBase;
     
-    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>; o_vars: Dictionary<string, object>): object; override;
+    public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin
       
-      inherited StartCalc(n_vars, s_vars, o_vars);
+      inherited StartCalc(n_vars, s_vars);
       
       Result := Main.GetRes;
       
@@ -2001,6 +2102,9 @@ begin
   while true do
   begin
     
+    if from > self.Length then
+      raise new CorrespondingCharNotFoundException(self, ch, nfrom);
+    
     if self[from] = ch then
     begin
       Result := from;
@@ -2013,8 +2117,6 @@ begin
       from := self.FindNext(from+1,'"');
     
     from += 1;
-    if from > self.Length then
-      raise new CorrespondingCharNotFoundException(self, ch, nfrom);
     
   end;
 end;
@@ -2510,7 +2612,6 @@ type
     
     class g_n_vars_names: List<string>;
     class g_s_vars_names: List<string>;
-    class g_o_vars_names: List<string>;
     
     class l_n_vars_names: List<string>;
     class l_s_vars_names: List<string>;
@@ -2613,12 +2714,11 @@ type
       end;
     end;
     
-    class function GetOptExprWrapper(e: Expr; g_n_vars_names, g_s_vars_names, g_o_vars_names: List<string>): OptExprWrapper;
+    class function GetOptExprWrapper(e: Expr; g_n_vars_names, g_s_vars_names: List<string>): OptExprWrapper;
     begin
       
       OptConverter.g_n_vars_names := g_n_vars_names;
       OptConverter.g_s_vars_names := g_s_vars_names;
-      OptConverter.g_o_vars_names := g_o_vars_names;
       
       l_n_vars_names := new List<string>;
       l_s_vars_names := new List<string>;
@@ -2655,8 +2755,8 @@ type
     
   end;
 
-class function OptExprWrapper.FromExpr(e: Expr; n_vars_names, s_vars_names, o_vars_names: List<string>) :=
-OptConverter.GetOptExprWrapper(e, n_vars_names, s_vars_names, o_vars_names);
+class function OptExprWrapper.FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>) :=
+OptConverter.GetOptExprWrapper(e, n_vars_names, s_vars_names);
 
 {$endregion Optimize}
 

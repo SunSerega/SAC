@@ -1,0 +1,9 @@
+Output 1+5*3^4+" hi"
+
+Output null+"hi"
+Output 5+null comment 1
+ comment 2
+
+Return
+
+Output 1+5*3^4+" hi"
