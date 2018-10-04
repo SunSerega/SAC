@@ -163,8 +163,6 @@ type
   
   {$region Exception's}
   
-  ReturnExecuted = class(Exception) end;
-  
   PrecompilingException = abstract class(Exception)
     
     public Sender: StmBlock;
@@ -207,6 +205,18 @@ type
     inherited Create(source, $'Recursion level was > maximum, {max}');
     
   end;
+  InsufficientOperParamCount = class(PrecompilingException)
+    
+    public constructor(source: Script; exp: integer; par: array of string) :=
+    inherited Create(source, $'Insufficient operator params count, expeted {exp}, but found {par.Length}', KV('par', object(par)));
+    
+  end;
+  LabelNotFoundException = class(PrecompilingException)
+    
+    public constructor(source: Script; lbl_name: string) :=
+    inherited Create(source, $'Label "{lbl_name}" not found');
+    
+  end;
   
   OutputStreamEmptyException = class(InnerException)
     
@@ -228,6 +238,7 @@ type
     public svs := new Dictionary<string, string>;
     public CallStack := new Stack<StmBlock>;
     public max_recursion: integer;
+    public jcc := false;
     
     public procedure SetVar(vname:string; val: object);
     begin
@@ -287,7 +298,7 @@ type
     public class function ObjToStr(o: object): string;
     begin
       if o = nil then
-        Result := 'null' else
+        Result := '' else
       if o is string then
         Result := o as string else
         Result := real(o).ToString(nfi);
@@ -391,6 +402,42 @@ type
   
   {$endregion Stm containers}
   
+  {$region StmBlockRef}
+  
+  StmBlockRef = abstract class
+    
+    function GetBlock(ec: ExecutingContext): StmBlock; abstract;
+    
+  end;
+  StaticStmBlockRef = class(StmBlockRef)
+    
+    bl: StmBlock;
+    
+    function GetBlock(ec: ExecutingContext): StmBlock; override := bl;
+    
+  end;
+  DynamicStmBlockRef = class(StmBlockRef)
+    
+    e: OptExprWrapper;
+    
+    function GetBlock(ec: ExecutingContext): StmBlock; override;
+    begin
+      var res := StmBase.ObjToStr(e.Calc(ec.nvs, ec.svs));
+      if res <> '' then
+      begin
+        if res.StartsWith('#') then
+          res := ec.curr.fname+res else
+          res := Script.CombinePaths(System.IO.Path.GetDirectoryName(ec.curr.fname), res);
+        
+        if not ec.scr.sbs.TryGetValue(res, Result) then
+          raise new LabelNotFoundException(ec.scr, res);
+      end;
+    end;
+    
+  end;
+  
+  {$endregion StmBlockRef}
+  
   {$region interface's}
   
   IFileRefStm = interface
@@ -406,25 +453,97 @@ type
   
   {$region operator's}
   
-  OperReturn = class(OperStmBase)
+  OperCall = class(OperStmBase, ICallOper)
     
-    constructor := exit;
+    public CallingBlock: StmBlockRef;
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      var res := new DynamicStmBlockRef;
+      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
+      CallingBlock := res;
+    end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    ec->begin raise new ReturnExecuted end;//ToDo #1326
+    ec->
+    begin
+      ec.Push(bl.next);
+      ec.curr := self.CallingBlock.GetBlock(ec);
+      ec.jcc := true;
+    end;
+    
+  end;
+  OperCallIf = class(OperStmBase, ICallOper)
+    
+    public e1,e2: OptExprWrapper;
+    public compr: (equ, less, more, less_equ, more_equ);
+    public CallingBlock1: StmBlockRef;
+    public CallingBlock2: StmBlockRef;
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      
+      var res := new DynamicStmBlockRef;
+      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[4]), sb.nvn, sb.svn);
+      CallingBlock1 := res;
+      
+      res := new DynamicStmBlockRef;
+      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[5]), sb.nvn, sb.svn);
+      CallingBlock2 := res;
+    end;
+    
+    private function comp_obj(o1,o2: object): boolean;
+    begin
+      if (o1 is real) and (o2 is real) then
+        case compr of
+          equ: Result := real(o1) = real(o2);
+          less: Result := real(o1) < real(o2);
+          more: Result := real(o1) > real(o2);
+          less_equ: Result := real(o1) <= real(o2);
+          more_equ: Result := real(o1) >= real(o2);
+        end else
+        case compr of
+          equ: Result := ObjToStr(o1) = ObjToStr(o2);
+          less: Result := ObjToStr(o1) < ObjToStr(o2);
+          more: Result := ObjToStr(o1) > ObjToStr(o2);
+          less_equ: Result := ObjToStr(o1) <= ObjToStr(o2);
+          more_equ: Result := ObjToStr(o1) >= ObjToStr(o2);
+        end;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    ec->
+    begin
+      ec.Push(bl.next);
+      var res1 := e1.Calc(ec.nvs, ec.svs);
+      var res2 := e2.Calc(ec.nvs, ec.svs);
+      ec.curr := comp_obj(res1,res2)?CallingBlock1.GetBlock(ec):CallingBlock2.GetBlock(ec);
+      ec.jcc := true;
+    end;
+    
+  end;
+  OperReturn = class(OperStmBase)
+    
+    public constructor := exit;
+    
+    public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
   OperOutput = class(OperStmBase)
     
-    otp: OptExprWrapper;
+    public otp: OptExprWrapper;
     
-    constructor(sb: StmBlock; par: array of string);
+    public constructor(sb: StmBlock; par: array of string);
     begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       var e := Expr.FromString(par[1]);
       otp := OptExprWrapper.FromExpr(e, sb.nvn, sb.svn);
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
+    public public function GetCalc: Action<ExecutingContext>; override :=
     ec->
     if scr.otp <> nil then
       scr.otp(ObjToStr(otp.Calc(
@@ -459,7 +578,7 @@ implementation
 
 {$region General}
 
-function SmartSplit(self: string; c: integer := -1): array of string; extensionmethod;
+function SmartSplit(self: string; ch: char := ' '; c: integer := -1): array of string; extensionmethod;
 begin
   if (self = '') or (c = 0) then
   begin
@@ -483,7 +602,7 @@ begin
       n := self.FindNext(n+1,'"') else
     if self[n] = '(' then
       n := self.FindNext(n+1,')') else
-    if self[n] = ' ' then
+    if self[n] = ch then
     begin
       wsp += n;
       if wsp.Count = c then break;
@@ -514,9 +633,9 @@ end;
 
 constructor ExprStm.Create(sb: StmBlock; text: string);
 begin
-  var ss := text.Split(new char[]('='), 2);
+  var ss := text.SmartSplit('=', 2);
   self.v_name := ss[0];
-  self.e := Expr.FromString(ss[1]);
+  self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]),sb.nvn, sb.svn);
 end;
 
 class function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
@@ -531,8 +650,13 @@ end;
 class function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
 begin
   case par[0] of
+    
+    'call': Result := new OperCall(sb, par);
+    'callif': Result := new OperCallIf(sb, par);
     'return': Result := new OperReturn;
+    
     'output': Result := new OperOutput(sb, par);
+    
   else raise new UndefinedOperNameException(sb, par[0]);
   end;
 end;
@@ -572,35 +696,51 @@ begin
     
     var last := new StmBlock(self);
     var lname := ffname;
+    
     var tmp_b_c := 0;
+    var skp_ar := false;
+    
     foreach var ss in lns do
       if ss <> '' then
       begin
-        var s := ss.SmartSplit(2)[0];
+        var s := ss.SmartSplit(' ',2)[0];
         
         if s.StartsWith('#') then
         begin
           
           if s.Contains('%') then raise new InvalidLabelCharactersException(last, s, '%');
           sbs.Add(lname, last);
-          last.next := new StmBlock(self);
-          last.Seal;
-          last := last.next;
+          last.fname := ffname;
+          if skp_ar then
+          begin
+            last.Seal;
+            last := new StmBlock(self);
+          end else
+          begin
+            last.next := new StmBlock(self);
+            last.Seal;
+            last := last.next;
+          end;
           lname := ffname+s;
+          skp_ar := false;
           
         end else
-          if s <> '' then
+          if (s <> '') and not skp_ar then
           begin
             var stm := StmBase.FromString(last, s, ss.SmartSplit);
             last.stms.Add(stm);
             if stm is ICallOper then
             begin
               sbs.Add(lname, last);
-              last.next := new StmBlock;
+              last.next := new StmBlock(self);
+              last.fname := ffname;
+              last.Seal;
               last := last.next;
-              lname := ffname+'%'+tmp_b_c;
+              lname := ffname+'#%'+tmp_b_c;
               tmp_b_c += 1;
-            end;
+            end else
+            if stm is OperReturn then
+              skp_ar := true;
           end;
       end;
     
@@ -667,13 +807,11 @@ function ExecutingContext.ExecuteNext: boolean;
 begin
   if curr <> nil then
   begin
-    try
-      curr.Execute(self);
+    curr.Execute(self);
+    if not jcc then
       curr := curr.next;
-      Result := true;
-    except
-      on ReturnExecuted do Result := Pop(curr);
-    end;
+    jcc := false;
+    Result := true;
   end else
     Result := Pop(curr);
 end;
