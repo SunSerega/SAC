@@ -83,7 +83,7 @@ Please, do Not put anything except issues and feature requests in issues.
 
 For other types of feedback you can use:
 
-[PABC.Net forum page of SAC (\*Comming soon, with release\*)]()\
+[PABC.Net forum page of SAC](http://forum.mmcs.sfedu.ru/t/sac-scriptautoclicker/2607)\
 My email: `latchenko3@yandex.ru`\
 [My vk](https://vk.com/sun_serega)
 
