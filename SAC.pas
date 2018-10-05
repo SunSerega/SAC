@@ -12,14 +12,15 @@ type
     
     procedure Start;
     begin
-      var s := new Script(path);
-      s.Start;
+      new ScriptExecutionForm(path+'\main.sac');
+      Halt;
     end;
     
     constructor(fname: string);
     begin
-      self.path := fname;
-      self.name := System.IO.Path.GetFileName(fname);
+      var fi := new System.IO.FileInfo(fname);
+      self.path := fi.FullName;
+      self.name := fi.Name;
     end;
     
   end;
@@ -174,12 +175,13 @@ begin
   
 end;
 
-procedure HelpWithArgs;
+procedure HelpWithArgs(debug: boolean);
 begin
   var ToDo := 0;
   writeln('Nothing in "!conf" start yet');
   writeln('Press Enter to continue without config');
   readln;
+  halt;
 end;
 
 procedure StartScript;
@@ -191,24 +193,44 @@ begin
   System.Console.SetBufferSize(WW,WH);
   writeln($'File {CommandLineArgs[0]}');
   
-  var debug := false;
   var conf := false;
-  var line := 0;
+  var debug := true;
+  
+  var TryParseBool: string->boolean :=
+  s->
+  begin
+    Result := false;
+    if not boolean.TryParse(s, Result) then
+    begin
+      var bi: BigInteger;
+      if BigInteger.TryParse(s, bi) then
+        Result := bi <> 0 else
+      begin
+        Writeln($'Can''t parse "{s}" to bool value');
+        Readln;
+        Halt;
+      end;
+    end;
+  end;
   
   foreach var arg:string in CommandLineArgs.Skip(1) do
-    if arg = '!conf' then conf := true else
-    if arg = '!debug' then debug := true else
-    if arg.StartsWith('!line=') then//ToDo заменить, прыгать можно только на лейблы
-    begin//ToDo StartsWith это криво. Надо заменить на .Split('=',2) в начале цикла
-      if not TryStrToInt(arg.Split(new char[]('='),2)[1], line) then
-        Writeln($'Error parsing {arg.Split(new char[](''=''),2)[1]} to integer in "!line" arg');
-    end else
+  begin
+    var par := arg.SmartSplit('=',2);
+    
+    if par[0] = '!conf' then conf := (par.Length=1) or TryParseBool(par[1]) else
+    if par[0] = '!debug' then debug := (par.Length=1) or TryParseBool(par[1]) else
+    begin
       writeln($'unknown arg: {arg}');
+      Readln;
+      Halt;
+    end;
+    
+  end;
   
-  if conf then HelpWithArgs;
+  if conf then HelpWithArgs(debug);
   
-  var s := new Script(CommandLineArgs[0], debug, line);
-  s.Start;
+  new ScriptExecutionForm(CommandLineArgs[0], debug);
+  Halt;
   
 end;
 

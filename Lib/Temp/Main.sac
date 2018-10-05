@@ -7,10 +7,9 @@ n=5+null
 Output n+3 comment 1
  comment 2
 
+Susp
 Return
-
-Output 1+5*3^4+" hi"
+Output "after return"
 
 #lbl1
-
 Output "lbl1 executed"

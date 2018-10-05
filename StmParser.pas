@@ -163,7 +163,7 @@ type
   
   {$region Exception's}
   
-  PrecompilingException = abstract class(Exception)
+  FileCompilingException = abstract class(Exception)
     
     public Sender: StmBlock;
     public ExtraInfo := new Dictionary<string, object>;
@@ -175,43 +175,43 @@ type
     end;
     
   end;
-  UndefinedDirectiveNameException = class(PrecompilingException)
+  UndefinedDirectiveNameException = class(FileCompilingException)
     
     public constructor(source: StmBlock; dname: string) :=
     inherited Create(source, $'Directive name "{dname}" not defined');
     
   end;
-  UndefinedOperNameException = class(PrecompilingException)
+  UndefinedOperNameException = class(FileCompilingException)
     
     public constructor(source: StmBlock; oname: string) :=
     inherited Create(source, $'Operator name "{oname}" not defined');
     
   end;
-  RefFileNotFound = class(PrecompilingException)
+  RefFileNotFound = class(FileCompilingException)
     
     public constructor(source: StmBlock; fname: string) :=
     inherited Create(source, $'File "{fname}" not found');
     
   end;
-  InvalidLabelCharactersException = class(PrecompilingException)
+  InvalidLabelCharactersException = class(FileCompilingException)
     
     public constructor(source: StmBlock; l: string; ch: char) :=
     inherited Create(source, $'Label can''t contain "{ch}". Label was "l"');
     
   end;
-  RecursionTooBig = class(PrecompilingException)
+  RecursionTooBig = class(FileCompilingException)
     
     public constructor(source: Script; max: integer) :=
     inherited Create(source, $'Recursion level was > maximum, {max}');
     
   end;
-  InsufficientOperParamCount = class(PrecompilingException)
+  InsufficientOperParamCount = class(FileCompilingException)
     
     public constructor(source: Script; exp: integer; par: array of string) :=
     inherited Create(source, $'Insufficient operator params count, expeted {exp}, but found {par.Length}', KV('par', object(par)));
     
   end;
-  LabelNotFoundException = class(PrecompilingException)
+  LabelNotFoundException = class(FileCompilingException)
     
     public constructor(source: Script; lbl_name: string) :=
     inherited Create(source, $'Label "{lbl_name}" not found');
@@ -367,7 +367,11 @@ type
     private class nfi := new System.Globalization.NumberFormatInfo;
     
     public main_file_name: string;
+    
     public otp: procedure(s: string);
+    public susp_called: procedure;
+    public stoped: procedure;
+    
     public sbs := new Dictionary<string, StmBlock>;
     public nvn := new List<string>;
     public svn := new List<string>;
@@ -396,6 +400,8 @@ type
     begin
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
       while ec.ExecuteNext do;
+      if stoped <> nil then
+        stoped;
     end;
     
   end;
@@ -525,6 +531,20 @@ type
     end;
     
   end;
+  
+  OperSusp = class(OperStmBase)
+    
+    public constructor := exit;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    ec->
+    begin
+      if ec.scr.susp_called <> nil then
+        ec.scr.susp_called();
+      System.Threading.Thread.CurrentThread.Suspend;
+    end;
+    
+  end;
   OperReturn = class(OperStmBase)
     
     public constructor := exit;
@@ -532,6 +552,15 @@ type
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
+  OperHalt = class(OperStmBase)
+    
+    public constructor := exit;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    oe->Halt();
+    
+  end;
+  
   OperOutput = class(OperStmBase)
     
     public otp: OptExprWrapper;
@@ -653,7 +682,10 @@ begin
     
     'call': Result := new OperCall(sb, par);
     'callif': Result := new OperCallIf(sb, par);
+    
+    'susp': Result := new OperSusp;
     'return': Result := new OperReturn;
+    'halt': Result := new OperHalt;
     
     'output': Result := new OperOutput(sb, par);
     
