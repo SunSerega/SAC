@@ -1,18 +1,12 @@
 ﻿unit StmParser;
-//ToDo файлы могут быть подключены и динамичным связыванием. Это надо предусмотреть
 //ToDo Добавить DeduseVarsTypes и Instatiate в ExprParser
 //ToDo удобный способ смотреть изначальный и оптимизированный вариант
 //ToDo контекст ошибок, то есть при оптимизации надо сохранять номер строки
+//ToDo типы вроде InputValue и т.п., чтоб не переписывать для каждого оператора код конвертации текста в параметры, а так же последующие оптимизации
+//ToDo нормальные GetCalc
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
-
-//ToDo bug track:
-// -formating adds newline for "class function"
-
-//ToDo Проверить, не исправили ли issue компилятора
-// - #1322 (в следующем билде)
-// - #1326
 
 interface
 
@@ -217,6 +211,12 @@ type
     inherited Create(source, $'Label "{lbl_name}" not found');
     
   end;
+  InvalidSleepLengthException = class(FileCompilingException)
+    
+    public constructor(source: Script; l: BigInteger) :=
+    inherited Create(source, $'Value {l} is invalid for Sleep operator', KV('l'+'', object(l)));
+    
+  end;
   
   OutputStreamEmptyException = class(InnerException)
     
@@ -408,6 +408,83 @@ type
   
   {$endregion Stm containers}
   
+  {$region InputValue}
+  
+  InputValue = abstract class
+    
+    public function GetCalc: Action<ExecutingContext>; virtual := nil;
+    
+    public function GetRes: object; abstract;
+    
+    public function Optimize(nvn, svn: List<string>): InputValue; virtual := self;
+    
+  end;
+  
+  InputSValue = abstract class(InputValue)
+    
+    public res: string;
+    
+    public function GetRes: object; override := res;
+    
+  end;
+  SInputSValue = class(InputSValue)
+    
+    public constructor(res: string) :=
+    self.res := res;
+    
+  end;
+  DInputSValue = class(InputSValue)
+    
+    public oe: OptExprWrapper;
+    
+    public procedure Calc(ec: ExecutingContext) :=
+    self.res := StmBase.ObjToStr(oe.Calc(ec.nvs, ec.svs));
+    
+    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
+    
+    public function Optimize(nvn, svn: List<string>): InputValue; override;
+    begin
+      oe.Optimize(nvn, svn);//ToDo разобраться там с var-Expr, там полно всего неправильного
+      if oe.GetMain is IOptLiteralExpr(var l) then
+        Result := new SInputSValue(StmBase.ObjToStr(l.GetRes)) else
+        Result := self;
+    end;
+    
+  end;
+  
+  InputNValue = abstract class(InputValue)
+    
+    public res: real;
+    
+    public function GetRes: object; override := res;
+    
+  end;
+  SInputNValue = class(InputNValue)
+    
+    public constructor(res: real) :=
+    self.res := res;
+    
+  end;
+  DInputNValue = class(InputNValue)
+    
+    public oe: OptExprWrapper;
+    
+    public procedure Calc(ec: ExecutingContext);
+    begin
+      var o := oe.Calc(ec.nvs, ec.svs);
+      if o is string then
+        raise new ExpectedNumValueException(oe) else
+      if o = nil then
+        self.res := 0 else
+        self.res := real(o);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
+    
+  end;
+  
+  {$endregion InputValue}
+  
   {$region StmBlockRef}
   
   StmBlockRef = abstract class
@@ -458,6 +535,7 @@ type
   {$endregion interface's}
   
   {$region operator's}
+  
   
   OperCall = class(OperStmBase, ICallOper)
     
@@ -561,6 +639,54 @@ type
     
   end;
   
+  OperSleep = class(OperStmBase, ICallOper)
+    
+    public l: OptExprWrapper;
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      l := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
+      
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    ec->
+    begin
+      var r := real(l.Calc(ec.nvs, ec.svs));
+      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
+      var i := BigInteger.Create(r);
+      if (i < 0) or (i > (integer.MaxValue shr 1)) then raise new InvalidSleepLengthException(ec.scr, i);
+      Sleep(integer(i));
+    end;
+    
+  end;
+  {
+  OperRandom = class(OperStmBase, ICallOper)
+    
+    public l: OptExprWrapper;
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      l := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
+      
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    ec->
+    begin
+      var r := real(l.Calc(ec.nvs, ec.svs));
+      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
+      var i := BigInteger.Create(r);
+      if (i < 0) or (i > (integer.MaxValue shr 1)) then raise new InvalidSleepLengthException(ec.scr, i);
+      Sleep(integer(i));
+    end;
+    
+  end;
+  {}
   OperOutput = class(OperStmBase)
     
     public otp: OptExprWrapper;
@@ -821,13 +947,9 @@ end;
 
 function StmBlock.GetAllFRefs: sequence of OptExprBase;
 begin
-  var res := new List<OptExprBase>;//ToDo #1322
   foreach var op in stms do
     if op is IFileRefStm(var frs) then
-      //yield sequence frs.GetRefs;
-      res.AddRange(frs.GetRefs);
-  
-  Result := res;
+      yield sequence frs.GetRefs;
 end;
 
 procedure Script.Optimize(load_done: boolean);
@@ -841,8 +963,10 @@ begin
   begin
     curr.Execute(self);
     if not jcc then
+    begin
       curr := curr.next;
-    jcc := false;
+      jcc := false;
+    end;
     Result := true;
   end else
     Result := Pop(curr);

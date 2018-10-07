@@ -2,6 +2,7 @@
 //ToDo Больше регионов. БОЛЬШЕ
 //ToDo Больше шорткатов при res=nil
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
+//ToDo BigInteger.Create(real.PositiveInfinity) даёт ошибку
 
 //ToDo ClampLists:  Реализовать
 //ToDo функции:     что то для нарезания строк
@@ -221,6 +222,12 @@ type
     
     public constructor(sender: object) :=
     inherited Create(sender, 'Expected Num Value');
+    
+  end;
+  CannotConvertToIntException = class(ExprCompilingException)
+    
+    public constructor(sender, val: object) :=
+    inherited Create(sender, 'Can''t convert [{val}] to integer', KV('val',object(val)));
     
   end;
   
