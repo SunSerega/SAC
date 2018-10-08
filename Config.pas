@@ -284,7 +284,7 @@ type
   MForm = class(Form)
     
     const RegName = 'ScriptAutoClicker';
-    const ProgFilesName = System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
+    class ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
     
     const version = 1;
     

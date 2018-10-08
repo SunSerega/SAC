@@ -500,6 +500,8 @@ type
   
   StmBlockRef = abstract class
     
+    function GetCalc: Action<ExecutingContext>; virtual := nil;
+    
     function GetBlock(ec: ExecutingContext): StmBlock; abstract;
     
   end;
@@ -512,11 +514,13 @@ type
   end;
   DynamicStmBlockRef = class(StmBlockRef)
     
-    e: OptExprWrapper;
+    s: InputSValue;
+    
+    function GetCalc: Action<ExecutingContext>; override := s.GetCalc;
     
     function GetBlock(ec: ExecutingContext): StmBlock; override;
     begin
-      var res := StmBase.ObjToStr(e.Calc(ec.nvs, ec.svs));
+      var res := s.res;
       if res <> '' then
       begin
         if res.StartsWith('#') then
@@ -527,6 +531,9 @@ type
           raise new LabelNotFoundException(ec.scr, res);
       end;
     end;
+    
+    constructor(s: InputSValue) :=
+    self.s := s;
     
   end;
   
@@ -550,44 +557,44 @@ type
   
   OperCall = class(OperStmBase, ICallOper)
     
-    public CallingBlock: StmBlockRef;
+    public CalledBlock: StmBlockRef;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.Push(bl.next);
+      ec.curr := self.CalledBlock.GetBlock(ec);
+      ec.jcc := true;
+    end;
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      var res := new DynamicStmBlockRef;
-      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
-      CallingBlock := res;
+      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
-    begin
-      ec.Push(bl.next);
-      ec.curr := self.CallingBlock.GetBlock(ec);
-      ec.jcc := true;
-    end;
+    System.Delegate.Combine(
+      CalledBlock.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
     
   end;
   OperCallIf = class(OperStmBase, ICallOper)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ, less, more, less_equ, more_equ);
-    public CallingBlock1: StmBlockRef;
-    public CallingBlock2: StmBlockRef;
+    public CalledBlock1: StmBlockRef;
+    public CalledBlock2: StmBlockRef;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
       
-      var res := new DynamicStmBlockRef;
-      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[4]), sb.nvn, sb.svn);
-      CallingBlock1 := res;
-      
-      res := new DynamicStmBlockRef;
-      res.e := OptExprWrapper.FromExpr(Expr.FromString(par[5]), sb.nvn, sb.svn);
-      CallingBlock2 := res;
+      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
+      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
     end;
     
     private function comp_obj(o1,o2: object): boolean;
@@ -615,7 +622,7 @@ type
       ec.Push(bl.next);
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.curr := comp_obj(res1,res2)?CallingBlock1.GetBlock(ec):CallingBlock2.GetBlock(ec);
+      ec.curr := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
       ec.jcc := true;
     end;
     
@@ -652,52 +659,44 @@ type
   
   OperSleep = class(OperStmBase, ICallOper)
     
-    public l: OptExprWrapper;
+    public l: InputNValue;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      l := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
-      
+      l := new DInputNValue(par[1], sb);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
     ec->
     begin
-      var r := real(l.Calc(ec.nvs, ec.svs));
+      var r := l.res;
       if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
       var i := BigInteger.Create(r);
-      if (i < 0) or (i > (integer.MaxValue shr 1)) then raise new InvalidSleepLengthException(ec.scr, i);
+      if (i < 0) or (i > integer.MaxValue) then raise new InvalidSleepLengthException(ec.scr, i);
       Sleep(integer(i));
     end;
     
   end;
-  {
   OperRandom = class(OperStmBase, ICallOper)
     
-    public l: OptExprWrapper;
+    public vname: string;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      l := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
-      
+      vname := par[1];
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
     ec->
     begin
-      var r := real(l.Calc(ec.nvs, ec.svs));
-      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
-      var i := BigInteger.Create(r);
-      if (i < 0) or (i > (integer.MaxValue shr 1)) then raise new InvalidSleepLengthException(ec.scr, i);
-      Sleep(integer(i));
+      ec.SetVar(vname, Random());
     end;
     
   end;
-  {}
   OperOutput = class(OperStmBase)
     
     public otp: OptExprWrapper;
@@ -973,11 +972,9 @@ begin
   if curr <> nil then
   begin
     curr.Execute(self);
-    if not jcc then
-    begin
+    if jcc then
+      jcc := false else
       curr := curr.next;
-      jcc := false;
-    end;
     Result := true;
   end else
     Result := Pop(curr);
