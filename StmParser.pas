@@ -435,19 +435,24 @@ type
   end;
   DInputSValue = class(InputSValue)
     
-    public oe: OptExprWrapper;
+    public oe: OptSExprWrapper;
     
     public procedure Calc(ec: ExecutingContext) :=
-    self.res := StmBase.ObjToStr(oe.Calc(ec.nvs, ec.svs));
+    self.res := oe.CalcS(ec.nvs, ec.svs);
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
     public function Optimize(nvn, svn: List<string>): InputValue; override;
     begin
-      oe.Optimize(nvn, svn);//ToDo разобраться там с var-Expr, там полно всего неправильного
-      if oe.GetMain is IOptLiteralExpr(var l) then
-        Result := new SInputSValue(StmBase.ObjToStr(l.GetRes)) else
+      oe.Optimize(nvn, svn);
+      if oe.GetMain is IOptLiteralExpr(var me) then
+        Result := new SInputSValue(string(me.GetRes)) else
         Result := self;
+    end;
+    
+    public constructor(s: string; bl: StmBlock);
+    begin
+      oe := OptSExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, OptExprBase.AsStrExpr));
     end;
     
   end;
@@ -467,19 +472,25 @@ type
   end;
   DInputNValue = class(InputNValue)
     
-    public oe: OptExprWrapper;
+    public oe: OptNExprWrapper;
     
-    public procedure Calc(ec: ExecutingContext);
-    begin
-      var o := oe.Calc(ec.nvs, ec.svs);
-      if o is string then
-        raise new ExpectedNumValueException(oe) else
-      if o = nil then
-        self.res := 0 else
-        self.res := real(o);
-    end;
+    public procedure Calc(ec: ExecutingContext) :=
+    res := oe.CalcN(ec.nvs, ec.svs);
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
+    
+    public function Optimize(nvn, svn: List<string>): InputValue; override;
+    begin
+      oe.Optimize(nvn, svn);
+      if oe.GetMain is IOptLiteralExpr(var me) then
+        Result := new SInputNValue(real(me.GetRes)) else
+        Result := self;
+    end;
+    
+    public constructor(s: string; bl: StmBlock);
+    begin
+      oe := OptNExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, oe->OptExprBase.AsDefinitelyNumExpr(oe)));
+    end;
     
   end;
   

@@ -235,7 +235,16 @@ type
     begin
       var ress := se.ConvertAll(e->e.GetExpRes);
       if ress.Any(o->o is string) then
-        Result := ress.Where(o->o<>nil).JoinIntoString('') else
+        Result := ress.Where(o->o<>nil).Select(
+          o->
+          begin
+            Result := '';
+            if o is string then
+              Result := o as string else
+            if o is real then
+              Result := real(o).ToString(new System.Globalization.NumberFormatInfo);
+          end
+        ).JoinIntoString('') else
         Result := ress.ConvertAll(function(o,i)->
 //        try
 //          Result :=
@@ -449,7 +458,7 @@ begin
   //exit;
   
   var skiping: integer;
-  skiping := 1023000+1;
+  //skiping := 0;
   var n := 0;
   
   foreach var te in TestExpr.GetAnyExprs(true, 3) do
@@ -464,11 +473,17 @@ begin
     var nvs := te.nvs;
     var svs := te.svs;
     var ovs := te.ovs;
+    foreach var kvp in ovs do//ToDo ну да, костыль, но уже как то... какая разница
+      if kvp.Value <> nil then
+        if kvp.Value is real then
+          nvs.Add(kvp.Key, real(kvp.Value)) else
+          svs.Add(kvp.Key, string(kvp.Value));
+    
     var res1 := ExprRes(te.GetExpRes);
     
     var e := Expr.FromString(s);
-    var oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList, ovs.Keys.ToList);
-    var res2 := ExprRes(oe.Calc(nvs, svs, ovs));
+    var oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
+    var res2 := ExprRes(oe.Calc(nvs, svs));
     
     if not (res1 = res2) then
     begin
@@ -485,9 +500,9 @@ begin
       writeln($'Ожидалось:      {res1}');
       writeln($'Получили:       {res2}');
       write('-'*50);
-      oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList, ovs.Keys.ToList);
+      oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
       res1 := ExprRes(te.GetExpRes);
-      res2 := ExprRes(oe.Calc(nvs, svs, ovs));
+      res2 := ExprRes(oe.Calc(nvs, svs));
       var b := res1=res2;
       readln;
     end;

@@ -3,6 +3,8 @@
 //ToDo Больше шорткатов при res=nil
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 //ToDo BigInteger.Create(real.PositiveInfinity) даёт ошибку
+//ToDo Delegate.Combine вместо всех +=
+//ToDo Заменить "... as T" на "T(...)"
 
 //ToDo ClampLists:  Реализовать
 //ToDo функции:     что то для нарезания строк
@@ -448,13 +450,14 @@ type
   IOptExpr = interface
     
     function GetRes: Object;
-    
     function GetResType: System.Type;
     
-    function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr;
+    function GetVarNames(nn, ns, no: array of string): sequence of string;
+    function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr;
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
     
     function Openup: IOptExpr;
-    
     function Optimize: IOptExpr;
     
     function GetCalc: Action0;
@@ -464,20 +467,20 @@ type
     
     protected static nfi := new System.Globalization.NumberFormatInfo;
     
-    protected static function AsStrExpr(o: OptExprBase): OptExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
-    protected static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
+    public static function AsStrExpr(o: OptExprBase): OptExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
+    public static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
     
     
     
     public function GetRes: object; abstract;
-    
     public function GetResType: System.Type; abstract;
     
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; virtual := self;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; virtual := new string[0];
+    function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual := self;
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; virtual := self;
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual := self;
     
     public function Openup: IOptExpr; virtual := self;
-    
     public function Optimize: IOptExpr; virtual := self;
     
     public function GetCalc:Action0; virtual := nil;
@@ -579,22 +582,34 @@ type
       
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
+      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := Negative.Cast&<OptExprBase>;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
+    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Positive.Concat(Negative).Any(oe->oe is IOptPlusExpr) then
       begin
@@ -624,8 +639,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Optimize.Openup.Optimize as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       var pn := Positive.Concat(Negative);
       var lc :=  pn.Count(oe->oe is IOptLiteralExpr);
       
@@ -683,28 +697,40 @@ type
       
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptSExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptSExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptSExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
-      if Positive.Any(oe->oe is IOptPlusExpr) then
+      if Positive.Any(oe->(oe is IOptPlusExpr) and (oe is OptSExprBase)) then
       begin
         var res := new OptSSPlusExpr;
         
         foreach var oe in Positive do
-          if (oe is IOptPlusExpr(var ope)) and (ope.GetPositive.All(noe->noe is OptSExprBase)) then
-            res.Positive.AddRange(ope.GetPositive.Select(oe->oe as OptSExprBase)) else
+          if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
+            res.Positive.AddRange(ope.GetPositive.Select(oe->AsStrExpr(oe) as OptSExprBase)) else
             res.Positive.Add(oe);
         
         Result := res;
@@ -715,7 +741,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptSExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       var lc := Positive.Count(oe->oe is IOptLiteralExpr);
       
       if lc = Positive.Count then
@@ -738,13 +764,16 @@ type
             ig := true;
             sb += (oe as OptSLiteralExpr).res;
           end else
-          if ig then
           begin
-            ig := false;
-            if sb.Length <> 0 then res.Positive.Add(new OptSLiteralExpr(sb.ToString));
-            sb.Clear;
-          end else
+            if ig then
+            begin
+              ig := false;
+              if sb.Length <> 0 then res.Positive.Add(new OptSLiteralExpr(sb.ToString));
+              sb.Clear;
+            end;
+            
             res.Positive.Add(oe);
+          end;
         
         if ig then
         begin
@@ -789,27 +818,39 @@ type
       res := sb.ToString;
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive;
     public function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
-      if Positive.Any(oe->oe is IOptPlusExpr) then
+      if Positive.Any(oe->(oe is IOptPlusExpr) and (oe is OptSExprBase)) then
       begin
         var res := new OptSOPlusExpr;
         
         foreach var oe in Positive do
-          if oe is IOptPlusExpr(var ope) then
+          if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
             res.Positive.AddRange(ope.GetPositive) else
             res.Positive.Add(oe);
         
@@ -821,7 +862,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       var lc :=  Positive.Count(oe->oe is IOptLiteralExpr);
       
       if lc = Positive.Count then
@@ -862,13 +903,16 @@ type
             ig := true;
             sb += oe.GetRes.ToString;
           end else
-          if ig then
           begin
-            ig := false;
-            if sb.Length <> 0 then res.Positive.Add(new OptSLiteralExpr(sb.ToString));
-            sb.Clear;
-          end else
+            if ig then
+            begin
+              ig := false;
+              if sb.Length <> 0 then res.Positive.Add(new OptSLiteralExpr(sb.ToString));
+              sb.Clear;
+            end;
+            
             res.Positive.Add(oe);
+          end;
         
         if ig then
         begin
@@ -937,28 +981,37 @@ type
       end;
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
+      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive;
     public function GetNegative: sequence of OptExprBase := Negative;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
+    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
     
-    public function Openup: IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptExprBase;
-      Result := self;
-    end;
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
+    
+    public function Openup: IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.Openup);
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(self, Negative);
       
       if Positive.Any(oe->oe is OptSExprBase) then
@@ -1037,6 +1090,13 @@ type
       
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
+      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
+      Result := self;
+    end;
+    
     
     
     public function AnyNegative := Negative.Any;
@@ -1044,17 +1104,22 @@ type
     function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     function GetNegative: sequence of OptExprBase := Negative.Select(oe->oe as OptExprBase);
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
+    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Positive.Concat(Negative).Any(oe->oe is IOptMltExpr) then
       begin
@@ -1084,8 +1149,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Optimize.Openup.Optimize as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       var pn := Positive.Concat(Negative);
       var lc := pn.Count(oe->oe is IOptLiteralExpr);
@@ -1152,6 +1216,13 @@ type
       res := sb.ToString;
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      Base := f(Base) as OptSExprBase;
+      Positive := f(Positive) as OptNExprBase;
+      Result := self;
+    end;
+    
     
     
     public function AnyNegative := false;
@@ -1159,17 +1230,22 @@ type
     function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
     function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      Base := Base.FixVarExprs(sn,ss,so,nn,ns,no) as OptSExprBase;
-      Positive := Positive.FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Base.GetVarNames(nn,ns,no)+
+    Positive.GetVarNames(nn,ns,no);
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      Base := Base.Openup as OptSExprBase;
-      Positive := Positive.Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       var res := self;
       
@@ -1200,8 +1276,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      Base := Base.Optimize.Openup.Optimize as OptSExprBase;
-      Positive := Positive.Optimize.Openup.Optimize as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
@@ -1258,6 +1333,13 @@ type
       res := sb.ToString;
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      Base := f(Base) as OptSExprBase;
+      Positive := f(Positive) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function AnyNegative := false;
@@ -1265,17 +1347,22 @@ type
     function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
     function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      Base := Base.FixVarExprs(sn,ss,so,nn,ns,no) as OptSExprBase;
-      Positive := Positive.FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Base.GetVarNames(nn,ns,no)+
+    Positive.GetVarNames(nn,ns,no);
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      Base := Base.Openup as OptSExprBase;
-      Positive := Positive.Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Base is IOptMltExpr(var ome) then
       begin
@@ -1305,8 +1392,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      Base := Base.Optimize.Openup.Optimize as OptSExprBase;
-      Positive := Positive.Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       if Positive is OptSExprBase then raise new CannotMltALotStringsException(self, new object[](Base, Positive));
       if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
@@ -1393,6 +1479,13 @@ type
       end;
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
+      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function AnyNegative := Negative.Any;
@@ -1400,17 +1493,22 @@ type
     function GetPositive: sequence of OptExprBase := Positive;
     function GetNegative: sequence of OptExprBase := Negative;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
+    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Openup as OptExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Positive.Concat(Negative).Any(oe->oe is IOptMltExpr) then
       begin
@@ -1440,8 +1538,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := Negative[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       var pn := Positive.Concat(Negative);
       var sc := pn.Count(oe->oe is OptSExprBase);
@@ -1526,19 +1623,31 @@ type
       res := Power(Positive[0].res, res);
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptNExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Positive[0] is IOptPowExpr(var ope) then
       begin
@@ -1557,7 +1666,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       var lc := Positive.Count(oe->oe is IOptLiteralExpr);
       
@@ -1635,19 +1744,31 @@ type
       res := Power(real(ro), nres);
     end;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Openup as OptNExprBase;
+      TransformAllSubExprs(oe->oe.Openup);
       
       if Positive[0] is IOptPowExpr(var ope) then
       begin
@@ -1663,7 +1784,7 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := Positive[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       if Positive.Any(oe->oe is OptSExprBase) then raise new CannotPowStringException(self);
       
@@ -1731,15 +1852,27 @@ type
     public name: string;
     public par: array of OptExprBase;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetTps: array of System.Type; abstract;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to par.Length-1 do par[i] := par[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     protected procedure CheckParamsBase;
     begin
@@ -1753,9 +1886,12 @@ type
     
     public procedure CheckParams; abstract;
     
+    public function Openup: IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.Openup);
+    
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to par.Length-1 do par[i] := par[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       CheckParams;
       if par.All(oe->oe is IOptLiteralExpr) then
       begin
@@ -1767,11 +1903,8 @@ type
         Result := self;
     end;
     
-    public function GetCalc: Action0; override;
-    begin
-      foreach var p in par do
-        Result += p.GetCalc();
-    end;
+    public function GetCalc: Action0; override :=
+    System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
     
     public function ToString: string; override :=
     '{n}'+$'{name}({par.JoinIntoString('','')})';
@@ -1782,15 +1915,27 @@ type
     public name: string;
     public par: array of OptExprBase;
     
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    begin
+      for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
+      Result := self;
+    end;
+    
     
     
     public function GetTps: array of System.Type; abstract;
     
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      for var i := 0 to par.Length-1 do par[i] := par[i].FixVarExprs(sn,ss,so,nn,ns,no) as OptExprBase;
-      Result := self;
-    end;
+    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
+    
+    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
+    
+    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     protected procedure CheckParamsBase;
     begin
@@ -1804,9 +1949,12 @@ type
     
     public procedure CheckParams; abstract;
     
+    public function Openup: IOptExpr; override :=
+    TransformAllSubExprs(oe->oe.Openup);
+    
     public function Optimize: IOptExpr; override;
     begin
-      for var i := 0 to par.Length-1 do par[i] := par[i].Optimize.Openup.Optimize as OptExprBase;
+      TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       CheckParams;
       if par.All(oe->oe is IOptLiteralExpr) then
       begin
@@ -1818,11 +1966,8 @@ type
         Result := self;
     end;
     
-    public function GetCalc: Action0; override;
-    begin
-      foreach var p in par do
-        Result += p.GetCalc();
-    end;
+    public function GetCalc: Action0; override :=
+    System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
     
     public function ToString: string; override :=
     '{s}'+$'{name}({par.JoinIntoString('','')})';
@@ -1836,10 +1981,38 @@ type
   IOptVarExpr = interface(IOptExpr)
     
   end;
+  UnOptVarExpr = class(OptOExprBase, IOptVarExpr)
+    
+    public name: string;
+    
+    
+    
+    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    new string[](name);
+    
+    public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
+    
+    public function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
+    
+    public constructor(name: string) :=
+    self.name := name;
+    
+    public function ToString: string; override :=
+    $'obj_var[?]';
+    
+  end;
   OptNVarExpr = class(OptNExprBase, IOptVarExpr)
     
     public souce: array of real;
     public id: integer;
+    
+    
+    
+    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    new string[](nn[id]);
+    
+    public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    AsDefinitelyNumExpr(new UnOptVarExpr(nn[id]));
     
     public procedure Calc :=
     res := souce[id];
@@ -1856,6 +2029,14 @@ type
     public souce: array of string;
     public id: integer;
     
+    
+    
+    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    new string[](ns[id]);
+    
+    public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    AsStrExpr(new UnOptVarExpr(ns[id]));
+    
     public procedure Calc :=
     res := souce[id];
     
@@ -1871,6 +2052,14 @@ type
     public souce: array of object;
     public id: integer;
     
+    
+    
+    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
+    new string[](no[id]);
+    
+    public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
+    new UnOptVarExpr(no[id]);
+    
     public procedure Calc :=
     res := souce[id];
     
@@ -1879,84 +2068,6 @@ type
     
     public function ToString: string; override :=
     $'obj_var[{id}]';
-    
-  end;
-  UnOptNVarExpr = class(OptNExprBase, IOptVarExpr)
-    
-    public name: string;
-    
-    
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      var id := nn.IndexOf(self.name);
-      if id = -1 then
-        Result := new OptNLiteralExpr(0) else
-      begin
-        var res := new OptNVarExpr;
-        res.souce := sn;
-        res.id := id;
-        Result := res;
-      end;
-    end;
-    
-    public constructor(name: string) :=
-    self.name := name;
-    
-    public function ToString: string; override :=
-    $'int_var[?]';
-    
-  end;
-  UnOptSVarExpr = class(OptSExprBase, IOptVarExpr)
-    
-    public name: string;
-    
-    
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      var id := ns.IndexOf(self.name);
-      if id = -1 then
-        Result := new OptSLiteralExpr('') else
-      begin
-        var res := new OptSVarExpr;
-        res.souce := ss;
-        res.id := id;
-        Result := res;
-      end;
-    end;
-    
-    public constructor(name: string) :=
-    self.name := name;
-    
-    public function ToString: string; override :=
-    $'str_var[?]';
-    
-  end;
-  UnOptOVarExpr = class(OptOExprBase, IOptVarExpr)
-    
-    public name: string;
-    
-    
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: List<string>): IOptExpr; override;
-    begin
-      var id := no.IndexOf(self.name);
-      if id = -1 then
-        Result := new OptNLiteralExpr(0) else
-      begin
-        var res := new OptOVarExpr;
-        res.souce := so;
-        res.id := id;
-        Result := res;
-      end;
-    end;
-    
-    public constructor(name: string) :=
-    self.name := name;
-    
-    public function ToString: string; override :=
-    $'obj_var[?]';
     
   end;
   
@@ -1970,16 +2081,110 @@ type
     public s_vars: array of string;
     public o_vars: array of object;
     
-    public n_vars_names := new List<string>;
-    public s_vars_names := new List<string>;
-    public o_vars_names := new List<string>;
+    public n_vars_names: array of string;
+    public s_vars_names: array of string;
+    public o_vars_names: array of string;
     
     public MainCalcProc: procedure;
+    
+    
+    
+    public function GetMain: OptExprBase; abstract;
+    
+    protected function OptBase(me: OptExprBase; nvn, svn: List<string>): OptExprBase;
+    begin
+      var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
+      
+      var lnvn := new List<string>;
+      var lsvn := new List<string>;
+      var lovn := new List<string>;
+      foreach var vn in Main.GetVarNames(nil,nil,nil) do
+        if nvn.Contains(vn) then
+          lnvn.Add(vn) else
+        if svn.Contains(vn) then
+          lsvn.Add(vn) else
+          lovn.Add(vn);
+      
+      var n_vars := ArrFill(lnvn.Count, 0.0);
+      var s_vars := ArrFill(lsvn.Count, '');
+      var o_vars := ArrFill(lovn.Count, object(nil));
+      
+      var n_vars_names := lnvn.ToArray;
+      var s_vars_names := lsvn.ToArray;
+      var o_vars_names := lovn.ToArray;
+      
+      Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
+      Main := Main.Optimize.Openup.Optimize;
+      
+      Result := OptExprBase(Main);
+      
+      
+      
+      self.n_vars_names := n_vars_names;
+      self.s_vars_names := s_vars_names;
+      self.o_vars_names := o_vars_names;
+      
+      self.n_vars := n_vars;
+      self.s_vars := s_vars;
+      self.o_vars := o_vars;
+      
+      
+      
+      self.MainCalcProc := Main.GetCalc;
+      
+    end;
+    
+    protected function FinalOptBase(me: OptExprBase; nvn, svn: List<string>): OptExprBase;
+    begin
+      var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
+      
+      var lnvn := new List<string>;
+      var lsvn := new List<string>;
+      var lovn := new List<string>;
+      foreach var vn in Main.GetVarNames(nil,nil,nil) do
+        if nvn.Contains(vn) then
+          lnvn.Add(vn) else
+        if svn.Contains(vn) then
+          lsvn.Add(vn) else
+          lovn.Add(vn);
+      
+      var n_vars := ArrFill(lnvn.Count, 0.0);
+      var s_vars := ArrFill(lsvn.Count, '');
+      var o_vars := ArrFill(lovn.Count, object(nil));
+      
+      var n_vars_names := lnvn.ToArray;
+      var s_vars_names := lsvn.ToArray;
+      var o_vars_names := lovn.ToArray;
+      
+      Main := Main.FinalFixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
+      Main := Main.Optimize.Openup.Optimize;
+      
+      Result := OptExprBase(Main);
+      
+      
+      
+      self.n_vars_names := n_vars_names;
+      self.s_vars_names := s_vars_names;
+      self.o_vars_names := o_vars_names;
+      
+      self.n_vars := n_vars;
+      self.s_vars := s_vars;
+      self.o_vars := o_vars;
+      
+      
+      
+      self.MainCalcProc := Main.GetCalc;
+      
+    end;
+    
+    public procedure Optimize(nvn, svn: List<string>); abstract;
+    
+    public procedure FinalOptimize(nvn, svn: List<string>); abstract;
     
     protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
       
-      for var i := 0 to n_vars_names.Count-1 do
+      for var i := 0 to n_vars_names.Length-1 do
       begin
         var name := n_vars_names[i];
         if n_vars.ContainsKey(name) then
@@ -1987,7 +2192,7 @@ type
           self.n_vars[i] := 0;
       end;
       
-      for var i := 0 to s_vars_names.Count-1 do
+      for var i := 0 to s_vars_names.Length-1 do
       begin
         var name := s_vars_names[i];
         if s_vars.ContainsKey(name) then
@@ -1995,7 +2200,7 @@ type
           self.s_vars[i] := '';
       end;
       
-      for var i := 0 to o_vars_names.Count-1 do
+      for var i := 0 to o_vars_names.Length-1 do
       begin
         var name := o_vars_names[i];
         if n_vars.ContainsKey(name) then
@@ -2011,17 +2216,22 @@ type
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; abstract;
     
-    public class function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>): OptExprWrapper;
-    
-    public constructor;
-    begin
-      
-    end;
+    public class function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase := nil): OptExprWrapper;
     
   end;
   OptNExprWrapper = class(OptExprWrapper)
     
     public Main: OptNExprBase;
+    
+    
+    
+    public function GetMain: OptExprBase; override := Main;
+    
+    public procedure Optimize(nvn, svn: List<string>); override :=
+    self.Main := OptNExprBase(OptBase(Main, nvn, svn));
+    
+    public procedure FinalOptimize(nvn, svn: List<string>); override :=
+    self.Main := OptNExprBase(FinalOptBase(Main, nvn, svn));
     
     public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
@@ -2049,7 +2259,17 @@ type
     
     public Main: OptSExprBase;
     
-    public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
+    
+    
+    public function GetMain: OptExprBase; override := Main;
+    
+    public procedure Optimize(nvn, svn: List<string>); override :=
+    self.Main := OptSExprBase(OptBase(Main, nvn, svn));
+    
+    public procedure FinalOptimize(nvn, svn: List<string>); override :=
+    self.Main := OptSExprBase(FinalOptBase(Main, nvn, svn));
+    
+    public function CalcS(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
       
       inherited StartCalc(n_vars, s_vars);
@@ -2059,7 +2279,7 @@ type
     end;
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override :=
-    CalcN(n_vars, s_vars);
+    CalcS(n_vars, s_vars);
     
     public constructor(Main: OptSExprBase);
     begin
@@ -2073,7 +2293,17 @@ type
   end;
   OptOExprWrapper = class(OptExprWrapper)
     
-    public Main: OptOExprBase;
+    public Main: OptExprBase;
+    
+    
+    
+    public function GetMain: OptExprBase; override := Main;
+    
+    public procedure Optimize(nvn, svn: List<string>); override :=
+    self.Main := OptBase(Main, nvn, svn);
+    
+    public procedure FinalOptimize(nvn, svn: List<string>); override :=
+    self.Main := FinalOptBase(Main, nvn, svn);
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin
@@ -2386,7 +2616,9 @@ end;
 
 {$region Optimize}
 
+{$region Funcs}
 type
+  
   OptFunc_Length = class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
@@ -2396,7 +2628,7 @@ type
     new System.Type[](
       typeof(string)
     );
-    
+  
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
@@ -2608,23 +2840,72 @@ type
     
   end;
   
+{$endregion Funcs}
+
+{$region some impl}
+
 class function OptExprBase.AsStrExpr(o: OptExprBase): OptExprBase :=
 new OptFunc_Str(new OptExprBase[](o));
 
 class function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptExprBase :=
 new OptFunc_DeflyNum(new OptExprBase[](o), ifnot);
 
+function UnOptVarExpr.FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
+begin
+  if nn.Contains(name) then
+  begin
+    var res := new OptNVarExpr;
+    res.souce := sn;
+    res.id := nn.IndexOf(name);
+    Result := res;
+  end else
+  if ns.Contains(name) then
+  begin
+    var res := new OptSVarExpr;
+    res.souce := ss;
+    res.id := ns.IndexOf(name);
+    Result := res;
+  end else
+  begin
+    var res := new OptOVarExpr;
+    res.souce := so;
+    res.id := no.IndexOf(name);
+    Result := res;
+  end;
+end;
+
+function UnOptVarExpr.FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
+begin
+  if nn.Contains(name) then
+  begin
+    var res := new OptNVarExpr;
+    res.souce := sn;
+    res.id := nn.IndexOf(name);
+    Result := res;
+  end else
+  if ns.Contains(name) then
+  begin
+    var res := new OptSVarExpr;
+    res.souce := ss;
+    res.id := ns.IndexOf(name);
+    Result := res;
+  end else
+  if no.Contains(name) then
+  begin
+    var res := new OptOVarExpr;
+    res.souce := so;
+    res.id := no.IndexOf(name);
+    Result := res;
+  end else
+    Result := new OptNullLiteralExpr;
+end;
+
+{$endregion some impl}
+
+{$region OptConverter}
+
 type
   OptConverter = static class//ToDo #1279
-    
-    class g_n_vars_names: List<string>;
-    class g_s_vars_names: List<string>;
-    
-    class l_n_vars_names: List<string>;
-    class l_s_vars_names: List<string>;
-    class l_o_vars_names: List<string>;
-    
-    
     
     class FuncTypes := new Dictionary<string, Func<array of OptExprBase,IOptFuncExpr>>;
     
@@ -2673,10 +2954,9 @@ type
     
     class function GetOptFuncExpr(e: FuncExpr): IOptFuncExpr;
     begin
-      var ln := e.name.ToLower;
-      if FuncTypes.ContainsKey(ln) then
+      if FuncTypes.ContainsKey(e.name) then
       begin
-        var func := FuncTypes[ln];
+        var func := FuncTypes[e.name];
         var pars := e.par.ConvertAll(p->GetOptExpr(p) as OptExprBase);
         Result := func(pars);
       end else
@@ -2687,22 +2967,8 @@ type
     begin
       
       case e.name of
-      'null': Result := new OptNullLiteralExpr;
-      else
-        if g_n_vars_names.Contains(e.name) then
-        begin
-          Result := new UnOptNVarExpr(e.name);
-          l_n_vars_names.Add(e.name);
-        end else
-        if g_s_vars_names.Contains(e.name) then
-        begin
-          Result := new UnOptSVarExpr(e.name);
-          l_s_vars_names.Add(e.name);
-        end else
-        begin
-          Result := new UnOptOVarExpr(e.name);
-          l_o_vars_names.Add(e.name);
-        end;
+        'null': Result := new OptNullLiteralExpr;
+        else Result := new UnOptVarExpr(e.name);
       end;
       
     end;
@@ -2721,23 +2987,31 @@ type
       end;
     end;
     
-    class function GetOptExprWrapper(e: Expr; g_n_vars_names, g_s_vars_names: List<string>): OptExprWrapper;
+    class function GetOptExprWrapper(e: Expr; g_n_vars_names, g_s_vars_names: List<string>; conv: OptExprBase->OptExprBase): OptExprWrapper;
     begin
-      
-      OptConverter.g_n_vars_names := g_n_vars_names;
-      OptConverter.g_s_vars_names := g_s_vars_names;
-      
-      l_n_vars_names := new List<string>;
-      l_s_vars_names := new List<string>;
-      l_o_vars_names := new List<string>;
       
       var Main := GetOptExpr(e);
       
-      var n_vars := ArrFill(l_n_vars_names.Count, 0.0);
-      var s_vars := ArrFill(l_s_vars_names.Count, '');
-      var o_vars := ArrFill(l_o_vars_names.Count, object(nil));
+      var lnvn := new List<string>;
+      var lsvn := new List<string>;
+      var lovn := new List<string>;
+      foreach var vn in Main.GetVarNames(nil,nil,nil) do
+        if g_n_vars_names.Contains(vn) then
+          lnvn.Add(vn) else
+        if g_s_vars_names.Contains(vn) then
+          lsvn.Add(vn) else
+          lovn.Add(vn);
       
-      Main := Main.FixVarExprs(n_vars, s_vars, o_vars, l_n_vars_names, l_s_vars_names, l_o_vars_names);
+      var n_vars := ArrFill(lnvn.Count, 0.0);
+      var s_vars := ArrFill(lsvn.Count, '');
+      var o_vars := ArrFill(lovn.Count, object(nil));
+      
+      var n_vars_names := lnvn.ToArray;
+      var s_vars_names := lsvn.ToArray;
+      var o_vars_names := lovn.ToArray;
+      
+      if conv <> nil then Main := conv(Main as OptExprBase);
+      Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
       Main := Main.Optimize.Openup.Optimize;
       
       if Main is OptNExprBase then
@@ -2746,9 +3020,11 @@ type
         Result := new OptSExprWrapper(Main as OptSExprBase) else
         Result := new OptOExprWrapper(Main as OptOExprBase);
       
-      Result.n_vars_names := l_n_vars_names;
-      Result.s_vars_names := l_s_vars_names;
-      Result.o_vars_names := l_o_vars_names;
+      
+      
+      Result.n_vars_names := n_vars_names;
+      Result.s_vars_names := s_vars_names;
+      Result.o_vars_names := o_vars_names;
       
       Result.n_vars := n_vars;
       Result.s_vars := s_vars;
@@ -2762,8 +3038,10 @@ type
     
   end;
 
-class function OptExprWrapper.FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>) :=
-OptConverter.GetOptExprWrapper(e, n_vars_names, s_vars_names);
+class function OptExprWrapper.FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase) :=
+OptConverter.GetOptExprWrapper(e, n_vars_names, s_vars_names, conv);
+
+{$endregion OptConverter}
 
 {$endregion Optimize}
 
