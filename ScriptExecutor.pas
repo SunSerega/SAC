@@ -17,15 +17,6 @@ uses ExprParser;
 uses MiscData;
 
 type
-  Point=record
-    X,Y: integer;
-    constructor(X,Y: integer);
-    begin
-      self.X := X;
-      self.Y := Y;
-    end;
-  end;
-  
   ScriptExecutionForm=class(Form)
     
     scr: Script;
@@ -36,27 +27,8 @@ type
     pause_btm: byte := 192;
     form_thr: System.Threading.Thread;
     
-    {$region External}
-    
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
-    external 'User32.dll' name 'mouse_event';
-    
-    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
-    external 'User32.dll' name 'keybd_event';
-    
-    class procedure SetCursorPos(x, y: integer);
-    external 'User32.dll' name 'SetCursorPos';
-    
-    class procedure GetCursorPos(p:^Point);
-    external 'User32.dll' name 'GetCursorPos';
-    
-    class function GetCursorPos:Point;
-    begin GetCursorPos(@Result) end;
-    
     class function GetKeyState(nVirtKey: byte): byte;
     external 'User32.dll' name 'GetKeyState';
-    
-    {$endregion External}
     
     constructor(entry_point: string; debug: boolean) :=
     try

@@ -11,6 +11,7 @@
 interface
 
 uses ExprParser;
+uses MiscData;
 
 type
   {$region pre desc}
@@ -217,6 +218,18 @@ type
     inherited Create(source, $'Value {l} is invalid for Sleep operator', KV('l'+'', object(l)));
     
   end;
+  InvalidKeyCodeException = class(FileCompilingException)
+    
+    public constructor(source: Script; k: integer) :=
+    inherited Create(source, $'Key code must be 1..254, it can''t be {k}', KV('k'+'', object(k)));
+    
+  end;
+  InvalidMouseKeyCodeException = class(FileCompilingException)
+    
+    public constructor(source: Script; k: integer) :=
+    inherited Create(source, $'Mouse key code must be 1..2 or 4..6, it can''t be {k}', KV('k'+'', object(k)));
+    
+  end;
   
   OutputStreamEmptyException = class(InnerException)
     
@@ -238,7 +251,6 @@ type
     public svs := new Dictionary<string, string>;
     public CallStack := new Stack<StmBlock>;
     public max_recursion: integer;
-    public jcc := false;
     
     public procedure SetVar(vname:string; val: object);
     begin
@@ -302,6 +314,14 @@ type
       if o is string then
         Result := o as string else
         Result := real(o).ToString(nfi);
+    end;
+    
+    public function NumToInt(n: real): integer;
+    begin
+      if real.IsNaN(n) or real.IsInfinity(n) then raise new CannotConvertToIntException(scr, n);
+      var i := BigInteger.Create(n);
+      if (i < integer.MinValue) or (i > integer.MaxValue) then raise new CannotConvertToIntException(scr, i);
+      Result := integer(i);
     end;
     
   end;
@@ -546,7 +566,7 @@ type
     function GetRefs: sequence of OptExprBase;
     
   end;
-  ICallOper = interface
+  IJumpOper = interface
     
   end;
   
@@ -554,16 +574,349 @@ type
   
   {$region operator's}
   
+  OperKey = class(OperStmBase)
+    
+    public kk, dp: InputNValue;
+    
+    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      keybd_event(n,0,NumToInt(dp.res)=0?0:2,0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      kk := new DInputNValue(par[1], sb);
+      dp := new DInputNValue(par[2], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      dp.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperKeyDown = class(OperStmBase)
+    
+    public kk: InputNValue;
+    
+    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      keybd_event(n, 0, 2, 0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperKeyUp = class(OperStmBase)
+    
+    public kk: InputNValue;
+    
+    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      keybd_event(n, 0, 0, 0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperMouse = class(OperStmBase)
+    
+    public kk, dp: InputNValue;
+    
+    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      case n of
+        1: mouse_event(NumToInt(dp.res)=0?$004:$002, 0,0,0,0);
+        2: mouse_event(NumToInt(dp.res)=0?$010:$008, 0,0,0,0);
+        4: mouse_event(NumToInt(dp.res)=0?$040:$020, 0,0,0,0);
+        5: mouse_event(NumToInt(dp.res)=0?$100:$080, 0,0,0,0);
+        6: mouse_event(NumToInt(dp.res)=0?$400:$200, 0,0,0,0);
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      kk := new DInputNValue(par[1], sb);
+      dp := new DInputNValue(par[2], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      dp.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperMouseDown = class(OperStmBase)
+    
+    public kk: InputNValue;
+    
+    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      case n of
+        1: mouse_event($002, 0,0,0,0);
+        2: mouse_event($008, 0,0,0,0);
+        4: mouse_event($020, 0,0,0,0);
+        5: mouse_event($080, 0,0,0,0);
+        6: mouse_event($200, 0,0,0,0);
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperMouseUp = class(OperStmBase)
+    
+    public kk: InputNValue;
+    
+    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      case n of
+        1: mouse_event($004, 0,0,0,0);
+        2: mouse_event($010, 0,0,0,0);
+        4: mouse_event($040, 0,0,0,0);
+        5: mouse_event($100, 0,0,0,0);
+        6: mouse_event($400, 0,0,0,0);
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
   
-  OperCall = class(OperStmBase, ICallOper)
+  OperMousePos = class(OperStmBase)
+    
+    public x,y: InputNValue;
+    
+    class procedure SetCursorPos(x, y: integer);
+    external 'User32.dll' name 'SetCursorPos';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      SetCursorPos(
+        NumToInt(x.res),
+        NumToInt(x.res)
+      );
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      x := new DInputNValue(par[1], sb);
+      y := new DInputNValue(par[2], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      x.GetCalc(),
+      y.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperGetKey = class(OperStmBase)
+    
+    public kk: InputNValue
+    public vname: string;
+    
+    class function GetKeyState(nVirtKey: byte): byte;
+    external 'User32.dll' name 'GetKeyState';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var k := GetKeyState(n) and $80 = $80;
+      ec.SetVar(vname, k?1.0:0.0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      kk := new DInputNValue(par[1], sb);
+      vname := par[2];
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperGetKeyTrigger = class(OperStmBase)
+    
+    public kk: InputNValue
+    public vname: string;
+    
+    class function GetKeyState(nVirtKey: byte): byte;
+    external 'User32.dll' name 'GetKeyState';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var k := GetKeyState(n) and $01 = $01;
+      ec.SetVar(vname, k?1.0:0.0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      kk := new DInputNValue(par[1], sb);
+      vname := par[2];
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperGetMousePos = class(OperStmBase)
+    
+    public x,y: string;
+    
+    class procedure GetCursorPos(p: ^Point);
+    external 'User32.dll' name 'GetCursorPos';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var p: Point;
+      GetCursorPos(@p);
+      ec.SetVar(x, real(p.X));
+      ec.SetVar(y, real(p.Y));
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      x := par[1];
+      x := par[2];
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    self.Calc;
+    
+  end;
+  
+  OperCall = class(OperStmBase, IJumpOper)
     
     public CalledBlock: StmBlockRef;
     
     private procedure Calc(ec: ExecutingContext);
     begin
       ec.Push(bl.next);
-      ec.curr := self.CalledBlock.GetBlock(ec);
-      ec.jcc := true;
+      ec.curr.next := self.CalledBlock.GetBlock(ec);
     end;
     
     
@@ -582,12 +935,22 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperCallIf = class(OperStmBase, ICallOper)
+  OperCallIf = class(OperStmBase, IJumpOper)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ, less, more, less_equ, more_equ);
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.Push(bl.next);
+      var res1 := e1.Calc(ec.nvs, ec.svs);
+      var res2 := e2.Calc(ec.nvs, ec.svs);
+      ec.curr.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
+    end;
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -617,14 +980,87 @@ type
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
+    System.Delegate.Combine(
+      CalledBlock1.GetCalc(),
+      CalledBlock2.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action&<ExecutingContext>;
+    
+  end;
+  OperJump = class(OperStmBase, IJumpOper)
+    
+    public CalledBlock: StmBlockRef;
+    
+    private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(bl.next);
+      ec.curr.next := self.CalledBlock.GetBlock(ec);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      CalledBlock.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperJumpIf = class(OperStmBase, IJumpOper)
+    
+    public e1,e2: OptExprWrapper;
+    public compr: (equ, less, more, less_equ, more_equ);
+    public CalledBlock1: StmBlockRef;
+    public CalledBlock2: StmBlockRef;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.curr := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
-      ec.jcc := true;
+      ec.curr.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
     end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      
+      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
+      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
+    end;
+    
+    private function comp_obj(o1,o2: object): boolean;
+    begin
+      if (o1 is real) and (o2 is real) then
+        case compr of
+          equ: Result := real(o1) = real(o2);
+          less: Result := real(o1) < real(o2);
+          more: Result := real(o1) > real(o2);
+          less_equ: Result := real(o1) <= real(o2);
+          more_equ: Result := real(o1) >= real(o2);
+        end else
+        case compr of
+          equ: Result := ObjToStr(o1) = ObjToStr(o2);
+          less: Result := ObjToStr(o1) < ObjToStr(o2);
+          more: Result := ObjToStr(o1) > ObjToStr(o2);
+          less_equ: Result := ObjToStr(o1) <= ObjToStr(o2);
+          more_equ: Result := ObjToStr(o1) >= ObjToStr(o2);
+        end;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      CalledBlock1.GetCalc(),
+      CalledBlock2.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action&<ExecutingContext>;
     
   end;
   
@@ -657,9 +1093,20 @@ type
     
   end;
   
-  OperSleep = class(OperStmBase, ICallOper)
+  OperSleep = class(OperStmBase, IJumpOper)
     
     public l: InputNValue;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var r := l.res;
+      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
+      var i := BigInteger.Create(r);
+      if (i < 0) or (i > integer.MaxValue) then raise new InvalidSleepLengthException(ec.scr, i);
+      Sleep(integer(i));
+    end;
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -669,17 +1116,13 @@ type
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
-    begin
-      var r := l.res;
-      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
-      var i := BigInteger.Create(r);
-      if (i < 0) or (i > integer.MaxValue) then raise new InvalidSleepLengthException(ec.scr, i);
-      Sleep(integer(i));
-    end;
+    System.Delegate.Combine(
+      l.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
     
   end;
-  OperRandom = class(OperStmBase, ICallOper)
+  OperRandom = class(OperStmBase, IJumpOper)
     
     public vname: string;
     
@@ -691,31 +1134,33 @@ type
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
-    begin
-      ec.SetVar(vname, Random());
-    end;
+    ec->ec.SetVar(vname, Random());
     
   end;
   OperOutput = class(OperStmBase)
     
-    public otp: OptExprWrapper;
+    public otp: InputSValue;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var p := ec.scr.otp;
+      if p <> nil then
+        p(otp.res);
+    end;
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
-      var e := Expr.FromString(par[1]);
-      otp := OptExprWrapper.FromExpr(e, sb.nvn, sb.svn);
+      otp := new DInputSValue(par[1],sb);
     end;
     
     public public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
-    if scr.otp <> nil then
-      scr.otp(ObjToStr(otp.Calc(
-        ec.nvs,
-        ec.svs
-      )))
-    ;
+    System.Delegate.Combine(
+      otp.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
     
   end;
   
@@ -897,7 +1342,7 @@ begin
           begin
             var stm := StmBase.FromString(last, s, ss.SmartSplit);
             last.stms.Add(stm);
-            if stm is ICallOper then
+            if stm is IJumpOper then
             begin
               sbs.Add(lname, last);
               last.next := new StmBlock(self);
@@ -972,9 +1417,7 @@ begin
   if curr <> nil then
   begin
     curr.Execute(self);
-    if jcc then
-      jcc := false else
-      curr := curr.next;
+    curr := curr.next;
     Result := true;
   end else
     Result := Pop(curr);

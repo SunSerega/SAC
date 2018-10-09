@@ -35,4 +35,14 @@ procedure Log3(params data: array of object) := WTF('Log3.txt', data);
 
 {$endregion}
 
+type
+  Point=record
+    X,Y: integer;
+    constructor(X,Y: integer);
+    begin
+      self.X := X;
+      self.Y := Y;
+    end;
+  end;
+  
 end.
