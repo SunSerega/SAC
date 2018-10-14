@@ -2697,7 +2697,7 @@ type
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if not ( (pr is string(var s)) and (s.Length = 1) ) then
+      if (pr is string(var s)) and (s.Length = 1) then
         self.res := word(s[1]) else
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
     end;
@@ -2913,11 +2913,11 @@ type
     begin
       
       FuncTypes.Add('length', par->new OptFunc_Length(par));
-      FuncTypes.Add('Num', par->new OptFunc_Num(par));
-      FuncTypes.Add('Ord', par->new OptFunc_Ord(par));
-      FuncTypes.Add('DeflyNum', par->new OptFunc_DeflyNum(par));
+      FuncTypes.Add('num', par->new OptFunc_Num(par));
+      FuncTypes.Add('ord', par->new OptFunc_Ord(par));
+      FuncTypes.Add('deflynum', par->new OptFunc_DeflyNum(par));
       
-      FuncTypes.Add('Str', par->new OptFunc_Str(par));
+      FuncTypes.Add('str', par->new OptFunc_Str(par));
       
     end;
     
@@ -2954,9 +2954,10 @@ type
     
     class function GetOptFuncExpr(e: FuncExpr): IOptFuncExpr;
     begin
-      if FuncTypes.ContainsKey(e.name) then
+      var ln := e.name.ToLower;
+      if FuncTypes.ContainsKey(ln) then
       begin
-        var func := FuncTypes[e.name];
+        var func := FuncTypes[ln];
         var pars := e.par.ConvertAll(p->GetOptExpr(p) as OptExprBase);
         Result := func(pars);
       end else

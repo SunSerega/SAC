@@ -566,6 +566,11 @@ type
     function GetRefs: sequence of OptExprBase;
     
   end;
+  ICallOper = interface
+    
+    procedure SetNext(n: StmBlock);
+    
+  end;
   IJumpOper = interface
     
   end;
@@ -573,6 +578,8 @@ type
   {$endregion interface's}
   
   {$region operator's}
+  
+  {$region Key/Mouse}
   
   OperKey = class(OperStmBase)
     
@@ -617,7 +624,7 @@ type
     begin
       var n := NumToInt(kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-      keybd_event(n, 0, 2, 0);
+      keybd_event(n, 0, 0, 0);
     end;
     
     
@@ -647,7 +654,7 @@ type
     begin
       var n := NumToInt(kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-      keybd_event(n, 0, 0, 0);
+      keybd_event(n, 0, 2, 0);
     end;
     
     
@@ -780,6 +787,10 @@ type
     
   end;
   
+  {$endregion Key/Mouse}
+  
+  {$region Other simulators}
+  
   OperMousePos = class(OperStmBase)
     
     public x,y: InputNValue;
@@ -791,7 +802,7 @@ type
     begin
       SetCursorPos(
         NumToInt(x.res),
-        NumToInt(x.res)
+        NumToInt(y.res)
       );
     end;
     
@@ -901,7 +912,7 @@ type
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
       x := par[1];
-      x := par[2];
+      y := par[2];
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -909,17 +920,25 @@ type
     
   end;
   
-  OperCall = class(OperStmBase, IJumpOper)
+  {$endregion Other simulators}
+  
+  {$region Call/Jump}
+  
+  OperCall = class(OperStmBase, ICallOper)
     
     public CalledBlock: StmBlockRef;
+    public next: StmBlock;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(bl.next);
+      ec.Push(self.next);
       ec.curr.next := self.CalledBlock.GetBlock(ec);
     end;
     
     
+    
+    public procedure SetNext(n: StmBlock) :=
+    self.next := n;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -935,22 +954,26 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperCallIf = class(OperStmBase, IJumpOper)
+  OperCallIf = class(OperStmBase, ICallOper)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ, less, more, less_equ, more_equ);
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
+    public next: StmBlock;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(bl.next);
+      ec.Push(self.next);
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
       ec.curr.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
     end;
     
     
+    
+    public procedure SetNext(n: StmBlock) :=
+    self.next := n;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -984,7 +1007,7 @@ type
       CalledBlock1.GetCalc(),
       CalledBlock2.GetCalc(),
       Action&<ExecutingContext>(self.Calc)
-    ) as Action&<ExecutingContext>;
+    ) as Action<ExecutingContext>;
     
   end;
   OperJump = class(OperStmBase, IJumpOper)
@@ -1064,6 +1087,10 @@ type
     
   end;
   
+  {$endregion Call/Jump}
+  
+  {$region ExecutingContext chandgers}
+  
   OperSusp = class(OperStmBase)
     
     public constructor := exit;
@@ -1077,7 +1104,7 @@ type
     end;
     
   end;
-  OperReturn = class(OperStmBase)
+  OperReturn = class(OperStmBase, IJumpOper)
     
     public constructor := exit;
     
@@ -1092,6 +1119,10 @@ type
     oe->Halt();
     
   end;
+  
+  {$endregion ExecutingContext chandgers}
+  
+  {$region Misc}
   
   OperSleep = class(OperStmBase, IJumpOper)
     
@@ -1163,6 +1194,8 @@ type
     ) as Action<ExecutingContext>;
     
   end;
+  
+  {$endregion Misc}
   
   {$endregion operator's}
   
@@ -1259,15 +1292,31 @@ end;
 
 class function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
 begin
-  case par[0] of
+  case par[0].ToLower of
+    
+    'key': Result := new OperKey(sb, par);
+    'keydown': Result := new OperKeyDown(sb, par);
+    'keyup': Result := new OperKeyUp(sb, par);
+    'mouse': Result := new OperMouse(sb, par);
+    'mousedown': Result := new OperMouseDown(sb, par);
+    'mouseup': Result := new OperMouseUp(sb, par);
+    
+    'mousepos': Result := new OperMousePos(sb, par);
+    'getkey': Result := new OperGetKey(sb, par);
+    'getkeytrigger': Result := new OperGetKeyTrigger(sb, par);
+    'getmousepos': Result := new OperGetMousePos(sb, par);
     
     'call': Result := new OperCall(sb, par);
     'callif': Result := new OperCallIf(sb, par);
+    'jump': Result := new OperJump(sb, par);
+    'jumpif': Result := new OperJumpIf(sb, par);
     
     'susp': Result := new OperSusp;
     'return': Result := new OperReturn;
     'halt': Result := new OperHalt;
     
+    'sleep': Result := new OperSleep(sb, par);
+    'random': Result := new OperRandom(sb, par);
     'output': Result := new OperOutput(sb, par);
     
   else raise new UndefinedOperNameException(sb, par[0]);
@@ -1303,7 +1352,7 @@ begin
     var lns: array of string;
     begin
       var str := fi.OpenRead;
-      lns := (new System.IO.StreamReader(str)).ReadToEnd.ToLower.Remove(#13).Split(#10);
+      lns := (new System.IO.StreamReader(str)).ReadToEnd.Remove(#13).Split(#10);
       str.Close;
     end;
     
@@ -1328,6 +1377,7 @@ begin
           begin
             last.Seal;
             last := new StmBlock(self);
+            skp_ar := false;
           end else
           begin
             last.next := new StmBlock(self);
@@ -1335,24 +1385,24 @@ begin
             last := last.next;
           end;
           lname := ffname+s;
-          skp_ar := false;
           
         end else
           if (s <> '') and not skp_ar then
           begin
             var stm := StmBase.FromString(last, s, ss.SmartSplit);
             last.stms.Add(stm);
-            if stm is IJumpOper then
+            if stm is ICallOper{(var ico)} then//ToDo #незнаю_ибо_нет_инета
             begin
               sbs.Add(lname, last);
-              last.next := new StmBlock(self);
               last.fname := ffname;
               last.Seal;
-              last := last.next;
+              last := new StmBlock(self);
+              //ico.SetNext(last);//ToDo #незнаю_ибо_нет_инета
+              ICallOper(stm).SetNext(last);
               lname := ffname+'#%'+tmp_b_c;
               tmp_b_c += 1;
             end else
-            if stm is OperReturn then
+            if stm is IJumpOper then
               skp_ar := true;
           end;
       end;

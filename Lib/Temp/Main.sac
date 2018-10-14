@@ -1,15 +1,52 @@
-Output 1+5*3^4+" hi"
 
-Call "#lbl1"
+KeyDown 160 //Shift
+Key Ord("h")-Ord("a")+65 1
+Key Ord("h")-Ord("a")+65 0
+KeyUp 160
 
-Output null+"hi"
-n=5+null
-Output n+3 comment 1
- comment 2
+Key Ord("e")-Ord("a")+65 1
+Key Ord("e")-Ord("a")+65 0
 
-Susp
-Return
-Output "after return"
+Key Ord("l")-Ord("a")+65 1
+Key Ord("l")-Ord("a")+65 0
 
-#lbl1
-Output "lbl1 executed"
+Key Ord("l")-Ord("a")+65 1
+Key Ord("l")-Ord("a")+65 0
+
+Key Ord("o")-Ord("a")+65 1
+Key Ord("o")-Ord("a")+65 0
+
+Key 188 1 //","
+Key 188 0
+
+Key 32 1 //Space
+Key 32 0
+
+Key Ord("w")-Ord("a")+65 1
+Key Ord("w")-Ord("a")+65 0
+
+Key Ord("o")-Ord("a")+65 1
+Key Ord("o")-Ord("a")+65 0
+
+Key Ord("r")-Ord("a")+65 1
+Key Ord("r")-Ord("a")+65 0
+
+Key Ord("l")-Ord("a")+65 1
+Key Ord("l")-Ord("a")+65 0
+
+Key Ord("d")-Ord("a")+65 1
+Key Ord("d")-Ord("a")+65 0
+
+KeyDown 160
+Key 49 1
+Key 49 0
+KeyUp 160
+
+Output "Done writing hello world"
+
+
+
+
+
+
+
