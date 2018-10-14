@@ -6,20 +6,12 @@ uses System.Windows.Forms;
 uses System.Drawing;
 uses Microsoft.Win32;
 
+uses LocaleData;
+uses SettingsData;
+
 var
   f: Form;
   
-  Locale := new Dictionary<(string,string),string>;
-  curr_locale := '';
-
-function Translate(text:string):string;
-begin
-  var key := (curr_locale, text);
-  if Locale.ContainsKey(key) then
-    Result := Locale[key] else
-    Result := '*Translation Error*';
-end;
-
 function OpenOrCreate(self: RegistryKey; name: string): RegistryKey; extensionmethod;
 begin
   Result := self.OpenSubKey(name,true);
@@ -286,50 +278,6 @@ type
     
     
     
-    class procedure InitLocale;
-    begin
-      Locale.Add(('EN','AssociateDotSAC'),'Associate .SAC files');
-      Locale.Add(('EN','AddIcon'),'Add icon to .SAC files');
-      Locale.Add(('EN','AddCreateNew'),'Add "Create>>new .SAC file" button');
-      Locale.Add(('EN','AddConfLaunch'),'Add "Configured Launch" button for .SAC files');
-      Locale.Add(('EN','AddEdit'),'Add "Edit" botton for .SAC files');
-      Locale.Add(('EN','Ok'),'OK');
-      Locale.Add(('EN','Apply'),'Apply');
-      
-      Locale.Add(('EN','Exec'),'Execute');
-      Locale.Add(('EN','ConfLaunch'),'Configured Launch');
-      Locale.Add(('EN','Edit'),'Edit');
-      
-      Locale.Add(('EN','Text|reg used'),'Registry key ".sac" used by "{0}"'#10'Replace it?');
-      Locale.Add(('EN','Cap|reg used'),'Registry key ".sac" is used');
-      
-      Locale.Add(('EN','Text|reg ver'),'current version is {0}, but Config.exe version is {1}'#10'Do you wand to downgrade current version?');
-      Locale.Add(('EN','Cap|reg ver'),'version error');
-      
-      
-      
-      Locale.Add(('RU','AssociateDotSAC'),'Ассоциировать .SAC файлы');
-      Locale.Add(('RU','AddIcon'),'Add icon to .SAC files');
-      Locale.Add(('RU','AddCreateNew'),'Add "Create>>new .SAC file" button');
-      Locale.Add(('RU','AddConfLaunch'),'Добавить кнопку "Запуск с параметрами" для .SAC файлов');
-      Locale.Add(('RU','AddEdit'),'Добавить кнопку "Редактировать" для .SAC файлов');
-      Locale.Add(('RU','Ok'),'ОК');
-      Locale.Add(('RU','Apply'),'Применить');
-      
-      Locale.Add(('RU','Exec'),'Выполнить');
-      Locale.Add(('RU','ConfLaunch'),'Configured Launch');
-      Locale.Add(('RU','Edit'),'Edit');
-      
-      Locale.Add(('RU','Text|reg used'),'');
-      Locale.Add(('RU','Cap|reg used'),'');
-      
-      Locale.Add(('RU','Text|reg ver'),'');
-      Locale.Add(('RU','Cap|reg ver'),'');
-    end;
-    
-    class constructor :=
-    InitLocale;
-    
     class procedure DeleteFolder(dir: string);
     begin
       if not System.IO.Directory.Exists(dir) then exit;
@@ -349,7 +297,6 @@ type
     class procedure LoadLib;
     begin
       System.IO.Directory.CreateDirectory('Lib');
-      {$resource 'lib_pack'}
       var br := new System.IO.BinaryReader(GetResourceStream('lib_pack'));
       while br.BaseStream.Position < br.BaseStream.Length do
       begin
@@ -371,6 +318,10 @@ type
     procedure Load;
     begin
       
+      {$resource 'Lang\RU.lang'}
+      {$resource 'Lang\EN.lang'}
+      LoadLocale('#Config', '');
+      
       {$resource 'Icon.ico'}
       {$resource 'SAC.exe'}
       {$resource 'Editor.exe'}
@@ -378,6 +329,7 @@ type
       if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
       
+      {$resource 'lib_pack'}
       LoadLib;
       
       
@@ -435,11 +387,15 @@ type
     
     procedure Save;
     begin
+      var rest_needed := false;
+      
       if Parameter.All['AssociateDotSAC'].GetCBChecked then
       begin
         var key := Registry.ClassesRoot.OpenSubKey('.sac');
-        if key <> nil then
+        if key = nil then
+          rest_needed := true else
         begin
+          if not key.ExistsSubKey('ShellNew') then rest_needed := true;
           
           while (key <> nil) and (key.GetValue('') as string <> RegName) do
             case MessageBox.Show(string.Format(Translate('Text|reg used'), key.GetValue('')),Translate('Cap|reg used'),MessageBoxButtons.AbortRetryIgnore) of
@@ -490,6 +446,7 @@ type
         key.SetValue('', 'SAC Script');
         key.SetValue('version', version);
         
+        if not key.ExistsSubKey('shell') then rest_needed := true;
         var shell := key.OpenOrCreate('shell');
         shell.SetValue('','exec');
         
@@ -505,6 +462,7 @@ type
         begin
           System.IO.File.Copy('Icon.ico',ProgFilesName+'\Icon.ico', true);
           
+          if not key.ExistsSubKey('DefaultIcon') then rest_needed := true;
           var icon := key.OpenOrCreate('DefaultIcon');
           icon.SetValue('', $'"{ProgFilesName}\Icon.ico"');
           icon.Close;
@@ -513,11 +471,15 @@ type
           System.IO.File.Delete(ProgFilesName+'\Icon.ico');
           
           if shell.ExistsSubKey('DefaultIcon') then
+          begin
             shell.DeleteSubKey('DefaultIcon');
+            rest_needed := true;
+          end;
         end;
         
         if Parameter.All['AddConfLaunch'].GetCBChecked then
         begin
+          if not shell.ExistsSubKey('params_exec') then rest_needed := true;
           var params_exec := shell.OpenOrCreate('params_exec');
           params_exec.SetValue('', Translate('ConfLaunch'));
           var params_exec_com := params_exec.OpenOrCreate('command');
@@ -525,15 +487,17 @@ type
           params_exec_com.Close;
           params_exec.Close;
         end else
-        begin
           if shell.ExistsSubKey('params_exec') then
+          begin
             shell.DeleteSubKeyTree('params_exec');
-        end;
+            rest_needed := true;
+          end;
         
         if Parameter.All['AddEdit'].GetCBChecked then
         begin
           System.IO.File.Copy('Editor.exe',ProgFilesName+'\Editor.exe', true);
           
+          if not shell.ExistsSubKey('edit') then rest_needed := true;
           var edit := shell.OpenOrCreate('edit');
           edit.SetValue('', Translate('Edit'));
           var edit_com := edit.OpenOrCreate('command');
@@ -541,30 +505,33 @@ type
           edit_com.Close;
           edit.Close;
         end else
-        begin
           if shell.ExistsSubKey('edit') then
+          begin
             shell.DeleteSubKeyTree('edit');
-        end;
+            rest_needed := true;
+          end;
         
         shell.Close;
         key.Close;
         
       end else
       begin
-        var key := Registry.ClassesRoot.OpenSubKey(RegName);
-        if key <> nil then
+        if Registry.ClassesRoot.ExistsSubKey(RegName) then
         begin
-          key.Close;
           Registry.ClassesRoot.DeleteSubKeyTree(RegName);
+          rest_needed := true;
         end;
         
-        key := Registry.ClassesRoot.OpenSubKey('.sac');
+        var key := Registry.ClassesRoot.OpenSubKey('.sac');
         if key <> nil then
         begin
           var val := key.GetValue('') as string;
           key.Close;
           if val = RegName then
+          begin
             Registry.ClassesRoot.DeleteSubKeyTree('.sac');
+            rest_needed := true;
+          end;
         end;
         
         DeleteFolder(ProgFilesName);
@@ -574,7 +541,22 @@ type
         System.IO.File.Delete('Icon.ico');
         System.IO.File.Delete('SAC.exe');
         System.IO.File.Delete('Editor.exe');
+        
+        rest_needed := true;
       end;
+      
+      
+      
+      if not rest_needed then exit;
+      if
+        MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.YesNo) <>
+        System.Windows.Forms.DialogResult.Yes
+      then exit;
+      
+      var ToDo := 0;//ToDo сделать программную перезагрузку
+      MessageBox.Show('Don''t be lazy, restart it yourself! :D'#10'This thing comming soon™',_ObjectToString(new System.NotImplementedException),MessageBoxButtons.OK);
+      
+      Halt;
     end;
     
     constructor;
@@ -587,9 +569,9 @@ type
       
       LParameter.Create('temp', sender->
       begin
-        curr_locale := sender.L.SelectedItem as string;
+        CurrLocale := sender.L.SelectedItem as string;
         Parameter.ValidateNameAll;
-      end, 'EN', 'RU');
+      end, LangList);
       
       CBParameter.Create('AssociateDotSAC', CheckState.Indeterminate).AddParams(
         CBParameter.Create('AddIcon', CheckState.Checked),

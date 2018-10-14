@@ -1,0 +1,29 @@
+
+
+#Config
+
+AssociateDotSAC					=Associate .SAC files
+AddIcon							=Add icon to .SAC files
+AddCreateNew					=Add "Create>>new .SAC file" button for context menu (RMB in folder)
+AddConfLaunch					=Add "Configured Launch" button for .SAC files
+AddEdit							=Add "Edit" botton for .SAC files
+Ok								=OK
+Apply							=Apply
+
+Exec							=Execute
+ConfLaunch						=Configured Launch
+Edit							=Edit
+
+Text|reg used					=Registry key ".sac" used by "{0}".\#10Replace it?
+Cap|reg used					=Registry key ".sac" is used
+
+Text|reg ver					=Current version is {0}, but Config.exe version is {1}.\#10Do you want to downgrade current version?
+Cap|reg ver						=Version error
+
+Text|NeedRestart				=Now restart computer to save installed regestry keys.\#10Restart now?
+Cap|NeedRestart					=Comuter restart needed
+
+
+
+#SAC
+
