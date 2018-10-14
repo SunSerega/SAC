@@ -2,10 +2,6 @@
 {$reference System.Windows.Forms.dll}
 {$reference System.Drawing.dll}
 
-{$resource 'Icon.ico'}
-{$resource 'SAC.exe'}
-{$resource 'Editor.exe'}
-
 uses System.Windows.Forms;
 uses System.Drawing;
 uses Microsoft.Win32;
@@ -344,27 +340,45 @@ type
     
     class procedure FileFromStream(fname: string; str: System.IO.Stream);
     begin
-      var bw := new System.IO.BinaryWriter(System.IO.File.Create(fname));
-      var br := new System.IO.BinaryReader(str);
-      bw.BaseStream.SetLength(str.Length);
-      while str.Position < str.Length do
+      var f := System.IO.File.Create(fname);
+      str.CopyTo(f);
+      f.Close;
+      str.Close;
+    end;
+    
+    class procedure LoadLib;
+    begin
+      System.IO.Directory.CreateDirectory('Lib');
+      {$resource 'lib_pack'}
+      var br := new System.IO.BinaryReader(GetResourceStream('lib_pack'));
+      while br.BaseStream.Position < br.BaseStream.Length do
       begin
-        bw.Write(br.ReadBytes(4096));
-        br.BaseStream.Flush;
-        bw.BaseStream.Flush;
+        var d := br.ReadString;
+        System.IO.Directory.CreateDirectory(d);
+        var bw := new System.IO.BinaryWriter(System.IO.File.Create(d+'\'+br.ReadString));
+        var left := br.ReadInt64;
+        while left > 0 do
+        begin
+          var curr := Min(4096, left);
+          bw.Write(br.ReadBytes(curr));
+          left -= curr;
+        end;
+        
+        bw.Close;
       end;
-      br.Close;
-      bw.Close;
     end;
     
     procedure Load;
     begin
       
+      {$resource 'Icon.ico'}
+      {$resource 'SAC.exe'}
+      {$resource 'Editor.exe'}
       if not System.IO.File.Exists('Icon.ico') then FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
       if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
       
-      System.IO.Directory.CreateDirectory('Lib');
+      LoadLib;
       
       
       
