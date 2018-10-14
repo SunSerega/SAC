@@ -21,9 +21,32 @@ Text|reg ver					=Current version is {0}, but Config.exe version is {1}.\#10Do y
 Cap|reg ver						=Version error
 
 Text|NeedRestart				=Now restart computer to save installed regestry keys.\#10Restart now?
-Cap|NeedRestart					=Comuter restart needed
+Cap|NeedRestart					=Computer restart needed
+
+
+
+#Parsing
+
+abc=def
 
 
 
 #SAC
+
+NoLibHelp						=No lib folder found\#10You can still start script from random folder\#10Start this .exe with Command line arguments, like this:\#10"*folder_of_this_exe*\SAC.exe" "*YourScriptPath*\*YourScriptName*.sac"\#10You can also specify arguments, after .sac file name\#10Here is list of them:\#10"!conf" - will start program to help add arguments\#10"!debug" - will start script with debug (slower, but more info)\#10Thats all for now, press Enter to exit
+CanNotParseBoolArg				=Can't parse "{0}" to bool value
+UnknownArg						=Unknown arg: "{0}"
+
+LibView|CurrLib					=Folder: "{0}"
+LibView|RootLib					=Root: "{0}"
+LibView|SubLibs					=SubLibs:
+LibView|Scripts					=Scripts:
+LibView|LibElement				={0} : {1}
+LibView|LibBack					=-1/back : Go to root
+LibView|Read					=Enter name or id:
+LibView|AnsNotDef				="{0}" is not defined
+LibView|InvalidId				=id #{0} is out of posible range
+
+Runing							=Runing
+SetKey							=Set key
 

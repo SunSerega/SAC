@@ -11,7 +11,10 @@
 interface
 
 uses ExprParser;
+
 uses MiscData;
+uses LocaleData;
+uses SettingsData;
 
 type
   {$region pre desc}

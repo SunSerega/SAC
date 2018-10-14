@@ -31,10 +31,11 @@ Installing:
 	- [SAC.exe](http://github.com/SunSerega/SAC/raw/master/SAC.exe) - runs scripts;
 	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/Editor.exe) - editor for scripts;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts;
+3. Copy "Lang" folder from repository to folder with "SAC.exe"
 
 To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line (Win+R), like this:\
 "\*SAC_exe_Folder\*\SAC.exe" "\*ScriptFolder\*\\\*ScriptName\*.sac"\
-If you want to start editor - you the same command, just replace "SAC.exe" with "Editor.exe".
+If you want to start editor - use the same command, just replace "SAC.exe" with "Editor.exe".
 
 Uninstalling:
 1. Just delete everything you created when installing.

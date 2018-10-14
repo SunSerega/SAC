@@ -23,18 +23,22 @@ end;
 
 procedure LoadSettings(fname: string := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\ScriptAutoClicker\Settings.ini');
 begin
-  var sr := new System.IO.StreamReader(System.IO.File.OpenRead(fname));
-  
-  while not sr.EndOfStream do
+  if not System.IO.File.Exists(fname) then fname := System.IO.Path.GetDirectoryName(System.IO.Path.GetFullPath(System.Environment.GetCommandLineArgs[0]))+'\Settings.ini';
+  if System.IO.File.Exists(fname) then
   begin
-    var s := sr.ReadLine.Split(new char[]('='),2);
+    var sr := new System.IO.StreamReader(System.IO.File.OpenRead(fname));
     
-    case s[0] of
-      'CurrLang': Settings.Add(s[0], s[1]);
+    while not sr.EndOfStream do
+    begin
+      var s := sr.ReadLine.Split(new char[]('='),2);
+      
+      case s[0] of
+        'CurrLang': Settings.Add(s[0], s[1]);
+      end;
     end;
+    
+    sr.Close;
   end;
-  
-  sr.Close;
   
   LocaleData.CurrLocale := GetSettingsValue('CurrLang', LangList[0]);
 end;

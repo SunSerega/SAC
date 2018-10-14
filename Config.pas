@@ -77,8 +77,8 @@ type
       foreach var p in RootParams do
         p.ValidatePos(10,y, maxw);
       
-      f.Width := maxw + 10;
-      f.Height := y + 10 + 30;
+      f.Width := Max(200,maxw + 10);
+      f.Height := y + 68;
     end;
     
     class procedure ValidateNameAll;
@@ -92,6 +92,7 @@ type
     constructor(Name: string);
     begin
       self.Name := Name;
+      if Name = '' then exit;
       All[Name] := self;
       RootParams.Add(self);
     end;
@@ -318,9 +319,9 @@ type
     procedure Load;
     begin
       
-      {$resource 'Lang\RU.lang'}
-      {$resource 'Lang\EN.lang'}
-      LoadLocale('#Config', '');
+      LoadLocale('#Config');
+      LoadSettings;
+      (Parameter.All['CurrLang'] as LParameter).L.SelectedItem := CurrLocale;
       
       {$resource 'Icon.ico'}
       {$resource 'SAC.exe'}
@@ -514,6 +515,12 @@ type
         shell.Close;
         key.Close;
         
+        
+        
+        var sw := new System.IO.StreamWriter(System.IO.File.Create($'{ProgFilesName}\Settings.ini'));
+        sw.WriteLine($'CurrLang={CurrLocale}');
+        sw.Close;
+        
       end else
       begin
         if Registry.ClassesRoot.ExistsSubKey(RegName) then
@@ -567,7 +574,7 @@ type
       
       
       
-      LParameter.Create('temp', sender->
+      LParameter.Create('CurrLang', sender->
       begin
         CurrLocale := sender.L.SelectedItem as string;
         Parameter.ValidateNameAll;
@@ -591,6 +598,9 @@ type
       
       Load;
       Parameter.ValidateNameAll;
+      
+      self.Shown += procedure(o,e)->
+      (Parameter.All['Ok'] as BPar).B.Focus;
     end;
   
   end;

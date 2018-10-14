@@ -11,12 +11,14 @@ const
     'RU'
   );
 
-procedure LoadLocale(htg: string; dir: string := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\ScriptAutoClicker\Lang\');
+{$resource 'Lang\RU.lang'}
+{$resource 'Lang\EN.lang'}
+procedure LoadLocale(htg: string);
 begin
   foreach var lang_id in LangList do
   begin
-    var fname := dir+lang_id+'.lang';
-    var sr := new System.IO.StreamReader(System.IO.File.Exists(fname)?System.IO.File.OpenRead(fname):GetResourceStream(fname));
+    var fname := lang_id+'.lang';
+    var sr := new System.IO.StreamReader(GetResourceStream(fname));
     var f := false;
     
     while not sr.EndOfStream do
