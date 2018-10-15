@@ -517,6 +517,9 @@ type
         
         
         
+        System.IO.File.Delete('Icon.ico');
+        System.IO.File.Delete('Editor.exe');
+        
         var sw := new System.IO.StreamWriter(System.IO.File.Create($'{ProgFilesName}\Settings.ini'));
         sw.WriteLine($'CurrLang={CurrLocale}');
         sw.Close;
@@ -556,12 +559,9 @@ type
       
       if not rest_needed then exit;
       if
-        MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.YesNo) <>
+        MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK) <>
         System.Windows.Forms.DialogResult.Yes
       then exit;
-      
-      var ToDo := 0;//ToDo сделать программную перезагрузку
-      MessageBox.Show('Don''t be lazy, restart it yourself! :D'#10'This thing comming soon™',_ObjectToString(new System.NotImplementedException),MessageBoxButtons.OK);
       
       Halt;
     end;

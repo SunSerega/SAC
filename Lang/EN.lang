@@ -20,7 +20,7 @@ Cap|reg used					=Registry key ".sac" is used
 Text|reg ver					=Current version is {0}, but Config.exe version is {1}.\#10Do you want to downgrade current version?
 Cap|reg ver						=Version error
 
-Text|NeedRestart				=Now restart computer to save installed regestry keys.\#10Restart now?
+Text|NeedRestart				=Now restart computer to save and apply .sac file association, icons, etc.
 Cap|NeedRestart					=Computer restart needed
 
 

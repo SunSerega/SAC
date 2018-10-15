@@ -153,7 +153,7 @@ type
       {$region SetKey}
       SetKey.Click += procedure(o,e)->
       System.Threading.Thread.Create(()->
-      if not SetKey.Enabled then exit else
+      if SetKey.Enabled then
       lock n_pause_keys do
       begin
         SetKey.Enabled := false;
