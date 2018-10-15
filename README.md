@@ -46,6 +46,20 @@ Uninstalling:
 
 <details>
 <summary>
+How to build
+</summary>
+
+1. Install [PABC.Net](PascalABC.Net);
+2. Compile "PackAll.pas";
+3. Start "PackAll.exe".
+
+When its done - it would say "Ready".\
+Then, use one of installing methods, to apply your build.
+
+</details>
+
+<details>
+<summary>
 How to "Lib" folder:
 </summary>
 
@@ -80,7 +94,7 @@ Start it but just do not start the actual script.
 How to feedback
 </summary>
 
-Please, do Not put anything except issues and feature requests in issues.
+Please, try to Not put anything except issues and feature requests in issues.
 
 For other types of feedback you can use:
 

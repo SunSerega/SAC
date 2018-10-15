@@ -1,9 +1,9 @@
 ﻿unit StmParser;
+//ToDo Убрать лишние поля StmBlock (там список локальных переменных и т.п., что должно сущесвовать только в определённых процедурах)
 //ToDo Добавить DeduseVarsTypes и Instatiate в ExprParser
-//ToDo удобный способ смотреть изначальный и оптимизированный вариант
-//ToDo контекст ошибок, то есть при оптимизации надо сохранять номер строки
-//ToDo типы вроде InputValue и т.п., чтоб не переписывать для каждого оператора код конвертации текста в параметры, а так же последующие оптимизации
-//ToDo нормальные GetCalc
+//ToDo Удобный способ смотреть изначальный и оптимизированный вариант
+//ToDo Контекст ошибок, то есть при оптимизации надо сохранять номер строки
+//ToDo Оптимизация блоков, так чтоб они знали когда их результат - константа
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -233,6 +233,12 @@ type
     inherited Create(source, $'Mouse key code must be 1..2 or 4..6, it can''t be {k}', KV('k'+'', object(k)));
     
   end;
+  InvalidCompNameException = class(FileCompilingException)
+    
+    public constructor(source: Script; comp: string) :=
+    inherited Create(source, $'"{comp}" is not compare operator', KV('comp', object(comp)));
+    
+  end;
   
   OutputStreamEmptyException = class(InnerException)
     
@@ -308,6 +314,8 @@ type
     
     public function GetCalc: Action<ExecutingContext>; abstract;
     
+    public function Optimize(nvs: Dictionary<string, real>; svs: Dictionary<string, string>; ovs: List<string>): StmBase; virtual := self;
+    
     public class function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
     
     public class function ObjToStr(o: object): string;
@@ -372,7 +380,6 @@ type
     public scr: Script;
     
     public prev: StmBlock;
-    public refs := new List<StmBlock>;//блоки которые ссылаются на этот. не считая prev
     
     public function GetAllFRefs: sequence of OptExprBase;
     
@@ -569,12 +576,16 @@ type
     function GetRefs: sequence of OptExprBase;
     
   end;
-  ICallOper = interface
-    
-    procedure SetNext(n: StmBlock);
+  
+  IJumpCallOper = interface
     
   end;
-  IJumpOper = interface
+  ICallOper = interface(IJumpCallOper)
+    
+    property JumpBl: StmBlock read write;
+    
+  end;
+  IJumpOper = interface(IJumpCallOper)
     
   end;
   
@@ -940,8 +951,7 @@ type
     
     
     
-    public procedure SetNext(n: StmBlock) :=
-    self.next := n;
+    public property JumpBl: StmBlock read next write next;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -960,7 +970,7 @@ type
   OperCallIf = class(OperStmBase, ICallOper)
     
     public e1,e2: OptExprWrapper;
-    public compr: (equ, less, more, less_equ, more_equ);
+    public compr: (equ, less, more);
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
     public next: StmBlock;
@@ -975,12 +985,22 @@ type
     
     
     
-    public procedure SetNext(n: StmBlock) :=
-    self.next := n;
+    public property JumpBl: StmBlock read next write next;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      
+      if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
+      case par[2][1] of
+        '=': compr := equ;
+        '<': compr := less;
+        '>': compr := more;
+        else raise new InvalidCompNameException(sb.scr, par[2]);
+      end;
+      
+      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
+      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]), sb.nvn, sb.svn);
       
       CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
@@ -993,15 +1013,11 @@ type
           equ: Result := real(o1) = real(o2);
           less: Result := real(o1) < real(o2);
           more: Result := real(o1) > real(o2);
-          less_equ: Result := real(o1) <= real(o2);
-          more_equ: Result := real(o1) >= real(o2);
         end else
         case compr of
           equ: Result := ObjToStr(o1) = ObjToStr(o2);
           less: Result := ObjToStr(o1) < ObjToStr(o2);
           more: Result := ObjToStr(o1) > ObjToStr(o2);
-          less_equ: Result := ObjToStr(o1) <= ObjToStr(o2);
-          more_equ: Result := ObjToStr(o1) >= ObjToStr(o2);
         end;
     end;
     
@@ -1011,6 +1027,17 @@ type
       CalledBlock2.GetCalc(),
       Action&<ExecutingContext>(self.Calc)
     ) as Action<ExecutingContext>;
+    
+  end;
+  
+  OperCJump = class(OperStmBase, IJumpOper)
+    
+    public CalledBlock: StmBlock;
+    
+    
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    procedure(ec)->ec.curr.next := self.CalledBlock;
     
   end;
   OperJump = class(OperStmBase, IJumpOper)
@@ -1041,7 +1068,7 @@ type
   OperJumpIf = class(OperStmBase, IJumpOper)
     
     public e1,e2: OptExprWrapper;
-    public compr: (equ, less, more, less_equ, more_equ);
+    public compr: (equ, less, more);
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
     
@@ -1054,9 +1081,25 @@ type
     
     
     
+    public function Optimize(nvs: Dictionary<string, real>; svs: Dictionary<string, string>; ovs: List<string>): StmBase; override;
+    begin
+      
+    end;
+    
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      
+      if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
+      case par[2][1] of
+        '=': compr := equ;
+        '<': compr := less;
+        '>': compr := more;
+        else raise new InvalidCompNameException(sb.scr, par[2]);
+      end;
+      
+      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
+      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]), sb.nvn, sb.svn);
       
       CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
@@ -1069,15 +1112,11 @@ type
           equ: Result := real(o1) = real(o2);
           less: Result := real(o1) < real(o2);
           more: Result := real(o1) > real(o2);
-          less_equ: Result := real(o1) <= real(o2);
-          more_equ: Result := real(o1) >= real(o2);
         end else
         case compr of
           equ: Result := ObjToStr(o1) = ObjToStr(o2);
           less: Result := ObjToStr(o1) < ObjToStr(o2);
           more: Result := ObjToStr(o1) > ObjToStr(o2);
-          less_equ: Result := ObjToStr(o1) <= ObjToStr(o2);
-          more_equ: Result := ObjToStr(o1) >= ObjToStr(o2);
         end;
     end;
     
@@ -1114,7 +1153,7 @@ type
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
-  OperHalt = class(OperStmBase)
+  OperHalt = class(OperStmBase, IJumpOper)
     
     public constructor := exit;
     
@@ -1401,7 +1440,7 @@ begin
               last.Seal;
               last := new StmBlock(self);
               //ico.SetNext(last);//ToDo #незнаю_ибо_нет_инета
-              ICallOper(stm).SetNext(last);
+              ICallOper(stm).JumpBl := last;
               lname := ffname+'#%'+tmp_b_c;
               tmp_b_c += 1;
             end else
@@ -1462,7 +1501,27 @@ end;
 
 procedure Script.Optimize(load_done: boolean);
 begin
-  var ToDo := 0;
+  
+  var njbs: List<StmBlock>;
+  njbs := self.sbs.Values.Where(bl->not (bl.stms.Last is IJumpCallOper)).ToList;
+  var prev_njbs := new HashSet<StmBlock>;
+  while njbs.Count <> 0 do
+  begin
+    foreach var njb in njbs do
+      foreach var bl: StmBlock in self.sbs.Values do
+        if (bl.stms.Last is IJumpOper(var ijo)) and false then//ToDo if ijo.next=njb
+        begin
+          var Main_ToDo := 0;
+          bl.stms.Remove(bl.stms.Last);
+          bl.stms.AddRange(njb.stms);
+        end else
+        if (not (bl.stms.Last is IJumpCallOper)) and (bl.next = njb) then
+          bl.stms.AddRange(njb.stms);
+    
+    prev_njbs += njbs;
+    njbs := self.sbs.Values.Where(bl->not (prev_njbs.Contains(bl) or (bl.stms.Last is IJumpCallOper))).ToList;
+  end;
+  
 end;
 
 function ExecutingContext.ExecuteNext: boolean;
