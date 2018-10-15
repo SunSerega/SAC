@@ -102,6 +102,13 @@ type
       KeyList.ReadOnly := true;
       KeyList.WordWrap := false;
       KeyList.Multiline := true;
+      {$region RuningClick}
+      Runing.Click += (o,e)->
+      if Runing.Enabled then
+        if Runing.Checked then
+          scr_thr.Resume else
+          scr_thr.Suspend;
+      {$endregion RuningClick}
       {$region Update KeyList}
       var NGetKeyState := ScriptExecutionForm.GetKeyState;//ToDo #891
       var n_pause_keys := pause_keys;//ToDo #? 2.pas
@@ -180,6 +187,10 @@ type
       
       self.Width := SetKey.Right+25;
       self.Height := Output.Bottom+48;
+      self.Text := System.IO.Path.GetFullPath(entry_point.Split(new char[]('#'),2)[0]);
+      if self.Text.ToLower.Contains('\lib\') then
+        self.Text := 'SAC: '+self.Text.Split('\').SkipWhile(s->s.ToLower <> 'lib').JoinIntoString('\') else
+        self.Text := 'SAC: '+self.Text.Split('\').Last;
       
       {$endregion Form}
       
