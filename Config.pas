@@ -716,7 +716,7 @@ type
 begin
   try
     if
-      true or
+      //true or
       (CommandLineArgs.Length=1) and (CommandLineArgs[0]='SkipUAC')
     then
       Application.Run(new MForm) else
