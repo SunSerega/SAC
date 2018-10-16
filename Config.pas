@@ -30,6 +30,9 @@ begin
 end;
 
 type
+  
+  {$region Config Parameter's}
+  
   ParameterState = (StOn, StOff, StPart);
   Parameter = abstract class
     
@@ -270,21 +273,79 @@ type
     
   end;
   
+  {$endregion Config Parameter's}
+  
+  {$region Lib file's}
+  
+  LibDir=class
+    
+    public constructor := exit;
+    
+    public class root := new LibDir;
+    
+    public sdirs := new Dictionary<string, LibDir>;
+    public fls := new List<string>;
+    
+    public procedure Add(dir,fname: string);
+    begin
+      var ss := dir.Split(new char[]('\'), 2);
+      if ss.Length=1 then
+      begin
+        var res: LibDir;
+        if sdirs.ContainsKey(dir) then
+          res := sdirs[dir] else
+          res := new LibDir;
+        res.fls.Add(fname);
+        sdirs[dir] := res;
+      end else
+      begin
+        var res: LibDir;
+        if sdirs.ContainsKey(ss[0]) then
+          res := sdirs[ss[0]] else
+          res := new LibDir;
+        res.Add(ss[1],fname);
+        sdirs[ss[0]] := res;
+      end;
+    end;
+    
+    public procedure Delete(path: string := System.IO.Directory.GetCurrentDirectory+'\');
+    begin
+      
+      foreach var kvp in sdirs do
+        kvp.Value.Delete(path+kvp.Key+'\');
+      self.sdirs.Clear;
+      
+      foreach var fname in fls do
+        System.IO.File.Delete(path+fname);
+      self.fls.Clear;
+      
+      if not System.IO.Directory.EnumerateFileSystemEntries(path).Any then
+        System.IO.Directory.Delete(path);
+      
+    end;
+    
+  end;
+  
+  {$endregion Lib file's}
+  
   MForm = class(Form)
     
     const RegName = 'ScriptAutoClicker';
     class ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
     
     const version = 1;
+    class misc_loaded: boolean;
+    class sac_exe_loaded: boolean;
     
     
     
-    class procedure DeleteFolder(dir: string);
+    class procedure DeleteFolder(dir: string; params excpt: array of string);
     begin
       if not System.IO.Directory.Exists(dir) then exit;
-      System.IO.Directory.EnumerateDirectories(dir).ForEach(DeleteFolder);
-      System.IO.Directory.EnumerateFiles(dir).ForEach(System.IO.File.Delete);
-      System.IO.Directory.Delete(dir);
+      System.IO.Directory.EnumerateDirectories(dir).ForEach(d->MForm.DeleteFolder(d, excpt));
+      System.IO.Directory.EnumerateFiles(dir).Where(fname->not excpt.Contains(fname)).ForEach(System.IO.File.Delete);
+      if not System.IO.Directory.EnumerateFileSystemEntries(dir).Any then
+        System.IO.Directory.Delete(dir);
     end;
     
     class procedure FileFromStream(fname: string; str: System.IO.Stream);
@@ -292,7 +353,7 @@ type
       var f := System.IO.File.Create(fname);
       str.CopyTo(f);
       f.Close;
-      str.Close;
+      str.Position := 0;
     end;
     
     class procedure LoadLib;
@@ -303,7 +364,9 @@ type
       begin
         var d := br.ReadString;
         System.IO.Directory.CreateDirectory(d);
-        var bw := new System.IO.BinaryWriter(System.IO.File.Create(d+'\'+br.ReadString));
+        var f := br.ReadString;
+        LibDir.root.Add(d, f);
+        var bw := new System.IO.BinaryWriter(System.IO.File.Create(d+'\'+f));
         var left := br.ReadInt64;
         while left > 0 do
         begin
@@ -314,6 +377,7 @@ type
         
         bw.Close;
       end;
+      br.BaseStream.Position := 0;
     end;
     
     procedure Load;
@@ -324,14 +388,17 @@ type
       (Parameter.All['CurrLang'] as LParameter).L.SelectedItem := CurrLocale;
       
       {$resource 'Icon.ico'}
-      {$resource 'SAC.exe'}
       {$resource 'Editor.exe'}
       if not System.IO.File.Exists('Icon.ico') then FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
-      if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
-      
       {$resource 'lib_pack'}
       LoadLib;
+      misc_loaded := true;
+      
+      {$resource 'SAC.exe'}
+      if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
+      sac_exe_loaded := true;
+      
       
       
       
@@ -444,6 +511,20 @@ type
         end else
           key := Registry.ClassesRoot.CreateSubKey(RegName);
         
+        if not misc_loaded then
+        begin
+          FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
+          FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
+          LoadLib;
+          misc_loaded := true;
+        end;
+        
+        if not sac_exe_loaded then
+        begin
+          FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
+          sac_exe_loaded := true;
+        end;
+        
         key.SetValue('', 'SAC Script');
         key.SetValue('version', version);
         
@@ -517,9 +598,6 @@ type
         
         
         
-        System.IO.File.Delete('Icon.ico');
-        System.IO.File.Delete('Editor.exe');
-        
         var sw := new System.IO.StreamWriter(System.IO.File.Create($'{ProgFilesName}\Settings.ini'));
         sw.WriteLine($'CurrLang={CurrLocale}');
         sw.Close;
@@ -544,13 +622,38 @@ type
           end;
         end;
         
-        DeleteFolder(ProgFilesName);
-        if System.IO.Directory.EnumerateFileSystemEntries('Lib').Count = 0 then
-          System.IO.Directory.Delete('Lib');
+        if
+          System.IO.File.Exists($'{ProgFilesName}\Settings.ini') and
+          (
+            MessageBox.Show(Translate('Text|SettingsDel'),Translate('Cap|SettingsDel'),MessageBoxButtons.YesNo)
+            <>System.Windows.Forms.DialogResult.Yes
+          )
+        then
+          DeleteFolder(ProgFilesName, $'{ProgFilesName}\Settings.ini') else
+          DeleteFolder(ProgFilesName);
         
-        System.IO.File.Delete('Icon.ico');
+        if misc_loaded then
+        begin
+          misc_loaded := false;
+          
+          LibDir.root.Delete;
+          
+          if
+            (not System.IO.Directory.Exists('Lib')) or
+            (
+              MessageBox.Show(Translate('Text|LibDel'),Translate('Cap|LibDel'),MessageBoxButtons.YesNo)
+              =System.Windows.Forms.DialogResult.Yes
+            )
+          then
+            DeleteFolder('Lib');
+          
+          System.IO.File.Delete('Icon.ico');
+          System.IO.File.Delete('Editor.exe');
+          
+        end;
+        
         System.IO.File.Delete('SAC.exe');
-        System.IO.File.Delete('Editor.exe');
+        sac_exe_loaded := false;
         
         rest_needed := true;
       end;
@@ -558,10 +661,14 @@ type
       
       
       if not rest_needed then exit;
-      if
-        MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK) <>
-        System.Windows.Forms.DialogResult.Yes
-      then exit;
+      MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK);
+    end;
+    
+    procedure ClearAndExit;
+    begin
+      
+      System.IO.File.Delete('Icon.ico');
+      System.IO.File.Delete('Editor.exe');
       
       Halt;
     end;
@@ -587,7 +694,7 @@ type
         CBParameter.Create('AddEdit', CheckState.Unchecked)
       );
       
-      var proc1: Action0 := Save+Halt;
+      var proc1: Action0 := Save+ClearAndExit;
       var proc2: Action0 := Save;
       BsParameter.Create(
         ('Ok',proc1),
@@ -601,13 +708,17 @@ type
       
       self.Shown += procedure(o,e)->
       (Parameter.All['Ok'] as BPar).B.Focus;
+      
     end;
   
   end;
 
 begin
   try
-    if (CommandLineArgs.Length=1) and (CommandLineArgs[0]='SkipUAC') then
+    if
+      true or
+      (CommandLineArgs.Length=1) and (CommandLineArgs[0]='SkipUAC')
+    then
       Application.Run(new MForm) else
     begin
       var startInfo := new System.Diagnostics.ProcessStartInfo();

@@ -23,6 +23,12 @@ Cap|reg ver						=Version error
 Text|NeedRestart				=Now restart computer to save and apply .sac file association, icons, etc.
 Cap|NeedRestart					=Computer restart needed
 
+Text|SettingsDel				=Settings file found, delete it?
+Cap|SettingsDel					=Delete settings?
+
+Text|LibDel						=After deleting standard Lib entries, somethings left. Maybe it's your script and maybe you still need them.\#10Delete whole "Lib" folder?
+Cap|LibDel						=Lib not empty
+
 
 
 #Parsing
