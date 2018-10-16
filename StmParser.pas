@@ -1502,8 +1502,9 @@ end;
 procedure Script.Optimize(load_done: boolean);
 begin
   
+  exit;
   var njbs: List<StmBlock>;
-  njbs := self.sbs.Values.Where(bl->not (bl.stms.Last is IJumpCallOper)).ToList;
+  njbs := self.sbs.Values.Where(bl->not (bl.stms.Last is IJumpCallOper)).ToList;//ошибка если в stms нету ни 1 оператора
   var prev_njbs := new HashSet<StmBlock>;
   while njbs.Count <> 0 do
   begin
