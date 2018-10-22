@@ -20,8 +20,6 @@ Uninstalling:
 3. Launch it, uncheck all and press OK.
 4. Restart your computer, for all icons and context menu shortcuts to be properly deleted.
 
-If "Lib" folder is not empty - it would not be deleted when uninstalling.
-
 ---
 
 - Manual method
@@ -30,11 +28,13 @@ Installing:
 1. Download all modules you need:
 	- [SAC.exe](http://github.com/SunSerega/SAC/raw/master/SAC.exe) - runs scripts;
 	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/Editor.exe) - editor for scripts;
+	- [Help.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - manual for operators;
+	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/WK.exe) - shows key codes;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts;
 3. Copy "Lang" folder from repository to folder with "SAC.exe"
 
 To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line (Win+R), like this:\
-"\*SAC_exe_Folder\*\SAC.exe" "\*ScriptFolder\*\\\*ScriptName\*.sac"\
+`"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac"`\
 If you want to start editor - use the same command, just replace "SAC.exe" with "Editor.exe".
 
 Uninstalling:
@@ -80,7 +80,7 @@ If you used automatic installing method - you could chose to install "Configured
 If so - just press RMB on .sac file you want to execute and press "Configured launch".\
 (remember, you need to restart computer for this button to be created)\
 If not - open command line (press Win+R) and enter this string, replacing things in ** with proper names:\
-"\*SAC_exe_Folder\*\SAC.exe" "\*ScriptFolder\*\\\*ScriptName\*.sac" "!conf".
+`"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac" "!conf"`\
 
 If you want to know allowed command line agrs list - it is shown in Configured launch.\
 Start it but just do not start the actual script.
