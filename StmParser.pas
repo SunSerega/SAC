@@ -606,7 +606,9 @@ type
     begin
       var n := NumToInt(kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-      keybd_event(n,0,NumToInt(dp.res)=0?0:2,0);
+      var p := NumToInt(dp.res);
+      if p and $1 = $1 then keybd_event(n,0,0,0);
+      if p and $2 = $2 then keybd_event(n,0,2,0);
     end;
     
     
@@ -687,25 +689,61 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperMouse = class(OperStmBase)
+  OperKeyPress = class(OperStmBase)
     
-    public kk, dp: InputNValue;
+    public kk: InputNValue;
     
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
-    external 'User32.dll' name 'mouse_event';
+    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
     begin
       var n := NumToInt(kk.res);
-      case n of
-        1: mouse_event(NumToInt(dp.res)=0?$004:$002, 0,0,0,0);
-        2: mouse_event(NumToInt(dp.res)=0?$010:$008, 0,0,0,0);
-        4: mouse_event(NumToInt(dp.res)=0?$040:$020, 0,0,0,0);
-        5: mouse_event(NumToInt(dp.res)=0?$100:$080, 0,0,0,0);
-        6: mouse_event(NumToInt(dp.res)=0?$400:$200, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(scr, n);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      keybd_event(n, 0, 0, 0);
+      keybd_event(n, 0, 2, 0);
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperMouse = class(OperStmBase)
+    
+    public kk, dp: InputNValue;
+    
+    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: cardinal);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      
+      var p: cardinal;
+      case NumToInt(kk.res) of
+        1: p := $002;
+        2: p := $008;
+        4: p := $020;
+        5: p := $080;
+        6: p := $200;
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
       end;
       
+      mouse_event(
+        (NumToInt(dp.res) and $3) * p,
+        0,0,0,0
+      );
     end;
     
     
@@ -735,14 +773,14 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
-      case n of
+      
+      case NumToInt(kk.res) of
         1: mouse_event($002, 0,0,0,0);
         2: mouse_event($008, 0,0,0,0);
         4: mouse_event($020, 0,0,0,0);
         5: mouse_event($080, 0,0,0,0);
         6: mouse_event($200, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(scr, n);
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
       end;
       
     end;
@@ -772,14 +810,51 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
-      case n of
+      
+      case NumToInt(kk.res) of
         1: mouse_event($004, 0,0,0,0);
         2: mouse_event($010, 0,0,0,0);
         4: mouse_event($040, 0,0,0,0);
         5: mouse_event($100, 0,0,0,0);
         6: mouse_event($400, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(scr, n);
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
+      end;
+      
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      
+      kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
+  OperMousePress = class(OperStmBase)
+    
+    public kk: InputNValue;
+    
+    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      
+      case NumToInt(kk.res) of
+        1: mouse_event($006, 0,0,0,0);
+        2: mouse_event($018, 0,0,0,0);
+        4: mouse_event($060, 0,0,0,0);
+        5: mouse_event($180, 0,0,0,0);
+        6: mouse_event($600, 0,0,0,0);
+        else raise new InvalidMouseKeyCodeException(ec.scr, NumToInt(kk.res));
       end;
       
     end;
@@ -1337,11 +1412,13 @@ begin
   case par[0].ToLower of
     
     'key': Result := new OperKey(sb, par);
-    'keydown': Result := new OperKeyDown(sb, par);
-    'keyup': Result := new OperKeyUp(sb, par);
+    'keyd': Result := new OperKeyDown(sb, par);
+    'keyu': Result := new OperKeyUp(sb, par);
+    'keyp': Result := new OperKeyPress(sb, par);
     'mouse': Result := new OperMouse(sb, par);
-    'mousedown': Result := new OperMouseDown(sb, par);
-    'mouseup': Result := new OperMouseUp(sb, par);
+    'moused': Result := new OperMouseDown(sb, par);
+    'mouseu': Result := new OperMouseUp(sb, par);
+    'mousep': Result := new OperMousePress(sb, par);
     
     'mousepos': Result := new OperMousePos(sb, par);
     'getkey': Result := new OperGetKey(sb, par);

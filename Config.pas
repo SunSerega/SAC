@@ -389,8 +389,12 @@ type
       
       {$resource 'Icon.ico'}
       {$resource 'Editor.exe'}
+      {$resource 'Help.exe'}
+      {$resource 'WK.exe'}
       if not System.IO.File.Exists('Icon.ico') then FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
       if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
+      if not System.IO.File.Exists('Help.exe') then FileFromStream('Help.exe', GetResourceStream('Help.exe'));
+      if not System.IO.File.Exists('WK.exe') then FileFromStream('WK.exe', GetResourceStream('WK.exe'));
       {$resource 'lib_pack'}
       LoadLib;
       misc_loaded := true;
@@ -515,6 +519,8 @@ type
         begin
           FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
           FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
+          FileFromStream('Help.exe', GetResourceStream('Help.exe'));
+          FileFromStream('WK.exe', GetResourceStream('WK.exe'));
           LoadLib;
           misc_loaded := true;
         end;
@@ -649,6 +655,8 @@ type
           
           System.IO.File.Delete('Icon.ico');
           System.IO.File.Delete('Editor.exe');
+          System.IO.File.Delete('Help.exe');
+          System.IO.File.Delete('WK.exe');
           
         end;
         

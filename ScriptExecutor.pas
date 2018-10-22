@@ -78,37 +78,37 @@ type
         Ceil(self.CreateGraphics.MeasureString(' ', Output.Font).Height*30)
       );
       
-      var Runing := new CheckBox;
-      self.Controls.Add(Runing);
-      Runing.AutoSize := true;
-      Runing.Text := Translate('Runing');
-      Runing.Checked := false;
-      Runing.Top := 10;
-      Runing.Left := Output.Right+10;
+      var Running := new CheckBox;
+      self.Controls.Add(Running);
+      Running.AutoSize := true;
+      Running.Text := Translate('Running');
+      Running.Checked := false;
+      Running.Top := 10;
+      Running.Left := Output.Right+10;
       
       var SetKey := new Button;
       self.Controls.Add(SetKey);
       SetKey.AutoSize := true;
       SetKey.Text := Translate('SetKey');
       SetKey.Top := 10;
-      SetKey.Left := Runing.Right+10;
-      Runing.Top += (SetKey.Height-Runing.Height) div 2;
+      SetKey.Left := Running.Right+10;
+      Running.Top += (SetKey.Height-Running.Height) div 2;
       
       var KeyList := new RichTextBox;
       self.Controls.Add(KeyList);
       KeyList.Top := SetKey.Bottom+10;
-      KeyList.Left := Runing.Left;
-      KeyList.Width := SetKey.Right-Runing.Left;
+      KeyList.Left := Running.Left;
+      KeyList.Width := SetKey.Right-Running.Left;
       KeyList.ReadOnly := true;
       KeyList.WordWrap := false;
       KeyList.Multiline := true;
-      {$region RuningClick}
-      Runing.Click += (o,e)->
-      if Runing.Enabled then
-        if Runing.Checked then
+      {$region RunningClick}
+      Running.Click += (o,e)->
+      if Running.Enabled then
+        if Running.Checked then
           scr_thr.Resume else
           scr_thr.Suspend;
-      {$endregion RuningClick}
+      {$endregion RunningClick}
       {$region Update KeyList}
       var NGetKeyState := ScriptExecutionForm.GetKeyState;//ToDo #891
       var n_pause_keys := pause_keys;//ToDo #? 2.pas
@@ -157,8 +157,8 @@ type
       lock n_pause_keys do
       begin
         SetKey.Enabled := false;
-        Runing.Enabled := false;
-        Runing.AutoCheck := false;
+        Running.Enabled := false;
+        Running.AutoCheck := false;
         KeyList.Focus;
         pause_thr.Suspend;
         
@@ -179,9 +179,9 @@ type
         end;
         
         pause_thr.Resume;
-        Runing.AutoCheck := true;
+        Running.AutoCheck := true;
         SetKey.Enabled := true;
-        Runing.Enabled := true;
+        Running.Enabled := true;
       end).Start;
       {$endregion SetKey}
       
@@ -204,7 +204,7 @@ type
         var s := SeqGen(256,i->byte(i)).Where(i->NGetKeyState(i) and $80 = $80);
         while
           pause_keys.Any(k->not cpk.Contains(k)) and
-          not Runing.Checked
+          not Running.Checked
         do
         begin
           Sleep(1);
@@ -212,21 +212,21 @@ type
         end;
         while
           pause_keys.Any(k->cpk.Contains(k)) and
-          not Runing.Checked
+          not Running.Checked
         do
         begin
           Sleep(1);
           cpk := s.ToList;
         end;
-        if not Runing.Checked then
+        if not Running.Checked then
         begin
           scr_thr.Resume;
-          Runing.Checked := true;
+          Running.Checked := true;
         end;
         
         while
           pause_keys.Any(k->not cpk.Contains(k)) and
-          Runing.Checked
+          Running.Checked
         do
         begin
           Sleep(1);
@@ -234,17 +234,17 @@ type
         end;
         while
           pause_keys.Any(k->cpk.Contains(k)) and
-          Runing.Checked
+          Running.Checked
         do
         begin
           Sleep(1);
           cpk := s.ToList;
         end;
         
-        if Runing.Checked then
+        if Running.Checked then
         begin
           scr_thr.Resume;
-          Runing.Checked := false;
+          Running.Checked := false;
         end;
         
       except
@@ -259,7 +259,7 @@ type
       {$endregion Pause/Resume}
       
       scr.otp += procedure(s)->Output.Text += s+#10;
-      scr.susp_called += procedure->Runing.Checked := false;
+      scr.susp_called += procedure->Running.Checked := false;
       scr.stoped += Halt;
       
       scr_thr.Start;
