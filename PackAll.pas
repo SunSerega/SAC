@@ -1,117 +1,72 @@
-﻿begin
+﻿var
+  curr_dir := System.Environment.CurrentDirectory;
+  thrs := new List<System.Threading.Thread>;
+
+procedure Compile(fname: string; execute: boolean := false) :=
+try
   
-  var c := 0;
-  var key := new object;
+  var comp := new System.Diagnostics.ProcessStartInfo;
+  comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
+  //comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
+  comp.Arguments := $'"{curr_dir}\{fname}.pas"';
+  comp.UseShellExecute := false;
+  comp.RedirectStandardOutput := true;
   
-  System.Console.ForegroundColor := System.ConsoleColor.Gray;
+  var p := System.Diagnostics.Process.Start(comp);
+  p.WaitForExit;
+  write($'{fname} - {p.StandardOutput.ReadToEnd}{#10}');
   
-  System.Threading.Thread.Create(
-  ()->
+  if execute then
   begin
-    var comp := new System.Diagnostics.ProcessStartInfo;
-    comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-    comp.Arguments := $'"{System.Environment.CurrentDirectory}\Editor.pas"';
-    comp.UseShellExecute := false;
-    comp.RedirectStandardOutput := true;
-    
-    var p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    write(p.StandardOutput.ReadToEnd+#10);
-    
-    lock key do c += 1;
-  end).Start;
-  
-  System.Threading.Thread.Create(
-  ()->
-  begin
-    var comp := new System.Diagnostics.ProcessStartInfo;
-    comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-    comp.Arguments := $'"{System.Environment.CurrentDirectory}\Help.pas"';
-    comp.UseShellExecute := false;
-    comp.RedirectStandardOutput := true;
-    
-    var p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    write(p.StandardOutput.ReadToEnd+#10);
-    
-    lock key do c += 1;
-  end).Start;
-  
-  System.Threading.Thread.Create(
-  ()->
-  begin
-    var comp := new System.Diagnostics.ProcessStartInfo;
-    comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-    comp.Arguments := $'"{System.Environment.CurrentDirectory}\WK.pas"';
-    comp.UseShellExecute := false;
-    comp.RedirectStandardOutput := true;
-    
-    var p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    write(p.StandardOutput.ReadToEnd+#10);
-    
-    lock key do c += 1;
-  end).Start;
-  
-  System.Threading.Thread.Create(
-  ()->
-  begin
-    var comp := new System.Diagnostics.ProcessStartInfo;
-    comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-    comp.Arguments := $'"{System.Environment.CurrentDirectory}\LibPacker.pas"';
-    comp.UseShellExecute := false;
-    comp.RedirectStandardOutput := true;
-    
-    var p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    write(p.StandardOutput.ReadToEnd+#10);
-    
-    comp.FileName := 'LibPacker.exe';
+    comp.FileName := $'{fname}.exe';
     comp.Arguments := '';
     p := System.Diagnostics.Process.Start(comp);
     p.WaitForExit;
     write(p.StandardOutput.ReadToEnd+#10);
+  end;
+  
+except
+  on e: Exception do
+    write($'{fname} - {_ObjectToString(e)}{#10#10}');
+end;
+
+procedure CompileAsync(fname: string; execute: boolean := false);
+begin
+  var thr := new System.Threading.Thread(
+    procedure->Compile(fname, execute)
+  );
+  thr.Start;
+  thrs.Add(thr);
+end;
+
+begin
+  try
     
+    System.Console.ForegroundColor := System.ConsoleColor.Gray;
     
-    lock key do c += 1;
-  end).Start;
-  
-  System.Threading.Thread.Create(
-  ()->
-  begin
-    var comp := new System.Diagnostics.ProcessStartInfo;
-    comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-    comp.Arguments := $'"{System.Environment.CurrentDirectory}\SAC.pas"';
-    comp.UseShellExecute := false;
-    comp.RedirectStandardOutput := true;
+    CompileAsync('SAC');
+    CompileAsync('Editor');
+    CompileAsync('LibPacker', true);
+    CompileAsync('Help');
+    CompileAsync('WK');
     
-    var p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    write(p.StandardOutput.ReadToEnd+#10);
+    System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);
     
-    lock key do c += 1;
-  end).Start;
-  
-  System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);
-  
-  var comp := new System.Diagnostics.ProcessStartInfo;
-  comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-  comp.Arguments := $'"{System.Environment.CurrentDirectory}\Config.pas"';
-  comp.UseShellExecute := false;
-  comp.RedirectStandardOutput := true;
-  //comp.RedirectStandardInput := true;
-  
-  while c < 5 do Sleep(10);
-  
-  System.Console.ForegroundColor := System.ConsoleColor.Green;
-  
-  writeln('main'#10);
-  
-  var p := System.Diagnostics.Process.Start(comp);
-  //p.StandardInput.WriteLine;
-  p.WaitForExit;
-  writeln(p.StandardOutput.ReadToEnd);
-  
-  ReadlnString('Ready');
-  
+    while thrs.Any do
+    begin
+      thrs.RemoveAll(thr->not thr.IsAlive);
+      Sleep(10);
+    end;
+    
+    System.Console.ForegroundColor := System.ConsoleColor.Green;
+    
+    Compile('Config');
+    
+    System.Console.ForegroundColor := System.ConsoleColor.Gray;
+    ReadlnString('Ready');
+    
+  except
+    on e: Exception do
+      ReadlnString($'General Error - {_ObjectToString(e)}');
+  end;
 end.

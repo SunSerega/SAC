@@ -21,6 +21,8 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
+// - #1417
+// - #1418
 
 interface
 
@@ -1258,10 +1260,19 @@ type
           if oe is OptSExprBase then
             if nres.Base = nil then
               nres.Base := oe as OptSExprBase else
-              raise new CannotMltALotStringsException(self, new object[](nres.Base, oe)) else
+              
+              //--------//ToDo #1417 //ToDo #1418
+              //raise new CannotMltALotStringsException(self, new object[](nres.Base, oe)) else
+              raise new CannotMltALotStringsException(nil, new object[](nil, nil)) else
+              //--------
+              
           if oe is OptNExprBase then
             p.Positive.Add(oe as OptNExprBase) else
-            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](Base, oe))) as OptNExprBase);
+            
+            //--------//ToDo #1417 //ToDo #1418
+            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](Base, oe))) as OptNExprBase);
+            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))) as OptNExprBase);
+            //--------
         
         if res.Positive is OptNNMltExpr(var onme) then
           p.Positive.AddRange(onme.Positive) else
@@ -1377,7 +1388,11 @@ type
               raise new CannotMltALotStringsException(self, new object[](res.Base, oe)) else
           if oe is OptNExprBase then
             p.Positive.Add(oe as OptNExprBase) else
-            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](res_copy.Base, oe))) as OptNExprBase);
+            
+            //--------//ToDo #1417 //ToDo #1418
+            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](res_copy.Base, oe))) as OptNExprBase);
+            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))) as OptNExprBase);
+            //--------
         
         if res.Positive is OptNNMltExpr(var onme) then
           p.Positive.AddRange(onme.Positive) else
