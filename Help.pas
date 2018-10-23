@@ -38,8 +38,9 @@ begin
 end;
 
 begin
-  LoadSettings;
+  {$resource Lang\#Help}
   LoadLocale('#Help');
+  LoadSettings;
   Load;
   
 //  foreach var s in d.Values do

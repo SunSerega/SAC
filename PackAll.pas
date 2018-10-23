@@ -44,11 +44,15 @@ begin
     
     System.Console.ForegroundColor := System.ConsoleColor.Gray;
     
+    CompileAsync('LangPacker', true);
+    CompileAsync('LibPacker', true);
+    CompileAsync('WK');
+    
+    while thrs[0].IsAlive do Sleep(10);
+    
     CompileAsync('SAC');
     CompileAsync('Editor');
-    CompileAsync('LibPacker', true);
     CompileAsync('Help');
-    CompileAsync('WK');
     
     System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);
     

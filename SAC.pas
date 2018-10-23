@@ -1,6 +1,7 @@
-﻿uses ScriptExecutor;
-{$mainresource 'SAC_res.res'}
+﻿{$mainresource 'SAC_res.res'}
 {$apptype windows}
+
+uses ScriptExecutor;
 
 uses LocaleData;
 uses SettingsData;
@@ -230,7 +231,7 @@ end;
 begin
   try
     
-    LoadLocale('#Parsing');
+    {$resource Lang\#SAC}
     LoadLocale('#SAC');
     LoadSettings;
     

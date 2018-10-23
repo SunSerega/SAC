@@ -1,0 +1,35 @@
+
+
+AssociateDotSAC					=Associate .SAC files
+AddIcon							=Add icon to .SAC files
+AddCreateNew					=Add "Create>>new .SAC file" button for context menu (RMB in folder)
+AddConfLaunch					=Add "Configured Launch" button for .SAC files
+AddEdit							=Add "Edit" button for .SAC files
+Ok								=OK
+Apply							=Apply
+
+Exec							=Execute
+ConfLaunch						=Configured Launch
+Edit							=Edit
+
+Text|reg used					=\
+	Registry key ".sac" used by "{0}".\
+	Replace it?
+Cap|reg used					=Registry key ".sac" is used
+
+Text|reg ver					=\
+	Current version is {0}, but Config.exe version is {1}.\
+	Do you want to downgrade current version?
+Cap|reg ver						=Version error
+
+Text|NeedRestart				=Now restart computer to save and apply .sac file association, icons, etc.
+Cap|NeedRestart					=Computer restart needed
+
+Text|SettingsDel				=Settings file found, delete it?
+Cap|SettingsDel					=Delete settings?
+
+Text|LibDel						=\
+	After deleting standard Lib entries, somethings left. Maybe it's your script and maybe you still need them.\
+	Delete whole "Lib" folder?
+Cap|LibDel						=Lib not empty
+

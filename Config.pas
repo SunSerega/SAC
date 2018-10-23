@@ -102,6 +102,71 @@ type
     
   end;
   
+  BPar = class(Parameter)
+    
+    B: Button;
+    
+    procedure ValidatePos(x:integer; var y, maxw:integer); override := exit;
+    
+    procedure ValidateName; override;
+    begin
+      inherited ValidateName;
+      B.Text := self.Text;
+    end;
+    
+    constructor(Name:string; Click: procedure);
+    begin
+      inherited Create(Name);
+      
+      B := new Button;
+      f.Controls.Add(B);
+      if Click <> nil then
+        B.Click += procedure(o,e)->Click;
+      B.AutoSize := true;
+      B.KeyDown += (o,e)->if e.KeyCode=Keys.Escape then halt;
+    end;
+    
+  end;
+  BsParameter = class(Parameter)
+    
+    Bs: array of BPar;
+    
+    procedure ValidatePos(x:integer; var y, maxw:integer); override;
+    begin
+      y += Bs.Select(b->b.B.Height).Max;
+      maxw := Max(
+        maxw,
+        Bs.Select(b->b.B.Width).Sum + (Bs.Length-1)*5 + 10*2
+      );
+    end;
+    
+    procedure ValidateName; override :=
+    foreach var b in Bs do
+      b.ValidateName;
+    
+    constructor(params BC: array of (string, Action0));
+    begin
+      inherited Create('');
+      
+      Bs := new BPar[BC.Length];
+      for var i := 0 to BC.Length-1 do
+        Bs[i] := new BPar(BC[i][0], BC[i][1]);
+      
+      f.Resize += (o,e)->
+      begin
+        var x := f.Width - 20 - Bs.Last.B.Width;
+        var y := f.Height - 40;
+        for var i := Bs.Length-1 downto 0 do
+        begin
+          Bs[i].B.Left := x;
+          Bs[i].B.Top := y - Bs[i].B.Height;
+          x -= Bs[i].B.Width+5;
+        end;
+      end;
+    end;
+    
+  end;
+  
   LParameter = class(Parameter)
     
     L: System.Windows.Forms.ComboBox;
@@ -126,6 +191,7 @@ type
       L.Items.AddRange(States.ConvertAll(s->s as object));
       L.SelectedIndexChanged += procedure(o,e)->update(self);
       L.SelectedItem := L.Items.Cast&<object>.First;
+      L.KeyDown += (o,e)->if e.KeyCode=Keys.Escape then (Parameter.All['Ok'] as BPar).B.Focus;
       
     end;
     
@@ -186,6 +252,7 @@ type
       CB.AutoCheck := false;
       CB.AutoSize := true;
       CB.CheckState := State;
+      CB.KeyDown += (o,e)->if e.KeyCode=Keys.Escape then halt;
       CB.Click += (o,e)->
       begin
         if CB.CheckState = CheckState.Checked then
@@ -207,70 +274,6 @@ type
           self.CB.CheckState := CheckState.Indeterminate;
     end;
   
-  end;
-  
-  BPar = class(Parameter)
-    
-    B: Button;
-    
-    procedure ValidatePos(x:integer; var y, maxw:integer); override := exit;
-    
-    procedure ValidateName; override;
-    begin
-      inherited ValidateName;
-      B.Text := self.Text;
-    end;
-    
-    constructor(Name:string; Click: procedure);
-    begin
-      inherited Create(Name);
-      
-      B := new Button;
-      f.Controls.Add(B);
-      if Click <> nil then
-        B.Click += procedure(o,e)->Click;
-      B.AutoSize := true;
-    end;
-    
-  end;
-  BsParameter = class(Parameter)
-    
-    Bs: array of BPar;
-    
-    procedure ValidatePos(x:integer; var y, maxw:integer); override;
-    begin
-      y += Bs.Select(b->b.B.Height).Max;
-      maxw := Max(
-        maxw,
-        Bs.Select(b->b.B.Width).Sum + (Bs.Length-1)*5 + 10*2
-      );
-    end;
-    
-    procedure ValidateName; override :=
-    foreach var b in Bs do
-      b.ValidateName;
-    
-    constructor(params BC: array of (string, Action0));
-    begin
-      inherited Create('');
-      
-      Bs := new BPar[BC.Length];
-      for var i := 0 to BC.Length-1 do
-        Bs[i] := new BPar(BC[i][0], BC[i][1]);
-      
-      f.Resize += (o,e)->
-      begin
-        var x := f.Width - 20 - Bs.Last.B.Width;
-        var y := f.Height - 40;
-        for var i := Bs.Length-1 downto 0 do
-        begin
-          Bs[i].B.Left := x;
-          Bs[i].B.Top := y - Bs[i].B.Height;
-          x -= Bs[i].B.Width+5;
-        end;
-      end;
-    end;
-    
   end;
   
   {$endregion Config Parameter's}
@@ -334,8 +337,7 @@ type
     class ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
     
     const version = 1;
-    class misc_loaded: boolean;
-    class sac_exe_loaded: boolean;
+    class files_loaded: boolean;
     
     
     
@@ -383,6 +385,7 @@ type
     procedure Load;
     begin
       
+      {$resource Lang\#Config}
       LoadLocale('#Config');
       LoadSettings;
       (Parameter.All['CurrLang'] as LParameter).L.SelectedItem := CurrLocale;
@@ -391,17 +394,18 @@ type
       {$resource 'Editor.exe'}
       {$resource 'Help.exe'}
       {$resource 'WK.exe'}
-      if not System.IO.File.Exists('Icon.ico') then FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
-      if not System.IO.File.Exists('Editor.exe') then FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
-      if not System.IO.File.Exists('Help.exe') then FileFromStream('Help.exe', GetResourceStream('Help.exe'));
-      if not System.IO.File.Exists('WK.exe') then FileFromStream('WK.exe', GetResourceStream('WK.exe'));
+      {$resource 'SAC.exe'}
+      FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
+      FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
+      FileFromStream('Help.exe', GetResourceStream('Help.exe'));
+      FileFromStream('WK.exe', GetResourceStream('WK.exe'));
+      FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
+      
       {$resource 'lib_pack'}
       LoadLib;
-      misc_loaded := true;
       
-      {$resource 'SAC.exe'}
-      if not System.IO.File.Exists('SAC.exe') then FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
-      sac_exe_loaded := true;
+      files_loaded := true;
+      
       
       
       
@@ -515,20 +519,15 @@ type
         end else
           key := Registry.ClassesRoot.CreateSubKey(RegName);
         
-        if not misc_loaded then
+        if not files_loaded then
         begin
           FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
           FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
           FileFromStream('Help.exe', GetResourceStream('Help.exe'));
           FileFromStream('WK.exe', GetResourceStream('WK.exe'));
-          LoadLib;
-          misc_loaded := true;
-        end;
-        
-        if not sac_exe_loaded then
-        begin
           FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
-          sac_exe_loaded := true;
+          LoadLib;
+          files_loaded := true;
         end;
         
         key.SetValue('', 'SAC Script');
@@ -610,6 +609,7 @@ type
         
       end else
       begin
+        
         if Registry.ClassesRoot.ExistsSubKey(RegName) then
         begin
           Registry.ClassesRoot.DeleteSubKeyTree(RegName);
@@ -638,9 +638,9 @@ type
           DeleteFolder(ProgFilesName, $'{ProgFilesName}\Settings.ini') else
           DeleteFolder(ProgFilesName);
         
-        if misc_loaded then
+        if files_loaded then
         begin
-          misc_loaded := false;
+          files_loaded := false;
           
           LibDir.root.Delete;
           
@@ -657,13 +657,10 @@ type
           System.IO.File.Delete('Editor.exe');
           System.IO.File.Delete('Help.exe');
           System.IO.File.Delete('WK.exe');
+          System.IO.File.Delete('SAC.exe');
           
         end;
         
-        System.IO.File.Delete('SAC.exe');
-        sac_exe_loaded := false;
-        
-        rest_needed := true;
       end;
       
       
@@ -683,8 +680,9 @@ type
     
     constructor;
     begin
-      Icon := System.Drawing.Icon.FromHandle((new Bitmap(1,1)).GetHicon);
-      FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
+      self.Icon := System.Drawing.Icon.FromHandle((new Bitmap(1,1)).GetHicon);
+      self.FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
+      self.KeyDown += (o,e)->if e.KeyCode=Keys.Escape then halt;
       f := self;
       
       

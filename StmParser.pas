@@ -1617,4 +1617,17 @@ end;
 
 {$endregion temp_reg}
 
+begin
+  try
+    
+    {$resource Lang\#Parsing}
+    LoadLocale('#Parsing');
+    
+  except
+    on e: Exception do
+    begin
+      writeln(e);
+      readln;
+    end;
+  end;
 end.

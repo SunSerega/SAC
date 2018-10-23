@@ -1,0 +1,45 @@
+NoLibHelp=No lib folder found\
+You can still start script from any other folder\
+Start this .exe with Command line arguments, like this:\
+"*folder_of_this_exe*\SAC.exe" "*YourScriptPath*\*YourScriptName*.sac"\
+You can also specify arguments, after .sac file name\
+Here is list of them:\
+"!conf" - will start program to help add arguments\
+"!debug" - will start script with debug (slower, but more info)\
+Thats all for now, press Enter to exit
+CanNotParseBoolArg=Can't parse "{0}" to bool value
+UnknownArg=Unknown arg: "{0}"
+LibView|CurrLib=Folder: "{0}"
+LibView|RootLib=Root: "{0}"
+LibView|SubLibs=SubLibs:
+LibView|Scripts=Scripts:
+LibView|LibElement={0} : {1}
+LibView|LibBack=-1/back : Go to root
+LibView|Read=Enter name or id:
+LibView|AnsNotDef="{0}" is not defined
+LibView|InvalidId=id #{0} is out of possible range
+Running=Running
+SetKey=Set key
+~RU
+NoLibHelp=Папка Lib не найдена\
+Вы всё ещё можете запустить скрипт из любой другой папки\
+Запустите этот .exe с аргументами командной строки, вот так:\
+"*папка_этого_exe*\SAC.exe" "*ПутьКВашемуСкрипту*\*Название вашего скрипта*.sac"\
+Вы так же можете указать параметры, после имени .sac файла\
+Вот список допустимых параметров:\
+"!conf" - запустит программу которая поможет разобраться с параметрами\
+"!debug" - запустит скрипт в debug-режиме (медленнее, но больше информации об ошибках)\
+Пока что это всё, нажмите Enter для выхода
+CanNotParseBoolArg=Не получается преобразовать "{0}" в True или False
+UnknownArg=Неизвестный параметр: "{0}"
+LibView|CurrLib=Папка: "{0}"
+LibView|RootLib=Предыдущая папка: "{0}"
+LibView|SubLibs=Подпапки:
+LibView|Scripts=Скрипты:
+LibView|LibElement={0} : {1}
+LibView|LibBack=-1/back : Вернутся
+LibView|Read=Введите имя или номер:
+LibView|AnsNotDef=Неизвестное имя: "{0}"
+LibView|InvalidId=Номер №{0} вне допустимых границ
+Running=Выполняется
+SetKey=Уст. кнопку

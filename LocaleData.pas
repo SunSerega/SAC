@@ -11,31 +11,34 @@ const
     'RU'
   );
 
-{$resource 'Lang\RU.lang'}
-{$resource 'Lang\EN.lang'}
 procedure LoadLocale(htg: string);
 begin
-  foreach var lang_id in LangList do
+  var sr := new System.IO.StreamReader(GetResourceStream(htg));
+  var lang_id := LangList[0];
+  var sb := new StringBuilder;
+  
+  while not sr.EndOfStream do
   begin
-    var fname := lang_id+'.lang';
-    var sr := new System.IO.StreamReader(GetResourceStream(fname));
-    var f := false;
-    
-    while not sr.EndOfStream do
+    var s := sr.ReadLine;
+    if s = '' then continue;
+    if s[1] = '~' then
+      lang_id := s.Remove(0,1) else
     begin
-      var s := sr.ReadLine;
-      if s = '' then continue;
-      if s[1] = '#' then
-        f := s = htg else
-      if f then
-      begin
-        var ss := s.Split(new char[]('='),2);
-        Locale.Add((lang_id, ss[0].TrimEnd(#9)),ss[1].Replace('\#10',#10));
-      end;
+      var ss := s.Split(new char[]('='),2);
+      sb += ss[1];
+      if ss[1].LastOrDefault='\' then
+      repeat
+        sb.Remove(sb.Length-1,1);
+        s := sr.ReadLine;
+        sb += #10;
+        sb += s;
+      until (s.Last<>'\') or sr.EndOfStream;
+      Locale.Add((lang_id, ss[0]),sb.ToString);
+      sb.Clear;
     end;
-    
-    sr.Close;
   end;
+  
+  sr.Close;
 end;
 
 function Translate(text:string):string;
