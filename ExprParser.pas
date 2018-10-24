@@ -77,6 +77,12 @@ type
     inherited Create($'[> {source} <]', $'Unexpected OExprBase');
     
   end;
+  SaveNotImplementedException = class(InnerException)
+    
+    public constructor(sender: object) :=
+    inherited Create(sender, 'Binarry save proc not implemented for type {sender.GetType}');
+    
+  end;
   
   {$endregion General}
   
@@ -241,12 +247,6 @@ type
   
   {$region General}
   
-  IExpr = interface
-    
-    function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object;
-    
-  end;
-  
   ExprContextArea = abstract class
     
     public debug_name: string;
@@ -352,7 +352,7 @@ type
   
   {$region Load}
   
-  Expr = abstract class(IExpr)
+  Expr = abstract class
     
     public class function FromString(text:string): Expr :=
     FromString(text,1,text.Length);
@@ -487,6 +487,9 @@ type
     
     public function GetCalc:Action0; virtual := nil;
     
+    public procedure Save(bw: System.IO.BinaryWriter); virtual :=
+    raise new SaveNotImplementedException(self);
+    
     
     
     private property DebugType: System.Type read self.GetType;
@@ -532,6 +535,13 @@ type
     public constructor(val: real) :=
     self.res := val;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+      bw.Write(byte(1));
+      bw.Write(res);
+    end;
+    
     public function ToString: string; override :=
     res.ToString(nfi);
     
@@ -540,6 +550,13 @@ type
     
     public constructor(val: string) :=
     self.res := val;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+      bw.Write(byte(2));
+      bw.Write(res);
+    end;
     
     public function ToString: string; override :=
     (res.Length < 100)?
@@ -551,6 +568,12 @@ type
     
     public constructor :=
     self.res := nil;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+      bw.Write(byte(3));
+    end;
     
     public function ToString: string; override :=
     'null';
@@ -682,6 +705,21 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      bw.Write(byte(1));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+      bw.Write(Negative.Count);
+      foreach var oe in Negative do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'( [{Positive.JoinIntoString(''+'')}]-[{Negative.JoinIntoString(''+'')}] )';
     
@@ -794,6 +832,17 @@ type
       foreach var oe in Positive do
         Result += oe.GetCalc();
       Result += self.Calc;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      bw.Write(byte(2));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
     end;
     
     public function ToString: string; override :=
@@ -935,6 +984,17 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      bw.Write(byte(3));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'[ {Positive.JoinIntoString(''+'')} ]';
     
@@ -1056,6 +1116,21 @@ type
       foreach var oe in Positive.Concat(Negative) do
         Result += oe.GetCalc();
       Result += self.Calc;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      bw.Write(byte(1));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+      bw.Write(Negative.Count);
+      foreach var oe in Negative do
+        oe.Save(bw);
+      
     end;
     
     public function ToString: string; override :=
@@ -1196,6 +1271,21 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(3));
+      bw.Write(byte(1));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+      bw.Write(Negative.Count);
+      foreach var oe in Negative do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
     
@@ -1316,6 +1406,16 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(3));
+      bw.Write(byte(2));
+      
+      Base.Save(bw);
+      Positive.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'( {Base}*{Positive} )';
     
@@ -1427,6 +1527,16 @@ type
       Result += Base.GetCalc();
       Result += Positive.GetCalc();
       Result += self.Calc;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(3));
+      bw.Write(byte(3));
+      
+      Base.Save(bw);
+      Positive.Save(bw);
+      
     end;
     
     public function ToString: string; override :=
@@ -1610,6 +1720,21 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(3));
+      bw.Write(byte(4));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+      bw.Write(Negative.Count);
+      foreach var oe in Negative do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
     
@@ -1731,6 +1856,17 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(4));
+      bw.Write(byte(1));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'PowExpr({Positive.First}^[{Positive.Skip(1).JoinIntoString('','')}])';
     
@@ -1848,6 +1984,17 @@ type
       Result += self.Calc;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(4));
+      bw.Write(byte(2));
+      
+      bw.Write(Positive.Count);
+      foreach var oe in Positive do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     $'PowExpr({Positive.First}^[{Positive.Skip(1).JoinIntoString('','')}])';
     
@@ -1921,6 +2068,17 @@ type
     public function GetCalc: Action0; override :=
     System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(name);
+      
+      bw.Write(par.Count);
+      foreach var oe in par do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     '{n}'+$'{name}({par.JoinIntoString('','')})';
     
@@ -1984,6 +2142,17 @@ type
     public function GetCalc: Action0; override :=
     System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(name);
+      
+      bw.Write(par.Count);
+      foreach var oe in par do
+        oe.Save(bw);
+      
+    end;
+    
     public function ToString: string; override :=
     '{s}'+$'{name}({par.JoinIntoString('','')})';
     
@@ -2035,6 +2204,13 @@ type
     public function GetCalc:Action0; override :=
     self.Calc;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(6));
+      bw.Write(byte(1));
+      bw.Write(id);
+    end;
+    
     public function ToString: string; override :=
     $'num_var[{id}]';
     
@@ -2057,6 +2233,13 @@ type
     
     public function GetCalc:Action0; override :=
     self.Calc;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(6));
+      bw.Write(byte(2));
+      bw.Write(id);
+    end;
     
     public function ToString: string; override :=
     $'str_var[{id}]';
@@ -2081,6 +2264,13 @@ type
     public function GetCalc:Action0; override :=
     self.Calc;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(6));
+      bw.Write(byte(3));
+      bw.Write(id);
+    end;
+    
     public function ToString: string; override :=
     $'obj_var[{id}]';
     
@@ -2090,7 +2280,7 @@ type
   
   {$region Wrappers}
   
-  OptExprWrapper = abstract class(IExpr)
+  OptExprWrapper = abstract class
     
     public n_vars: array of real;
     public s_vars: array of string;
@@ -2231,7 +2421,26 @@ type
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; abstract;
     
-    public class function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase := nil): OptExprWrapper;
+    public static function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase := nil): OptExprWrapper;
+    
+    public procedure Save(bw: System.IO.BinaryWriter);
+    begin
+      
+      bw.Write(n_vars_names.Length);
+      foreach var nvn in n_vars_names do
+        bw.Write(nvn);
+      
+      bw.Write(s_vars_names.Length);
+      foreach var svn in s_vars_names do
+        bw.Write(svn);
+      
+      bw.Write(o_vars_names.Length);
+      foreach var ovn in o_vars_names do
+        bw.Write(ovn);
+      
+      GetMain.Save(bw);
+      
+    end;
     
   end;
   OptNExprWrapper = class(OptExprWrapper)

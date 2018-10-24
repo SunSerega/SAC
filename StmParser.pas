@@ -8,6 +8,8 @@
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
 
+//ToDo Реализовать Save для всех операторов и директив
+
 interface
 
 uses ExprParser;
@@ -307,7 +309,8 @@ type
   
   StmBase = abstract class
     
-    private class nfi := new System.Globalization.NumberFormatInfo;
+    private static nfi := new System.Globalization.NumberFormatInfo;
+    private static tps_lst := new List<System.Type>;
     
     public bl: StmBlock;
     public scr: Script;
@@ -335,11 +338,13 @@ type
       Result := integer(i);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    
   end;
   ExprStm = sealed class(StmBase)
     
     public v_name: string;
-    public e: IExpr;
+    public e: OptExprWrapper;
     
     public constructor(sb: StmBlock; text: string);
     
@@ -350,6 +355,23 @@ type
       ec.svs
     ));
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(0));
+      bw.Write(v_name);
+      e.Save(bw);
+    end;
+    
+  end;
+  OperStmBase = abstract class(StmBase)
+    
+    public class function FromString(sb: StmBlock; par: array of string): OperStmBase;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+    end;
+    
   end;
   DrctStmBase = abstract class(StmBase)
     
@@ -357,10 +379,10 @@ type
     
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
-  end;
-  OperStmBase = abstract class(StmBase)
-    
-    public class function FromString(sb: StmBlock; par: array of string): OperStmBase;
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+    end;
     
   end;
   
@@ -388,8 +410,10 @@ type
       Execute := System.Delegate.Combine(stms.Select(stm->stm.GetCalc() as System.Delegate).ToArray) as Action<ExecutingContext>;
     end;
     
-    constructor(scr: Script) :=
+    public constructor(scr: Script) :=
     self.scr := scr;
+    
+    public procedure Save(bw: System.IO.BinaryWriter);
     
   end;
   Script = class
@@ -403,9 +427,6 @@ type
     public stoped: procedure;
     
     public sbs := new Dictionary<string, StmBlock>;
-    public nvn := new List<string>;
-    public svn := new List<string>;
-    public ovn := new List<string>;
     
     private class function CombinePaths(p1, p2: string): string;
     begin
@@ -434,6 +455,36 @@ type
         stoped;
     end;
     
+    public procedure Save(str: System.IO.Stream);
+    begin
+      
+      var sw := new System.IO.StreamWriter(str);
+      sw.Write('!PreComp=');
+      sw.Flush;
+      var bw := new System.IO.BinaryWriter(str);
+      var sbbs := 
+      sbs
+      .Select(kvp->((kvp.Key.Split('#')+'').ToList,kvp.Value))
+      .GroupBy(
+        t->t[0][0],
+        t->(t[0][1],t[1])
+      ).ToList;
+      bw.Write(sbbs.Count);
+      foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in sbbs do
+      begin
+        bw.Write(kvp.Key);
+        var l := kvp.ToList;
+        bw.Write(l.Count);
+        foreach var t in l do
+        begin
+          bw.Write(t[0]);
+          t[1].Save(bw);
+        end;
+      end;
+      
+      str.Close;
+    end;
+    
   end;
   
   {$endregion Stm containers}
@@ -448,6 +499,8 @@ type
     
     public function Optimize(nvn, svn: List<string>): InputValue; virtual := self;
     
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    
   end;
   
   InputSValue = abstract class(InputValue)
@@ -456,11 +509,21 @@ type
     
     public function GetRes: object; override := res;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override :=
+    bw.Write(byte(1));
+    
   end;
   SInputSValue = class(InputSValue)
     
     public constructor(res: string) :=
     self.res := res;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(res);
+    end;
     
   end;
   DInputSValue = class(InputSValue)
@@ -485,6 +548,13 @@ type
       oe := OptSExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, OptExprBase.AsStrExpr));
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      oe.Save(bw);
+    end;
+    
   end;
   
   InputNValue = abstract class(InputValue)
@@ -493,11 +563,21 @@ type
     
     public function GetRes: object; override := res;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override :=
+    bw.Write(byte(2));
+    
   end;
   SInputNValue = class(InputNValue)
     
     public constructor(res: real) :=
     self.res := res;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(res);
+    end;
     
   end;
   DInputNValue = class(InputNValue)
@@ -522,6 +602,13 @@ type
       oe := OptNExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, oe->OptExprBase.AsDefinitelyNumExpr(oe)));
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      oe.Save(bw);
+    end;
+    
   end;
   
   {$endregion InputValue}
@@ -534,12 +621,21 @@ type
     
     function GetBlock(ec: ExecutingContext): StmBlock; abstract;
     
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    
   end;
   StaticStmBlockRef = class(StmBlockRef)
     
     bl: StmBlock;
     
     function GetBlock(ec: ExecutingContext): StmBlock; override := bl;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+      if bl = nil then bw.Write(-1) else
+      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=bl)[0]);
+    end;
     
   end;
   DynamicStmBlockRef = class(StmBlockRef)
@@ -564,6 +660,12 @@ type
     
     constructor(s: InputSValue) :=
     self.s := s;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      s.Save(bw);
+    end;
     
   end;
   
@@ -621,6 +723,15 @@ type
       dp := new DInputNValue(par[2], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte(1));
+      kk.Save(bw);
+      dp.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       kk.GetCalc(),
@@ -650,6 +761,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte(2));
+      kk.Save(bw);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -682,6 +801,14 @@ type
       kk := new DInputNValue(par[1], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte(3));
+      kk.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       kk.GetCalc(),
@@ -711,6 +838,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte(3));
+      kk.Save(bw);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -756,6 +891,15 @@ type
       dp := new DInputNValue(par[2], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte(1));
+      kk.Save(bw);
+      dp.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       kk.GetCalc(),
@@ -792,6 +936,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte(2));
+      kk.Save(bw);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -831,6 +983,14 @@ type
       kk := new DInputNValue(par[1], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte(3));
+      kk.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       kk.GetCalc(),
@@ -866,6 +1026,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte(4));
+      kk.Save(bw);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -905,6 +1073,15 @@ type
       y := new DInputNValue(par[2], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte(1));
+      x.Save(bw);
+      y.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       x.GetCalc(),
@@ -937,6 +1114,15 @@ type
       
       kk := new DInputNValue(par[1], sb);
       vname := par[2];
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte(2));
+      kk.Save(bw);
+      bw.Write(vname);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -972,6 +1158,15 @@ type
       vname := par[2];
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte(3));
+      kk.Save(bw);
+      bw.Write(vname);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       kk.GetCalc(),
@@ -1004,6 +1199,15 @@ type
       y := par[2];
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte(4));
+      bw.Write(x);
+      bw.Write(y);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     self.Calc;
     
@@ -1033,6 +1237,15 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(1));
+      CalledBlock.Save(bw);
+      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=next)[0]);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -1096,6 +1309,19 @@ type
         end;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(2));
+      e1.Save(bw);
+      bw.Write(integer(compr));
+      e2.Save(bw);
+      CalledBlock1.Save(bw);
+      CalledBlock2.Save(bw);
+      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=next)[0]);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       CalledBlock1.GetCalc(),
@@ -1105,16 +1331,17 @@ type
     
   end;
   
-  OperCJump = class(OperStmBase, IJumpOper)
-    
-    public CalledBlock: StmBlock;
-    
-    
-    
-    public function GetCalc: Action<ExecutingContext>; override :=
-    procedure(ec)->ec.curr.next := self.CalledBlock;
-    
-  end;
+  //ToDo можно просто изменить bl.next 1 раз, при создании этого оператора, так что отдельный тип бесполезен
+//  OperCJump = class(OperStmBase, IJumpOper)
+//    
+//    public CalledBlock: StmBlock;
+//    
+//    
+//    
+//    public function GetCalc: Action<ExecutingContext>; override :=
+//    procedure(ec)->ec.curr.next := self.CalledBlock;
+//    
+//  end;
   OperJump = class(OperStmBase, IJumpOper)
     
     public CalledBlock: StmBlockRef;
@@ -1131,6 +1358,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(3));
+      CalledBlock.Save(bw);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -1195,6 +1430,18 @@ type
         end;
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(4));
+      e1.Save(bw);
+      bw.Write(integer(compr));
+      e2.Save(bw);
+      CalledBlock1.Save(bw);
+      CalledBlock2.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       CalledBlock1.GetCalc(),
@@ -1212,6 +1459,13 @@ type
     
     public constructor := exit;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte(1));
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     ec->
     begin
@@ -1225,12 +1479,26 @@ type
     
     public constructor := exit;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte(2));
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
   OperHalt = class(OperStmBase, IJumpOper)
     
     public constructor := exit;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte(3));
+    end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
     oe->Halt();
@@ -1263,6 +1531,14 @@ type
       l := new DInputNValue(par[1], sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(6));
+      bw.Write(byte(1));
+      l.Save(bw);
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       l.GetCalc(),
@@ -1279,6 +1555,14 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       vname := par[1];
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(6));
+      bw.Write(byte(2));
+      bw.Write(vname);
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
@@ -1304,6 +1588,14 @@ type
       otp := new DInputSValue(par[1],sb);
     end;
     
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(6));
+      bw.Write(byte(3));
+      otp.Save(bw);
+    end;
+    
     public public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
       otp.GetCalc(),
@@ -1324,6 +1616,15 @@ type
     
     function GetRefs: sequence of OptExprBase :=
     fns.Select(fn->new OptSLiteralExpr(fn) as OptExprBase);
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(fns.Length);
+      foreach var fn in fns do
+        bw.Write(fn);
+    end;
     
     public constructor(par: array of string);
     begin
@@ -1611,6 +1912,19 @@ begin
     Result := true;
   end else
     Result := Pop(curr);
+end;
+
+procedure StmBlock.Save(bw: System.IO.BinaryWriter);
+begin
+  
+  bw.Write(stms.Count);
+  foreach var stm in stms do
+    stm.Save(bw);
+  
+  var ind := scr.sbs.Values.Numerate(0).FirstOrDefault(t->t[1]=next);
+  
+  bw.Write(ind=nil?-1:ind[0]);
+  
 end;
 
 {$region temp_reg}

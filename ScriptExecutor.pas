@@ -94,11 +94,28 @@ type
       SetKey.Left := Running.Right+10;
       Running.Top += (SetKey.Height-Running.Height) div 2;
       
+      var PreCompile := new Button;
+      self.Controls.Add(PreCompile);
+      SetKey.AutoSize := true;
+      PreCompile.Text := Translate('PreCompile');
+      PreCompile.Top := SetKey.Bottom+10;
+      PreCompile.Left := Running.Left;
+      PreCompile.Width := SetKey.Right-PreCompile.Left;
+      {$region PreCompile}
+      PreCompile.Click += (o,e)->
+      begin
+        var sfd := new System.Windows.Forms.SaveFileDialog;
+        sfd.Filter := Translate('PreCompFileFilter');
+        if sfd.ShowDialog <> System.Windows.Forms.DialogResult.OK then exit;
+        scr.Save(sfd.OpenFile);
+      end;
+      {$endregion PreCompile}
+      
       var KeyList := new RichTextBox;
       self.Controls.Add(KeyList);
-      KeyList.Top := SetKey.Bottom+10;
-      KeyList.Left := Running.Left;
-      KeyList.Width := SetKey.Right-Running.Left;
+      KeyList.Top := PreCompile.Bottom+10;
+      KeyList.Left := PreCompile.Left;
+      KeyList.Width := PreCompile.Width;
       KeyList.ReadOnly := true;
       KeyList.WordWrap := false;
       KeyList.Multiline := true;

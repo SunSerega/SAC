@@ -20,6 +20,8 @@ LibView|AnsNotDef="{0}" is not defined
 LibView|InvalidId=id #{0} is out of possible range
 Running=Running
 SetKey=Set key
+PreCompile=PreCompile
+PreCompFileFilter=SAC files (*.sac)|*.sac|All files (*.*)|*.*
 ~RU
 NoLibHelp=Папка Lib не найдена\
 Вы всё ещё можете запустить скрипт из любой другой папки\
@@ -43,3 +45,5 @@ LibView|AnsNotDef=Неизвестное имя: "{0}"
 LibView|InvalidId=Номер №{0} вне допустимых границ
 Running=Выполняется
 SetKey=Уст. кнопку
+PreCompile=ПреКомпилировать
+PreCompFileFilter=SAC файлы (*.sac)|*.sac|Все файлы (*.*)|*.*

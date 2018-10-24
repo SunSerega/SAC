@@ -26,4 +26,6 @@ LibView|InvalidId				=id #{0} is out of possible range
 
 Running							=Running
 SetKey							=Set key
+PreCompile						=PreCompile
+PreCompFileFilter				=SAC files (*.sac)|*.sac|All files (*.*)|*.*
 

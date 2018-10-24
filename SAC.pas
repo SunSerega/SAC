@@ -235,6 +235,8 @@ begin
     LoadLocale('#SAC');
     LoadSettings;
     
+    //CommandLineArgs := new string[]('Lib\Temp\main.sac');
+    
     if CommandLineArgs.Any then
       StartScript else
     if System.IO.Directory.Exists('lib') then

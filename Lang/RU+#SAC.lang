@@ -26,4 +26,6 @@ LibView|InvalidId				=Номер №{0} вне допустимых границ
 
 Running							=Выполняется
 SetKey							=Уст. кнопку
+PreCompile						=ПреКомпилировать
+PreCompFileFilter				=SAC файлы (*.sac)|*.sac|Все файлы (*.*)|*.*
 
