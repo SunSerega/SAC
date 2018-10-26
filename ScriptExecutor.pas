@@ -230,6 +230,7 @@ type
           Sleep(1);
           cpk := s.ToList;
         end;
+        //writeln('off-pressed');
         while
           pause_keys.Any(k->cpk.Contains(k)) and
           not Running.Checked
@@ -238,10 +239,12 @@ type
           Sleep(1);
           cpk := s.ToList;
         end;
+        //writeln('on-unpressed');
+        
         if not Running.Checked then
         begin
           scr_thr.Resume;
-          Running.Checked := true;
+          Running.Invoke(procedure->Running.Checked := true);
         end;
         
         while
@@ -252,6 +255,7 @@ type
           Sleep(1);
           cpk := s.ToList;
         end;
+        //writeln('on-pressed');
         while
           pause_keys.Any(k->cpk.Contains(k)) and
           Running.Checked
@@ -260,11 +264,12 @@ type
           Sleep(1);
           cpk := s.ToList;
         end;
+        //writeln('off-unpressed');
         
         if Running.Checked then
         begin
-          scr_thr.Resume;
-          Running.Checked := false;
+          scr_thr.Suspend;
+          Running.Invoke(procedure->Running.Checked := false);
         end;
         
       except

@@ -559,8 +559,6 @@ type
     begin
       if not entry_point.Split('\').Last.Contains('#') then entry_point += '#';
       entry_point := (new System.IO.FileInfo(entry_point)).FullName;
-      //writeln(entry_point);
-      //Writeln(sbs.Keys.First);
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
       while ec.ExecuteNext do;
       if stoped <> nil then
@@ -1036,7 +1034,7 @@ type
     
   end;
   
-  {$endregion Key/Mouse}
+  {$endregion Key}
   
   {$region Mouse}
   
@@ -1830,7 +1828,7 @@ type
   
   {$region Misc}
   
-  OperSleep = class(OperStmBase, IJumpOper)
+  OperSleep = class(OperStmBase)
     
     public l: InputNValue;
     
@@ -1874,7 +1872,7 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperRandom = class(OperStmBase, IJumpOper)
+  OperRandom = class(OperStmBase)
     
     public vname: string;
     
@@ -2197,6 +2195,7 @@ begin
           end;
       end;
     
+    last.fname := ffname;
     last.Seal;
     sbs.Add(lname, last);
   end;
