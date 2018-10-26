@@ -236,6 +236,8 @@ begin
     LoadSettings;
     
     //CommandLineArgs := new string[]('Lib\Temp\main.sac');
+    //CommandLineArgs := new string[]('Lib\examples\Basic operators\main.sac');
+    //CommandLineArgs := new string[]('Lib\Temp\SAC Script.sac');
     
     if CommandLineArgs.Any then
       StartScript else

@@ -18,6 +18,8 @@ uses MiscData;
 uses LocaleData;
 uses SettingsData;
 
+//uses ВБФ;
+
 type
   ExecParams = record
     
@@ -104,6 +106,7 @@ type
       {$region PreCompile}
       PreCompile.Click += (o,e)->
       begin
+        //SaveObj('temp.bin', scr);
         var sfd := new System.Windows.Forms.SaveFileDialog;
         sfd.Filter := Translate('PreCompFileFilter');
         if sfd.ShowDialog <> System.Windows.Forms.DialogResult.OK then exit;
@@ -275,7 +278,7 @@ type
       
       {$endregion Pause/Resume}
       
-      scr.otp += procedure(s)->Output.Text += s+#10;
+      scr.otp += procedure(s)->Output.Invoke(procedure->Output.Text += s+#10);
       scr.susp_called += procedure->Running.Checked := false;
       scr.stoped += Halt;
       
