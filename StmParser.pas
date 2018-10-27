@@ -311,6 +311,7 @@ type
     public scr: Script;
     
     public curr: StmBlock;
+    public next: StmBlock;
     public nvs := new Dictionary<string, real>;
     public svs := new Dictionary<string, string>;
     public CallStack := new Stack<StmBlock>;
@@ -1467,7 +1468,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.curr.next := self.CalledBlock.GetBlock(ec);
+      ec.next := self.CalledBlock.GetBlock(ec);
     end;
     
     
@@ -1512,7 +1513,7 @@ type
     begin
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.curr.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
+      ec.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
     end;
     
     
@@ -1609,7 +1610,7 @@ type
     private procedure Calc(ec: ExecutingContext);
     begin
       ec.Push(self.next);
-      ec.curr.next := self.CalledBlock.GetBlock(ec);
+      ec.next := self.CalledBlock.GetBlock(ec);
     end;
     
     
@@ -1666,7 +1667,7 @@ type
       ec.Push(self.next);
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.curr.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
+      ec.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
     end;
     
     
@@ -2277,8 +2278,9 @@ begin
   if curr = nil then
     Result := Pop(curr) else
   begin
+    next := curr.next;
     curr.Execute(self);
-    curr := curr.next;
+    curr := next;
     Result := true;
   end;
 end;

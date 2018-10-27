@@ -30,7 +30,7 @@ Installing:
 	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/Editor.exe) - editor for scripts;
 	- [Help.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - manual for operators;
 	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/WK.exe) - shows key codes;
-2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts;
+2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts.
 
 To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line (Win+R), like this:\
 `"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac"`\
@@ -78,6 +78,7 @@ How to command line
 If you used automatic installing method - you could chose to install "Configured launch" module.\
 If so - just press RMB on .sac file you want to execute and press "Configured launch".\
 (remember, you need to restart computer for this button to be created)\
+\
 If not - open command line (press Win+R) and enter this string, replacing things in ** with proper names:\
 `"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac" "!conf"`\
 
