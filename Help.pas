@@ -1,4 +1,6 @@
-﻿uses LocaleData;
+﻿{$mainresource 'Help.res'}
+
+uses LocaleData;
 uses SettingsData;
 
 var

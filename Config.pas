@@ -1,6 +1,7 @@
 ﻿{$apptype windows}
 {$reference System.Windows.Forms.dll}
 {$reference System.Drawing.dll}
+{$mainresource 'Config.res'}
 
 uses System.Windows.Forms;
 uses System.Drawing;

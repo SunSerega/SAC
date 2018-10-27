@@ -1,4 +1,4 @@
-﻿{$mainresource 'SAC_res.res'}
+﻿{$mainresource 'SAC.res'}
 {$apptype windows}
 
 uses ScriptExecutor;

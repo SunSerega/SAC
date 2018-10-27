@@ -1,4 +1,6 @@
-﻿function GetKeyState(Id:byte):byte;
+﻿{$mainresource 'WK.res'}
+
+function GetKeyState(Id:byte):byte;
 external 'User32.dll';
 
 begin
