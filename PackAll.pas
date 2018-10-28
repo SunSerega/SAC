@@ -94,7 +94,13 @@ begin
     
     System.Console.ForegroundColor := System.ConsoleColor.Green;
     
-    Compile('Config', gres);
+    Compile('Config', gres or mnft);
+    
+//    foreach var fname in System.IO.Directory.EnumerateFiles(GetCurrentDir) do
+//      if fname.EndsWith('.pcu') or fname.EndsWith('.pdb') then
+//      try
+//        System.IO.File.Delete(fname);
+//      except end;
     
     System.Console.ForegroundColor := System.ConsoleColor.Gray;
     ReadlnString('Ready');

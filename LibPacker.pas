@@ -24,6 +24,7 @@ begin
       bw.Write(str.Length);
       bw.Flush;
       str.CopyTo(bw.BaseStream);
+      str.Close;
       bw.BaseStream.Flush;
       
       writeln($'Saved lib file "{f}"');

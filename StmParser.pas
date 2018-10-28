@@ -373,16 +373,10 @@ type
     
     public function Optimize(nvs: Dictionary<string, real>; svs: Dictionary<string, string>; ovs: List<string>): StmBase; virtual := self;
     
-    public class function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
+    public static function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
     
-    public class function ObjToStr(o: object): string;
-    begin
-      if o = nil then
-        Result := '' else
-      if o is string then
-        Result := o as string else
-        Result := real(o).ToString(nfi);
-    end;
+    public static function ObjToStr(o: object) :=
+    OptExprBase.ObjToStr(o);
     
     public function NumToInt(n: real): integer;
     begin

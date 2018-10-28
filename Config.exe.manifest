@@ -8,7 +8,7 @@
 		<security>
 			<requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
 				<requestedExecutionLevel level="requireAdministrator" 
-				 uiAccess="true" />
+				 uiAccess="false" />
 			</requestedPrivileges>
 			<applicationRequestMinimum>
 				<defaultAssemblyRequest permissionSetReference="Custom" />

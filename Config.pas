@@ -506,6 +506,12 @@ type
         
         key.Close;
         
+        
+        
+        key := Registry;
+        
+        
+        
         System.IO.Directory.CreateDirectory(ProgFilesName);
         
         key := Registry.ClassesRoot.OpenSubKey(RegName,true);
@@ -681,7 +687,8 @@ type
     
     constructor;
     begin
-      self.Icon := System.Drawing.Icon.FromHandle((new Bitmap(1,1)).GetHicon);
+      {$resource 'Config.ico'}
+      self.Icon := System.Drawing.Icon.Create(GetResourceStream('Config.ico'));
       self.FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
       self.KeyDown += (o,e)->if e.KeyCode=Keys.Escape then halt;
       f := self;
@@ -722,21 +729,7 @@ type
 
 begin
   try
-    if
-      //true or
-      (CommandLineArgs.Length=1) and (CommandLineArgs[0]='SkipUAC')
-    then
-      Application.Run(new MForm) else
-    begin
-      var startInfo := new System.Diagnostics.ProcessStartInfo();
-      startInfo.UseShellExecute := true;
-      startInfo.WorkingDirectory := System.Environment.CurrentDirectory;
-      startInfo.FileName := Application.ExecutablePath;
-      startInfo.Verb := 'runas';
-      startInfo.Arguments := 'SkipUAC';
-      System.Diagnostics.Process.Start(startInfo);
-      Halt;
-    end;
+    Application.Run(new MForm);
   except
     on e: Exception do
     begin

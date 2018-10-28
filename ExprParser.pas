@@ -29,7 +29,7 @@ interface
 type
   {$region Exception's}
   
-  {$region General}
+  {$region Inner}
   
   ExprContextArea = class;
   
@@ -84,7 +84,7 @@ type
     
   end;
   
-  {$endregion General}
+  {$endregion Inner}
   
   {$region ContextCreation}
   
@@ -488,6 +488,29 @@ type
     public static function AsStrExpr(o: OptExprBase): OptExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
     public static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
     
+    public static function ObjToStr(o: object): string;
+    begin
+      if o = nil then
+        Result := '' else
+      if o is string then
+        Result := o as string else
+        Result := real(o).ToString(nfi);
+    end;
+    
+    public static function ObjToNum(o: object): real;
+    begin
+      if o <> nil then
+        if o is string then
+          raise new ExpectedNumValueException(o) else
+          Result := real(o);
+    end;
+    
+    public static function ObjToNumUnsafe(o: object): real;
+    begin
+      if o <> nil then
+        Result := real(o);
+    end;
+    
     
     
     public function GetRes: object; abstract;
@@ -506,11 +529,11 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
     
+    public static function Load(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object): OptExprBase;
+    
     
     
     private property DebugType: System.Type read self.GetType;
-    
-    public static function Load(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object): OptExprBase;
     
   end;
   OptNExprBase = abstract class(OptExprBase)
@@ -895,13 +918,7 @@ type
       var sb := new StringBuilder;
       
       for var i := 0 to Positive.Count-1 do
-      begin
-        var r: object := Positive[i].GetRes;
-        if r <> nil then
-          if r is real(var n) then
-            sb += n.ToString(nfi) else
-            sb += r as string;
-      end;
+        sb += ObjToStr(Positive[i].GetRes);
       
       res := sb.ToString;
     end;
@@ -958,24 +975,18 @@ type
         var sb := new StringBuilder;
         
         foreach var oe in Positive do
-          sb += oe.GetRes.ToString;
+          sb += ObjToStr(oe.GetRes);
         
         Result := new OptSLiteralExpr(sb.ToString);
       end else
       if Positive.All(oe->(oe is OptSExprBase) or (oe is IOptLiteralExpr)) then
       begin
         var res := new OptSSPlusExpr;
-        res.Positive := self.Positive.ConvertAll(oe->
-        begin
-          if oe is OptSExprBase then
-            Result := oe as OptSExprBase else
-          begin//oe is IOptLiteralExpr, but not OptSExprBase
-            var o := oe.GetRes;
-            if o is real then
-              Result := new OptSLiteralExpr(real(o).ToString(nfi)) else
-              Result := new OptSLiteralExpr('null');
-          end;
-        end);
+        res.Positive := self.Positive.ConvertAll(
+          oe->oe is OptSExprBase?
+          oe as OptSExprBase:
+          new OptSLiteralExpr(ObjToStr(oe.GetRes))
+        );
         Result := res.Optimize;//Если можно сложить какие то константы
       end else
       if lc < 2 then
@@ -989,7 +1000,7 @@ type
           if oe is IOptLiteralExpr then
           begin
             ig := true;
-            sb += oe.GetRes.ToString;
+            sb += ObjToStr(oe.GetRes);
           end else
           begin
             if ig then
@@ -1057,32 +1068,18 @@ type
         var sb := new StringBuilder;
         
         for var i := 0 to Positive.Count-1 do
-        begin
-          var r := Positive[i].GetRes;
-          if r <> nil then
-            if r is real(var n) then
-              sb += n.ToString(nfi) else
-              sb += r as string;
-        end;
+          sb += ObjToStr(Positive[i].GetRes);
         
         res := sb.ToString;
       end else
       begin
         var nres: real := 0;
         
-        for var i := 0 to Positive.Count-1 do
-        begin
-          var r := Positive[i].GetRes;
-          if r <> nil then
-            nres += real(r);
-        end;
+        foreach var oe in Positive do
+          nres += ObjToNumUnsafe(oe.GetRes);
         
-        for var i := 0 to Negative.Count-1 do
-        begin
-          var r := Negative[i].GetRes;
-          if r <> nil then
-            nres -= real(r);
-        end;
+        foreach var oe in Negative do
+          nres -= ObjToNumUnsafe(oe.GetRes);
         
         res := nres;
       end;
@@ -1126,19 +1123,12 @@ type
         if Negative.Any then raise new CannotSubStringExprException(self, Negative);
         
         var res := new OptSOPlusExpr;
-        res.Positive := self.Positive.ConvertAll(oe->
-        begin
-          if oe is IOptLiteralExpr then
-          begin
-            var res := oe.GetRes;
-            if res is real then
-              res := real(res).ToString(nfi) else
-            if res = nil then
-              res := '';
-            Result := new OptSLiteralExpr(res as string) as OptExprBase;
-          end else
-            Result := oe;
-        end);
+        res.Positive := self.Positive.ConvertAll(
+          oe->
+          oe is IOptLiteralExpr?
+          new OptSLiteralExpr(ObjToStr(oe.GetRes)) as OptExprBase:
+          oe
+        );
         Result := res.Optimize;//Тут оптимизации не провели, только изменили тип
       end else
       begin
@@ -1150,6 +1140,18 @@ type
           res.Positive := self.Positive.ConvertAll(oe->oe as OptNExprBase);
           res.Negative := self.Negative.ConvertAll(oe->oe as OptNExprBase);
           Result := res.Optimize;//Тут оптимизации не провели, только изменили тип
+        end else
+        if pn.All(oe->oe is IOptLiteralExpr) then
+        begin
+          var nres := 0.0;
+          
+          foreach var oe in Positive do
+            nres += ObjToNumUnsafe(oe.GetRes);
+          
+          foreach var oe in Negative do
+            nres -= ObjToNumUnsafe(oe.GetRes);
+          
+          Result := new OptNLiteralExpr(nres);
         end else
           Result := self;//Даже если есть несколько констант подряд - их нельзя складывать, потому что числа и строки по разному складываются
       end;
@@ -1213,7 +1215,7 @@ type
     
     private procedure Calc;
     begin
-      res := 1;
+      res := 1.0;
       
       for var i := 0 to Positive.Count-1 do
         res *= Positive[i].res;
@@ -1303,7 +1305,7 @@ type
         Result := self else
       begin
         var res := new OptNNMltExpr;
-        var n: real := 1;
+        var n := 1.0;
         
         foreach var oe in self.Positive do
           if oe is IOptLiteralExpr then
@@ -1315,7 +1317,7 @@ type
             n /= oe.res else
             res.Negative.Add(oe);
         
-        if n <> 1 then res.Positive.Add(new OptNLiteralExpr(n));
+        if n <> 1.0 then res.Positive.Add(new OptNLiteralExpr(n));
         Result := res;
       end;
     end;
@@ -1509,7 +1511,7 @@ type
         res := '';
         exit;
       end;
-      if not (co is real) then raise new CannotMltALotStringsException(self, new object[](Base, co));
+      if co is string then raise new CannotMltALotStringsException(self, new object[](Base, co));
       var ci := BigInteger.Create(real(co)+0.5);
       if ci < 0 then raise new CanNotMltNegStringException(self, ci);
       var cap := ci * r.Length;
@@ -1646,14 +1648,12 @@ type
             if nres = nil then
               nres := ro as string else
               raise new CannotMltALotStringsException(self, Positive.Select(oe->oe.GetRes).Where(r->r is string)) else
+            if ro = nil then
             begin
-              if ro = nil then
-              begin
-                res := '';
-                exit;
-              end;
+              self.res := '';
+              exit;
+            end else
               n *= real(ro);
-            end;
         end;
         
         var ci := BigInteger.Create(n+0.5);
@@ -1662,7 +1662,7 @@ type
         if cap > integer.MaxValue then raise new TooBigStringException(self,cap);
         var sb := new StringBuilder(integer(cap));
         loop integer(ci) do sb += nres;
-        res := sb.ToString;
+        self.res := sb.ToString;
       end else
       begin
         var nres := 1.0;
@@ -1671,7 +1671,10 @@ type
         begin
           var ro := Positive[i].GetRes;
           if ro = nil then
-            nres := 0.0 else
+          begin
+            nres *= 0.0;
+            break;
+          end else
             nres *= real(ro);
         end;
         
@@ -1679,7 +1682,10 @@ type
         begin
           var ro := Negative[i].GetRes;
           if ro = nil then
-            nres /= 0.0 else
+          begin
+            nres /= 0.0;
+            break;
+          end else
             nres /= real(ro);
         end;
         
@@ -1778,19 +1784,36 @@ type
         Result := self else
       begin
         var res := new OptOMltExpr;
-        var n: real := 1;
+        var n := 1.0;
         
         foreach var oe in self.Positive do
           if oe is OptNExprBase(var ane) then
             n *= ane.res else
+          if oe is OptNullLiteralExpr then
+          begin
+            n *= 0.0;
+            break;
+          end else
             res.Positive.Add(oe);
         
         foreach var oe in self.Negative do
           if oe is OptNExprBase(var ane) then
             n /= ane.res else
+          if oe is OptNullLiteralExpr then
+          begin
+            n /= 0.0;
+            break;
+          end else
             res.Negative.Add(oe);
         
-        if n <> 1 then res.Positive.Add(new OptNLiteralExpr(n));
+        if n <> 1.0 then
+          if real.IsNaN(n) then
+          begin
+            Result := new OptNLiteralExpr(real.NaN);
+            exit;
+          end else
+            res.Positive.Add(new OptNLiteralExpr(n));
+        
         Result := res;
       end;
       
@@ -1849,7 +1872,7 @@ type
     
     private procedure Calc;
     begin
-      res := 1;
+      res := 1.0;
       
       for var i := 1 to Positive.Count-1 do
         res *= Positive[i].res;
@@ -1930,7 +1953,7 @@ type
       end else
       begin
         var res := new OptNPowExpr;
-        var n: real := 1;
+        var n := 1.0;
         
         res.Positive.Add(self.Positive[0]);
         foreach var oe in self.Positive.Skip(1) do
@@ -1938,8 +1961,10 @@ type
             n *= oe.res else
             res.Positive.Add(oe);
         
-        if n <> 1 then res.Positive.Add(new OptNLiteralExpr(n));
-        Result := res;
+        if n <> 1.0 then res.Positive.Add(new OptNLiteralExpr(n));
+        if res.Positive.Count=1 then
+          Result := res.Positive[0] else
+          Result := res;
       end;
     end;
     
@@ -1984,10 +2009,13 @@ type
       for var i := 1 to Positive.Count-1 do
       begin
         var ro := Positive[i].GetRes;
-        if ro = nil then
-          nres := 0 else
         if ro is string then
           raise new CannotPowStringException(self) else
+        if ro = nil then
+        begin
+          nres *= 0.0;
+          break;
+        end else
           nres *= real(ro);
       end;
       
@@ -2049,32 +2077,33 @@ type
       end else
       if Positive.Count(oe->oe is IOptLiteralExpr) < 2 then
         Result := self else
-      if Positive[0] is OptNLiteralExpr(var onl) then
+      if Positive[0] as IOptExpr is IOptLiteralExpr(var iol) then
       begin
         var res := new OptOPowExpr;
-        var rb := new OptNLiteralExpr(onl.res);
+        var rb := new OptNLiteralExpr(ObjToNumUnsafe(iol.GetRes));
+        res.Positive.Add(rb);
         
-        res.Positive.Add(nil);
         foreach var oe in Positive.Skip(1) do
-          if oe is OptNLiteralExpr(var onl2) then
-            rb.res := Power(rb.res, onl2.res) else
+          if oe as IOptExpr is IOptLiteralExpr(var iol2) then
+            rb.res := Power(rb.res, ObjToNumUnsafe(iol2.GetRes)) else
             res.Positive.Add(oe);
         
-        res.Positive[0] := rb;
         Result := res;
       end else
       begin
         var res := new OptOPowExpr;
-        var n: real := 1;
+        var n := 1.0;
         
         res.Positive.Add(self.Positive[0]);
         foreach var oe in Positive.Skip(1) do
-          if oe is OptNLiteralExpr(var onl) then
-            n *= onl.res else
+          if oe as IOptExpr is IOptLiteralExpr(var iol) then
+            n *= ObjToNumUnsafe(iol.GetRes) else
             res.Positive.Add(oe);
         
-        if n <> 1 then res.Positive.Add(new OptNLiteralExpr(n));
-        Result := res;
+        if n <> 1.0 then res.Positive.Add(new OptNLiteralExpr(n));
+        if res.Positive.Count=1 then
+          Result := res.Positive[0] else
+          Result := res;
       end;
       
     end;
@@ -3012,7 +3041,7 @@ type
       var pr := par[0].GetRes;
       if pr is string then
         self.res := (pr as string).Length else
-        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -3053,8 +3082,8 @@ type
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if not ( (pr is string) and (TryStrToFloat(pr as string, self.res)) ) then
-        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
+      if not ( (pr is string) and TryStrToFloat(pr as string, self.res) ) then
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -3097,7 +3126,7 @@ type
       var pr := par[0].GetRes;
       if (pr is string(var s)) and (s.Length = 1) then
         self.res := word(s[1]) else
-        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr=nil?nil:pr.GetType);
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
     public function GetCalc: Action0; override;
@@ -3143,11 +3172,9 @@ type
     public procedure Calc;
     begin
       var o := par[0].GetRes;
-      if o is real then
-        self.res := real(o) else
-      if o = nil then
-        self.res := 0 else
-        ifnot();
+      if o is string then
+        ifnot else
+      self.res := ObjToNumUnsafe(o);
     end;
     
     private procedure DefaultIfNot :=
@@ -3157,19 +3184,14 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      CheckParams;
+      //CheckParams;
       par[0] := par[0].Optimize.Openup.Optimize as OptExprBase;
       CheckParams;
       
       if par[0] is OptNExprBase then
         Result := par[0] else
       if par[0] is IOptLiteralExpr then
-      begin
-        var o := par[0].GetRes;
-        if o is real then
-          Result := new OptNLiteralExpr(real(o)) else
-          Result := new OptNLiteralExpr(0);
-      end else
+        Result := new OptNLiteralExpr(ObjToNumUnsafe(par[0].GetRes)) else
         Result := self;
       
     end;
@@ -3214,12 +3236,7 @@ type
     
     public procedure Calc;
     begin
-      var o := par[0].GetRes;
-      if o is real(var n) then
-        self.res := n.ToString(nfi) else
-      if o = nil then
-        self.res := '' else
-        self.res := o as string;
+      self.res := ObjToStr(par[0].GetRes);
     end;
     
     
@@ -3232,12 +3249,7 @@ type
       if par[0] is OptSExprBase then
         Result := par[0] else
       if par[0] is IOptLiteralExpr then
-      begin
-        var o := par[0].GetRes;
-        if o is real(var n) then
-          Result := new OptSLiteralExpr(n.ToString(nfi)) else
-          Result := new OptSLiteralExpr('');
-      end else
+        Result := new OptSLiteralExpr(ObjToStr(par[0].GetRes)) else
         Result := self;
       
     end;
@@ -3395,8 +3407,10 @@ type
     static function GetOptVarExpr(e: VarExpr): IOptExpr;
     begin
       
-      case e.name of
+      case e.name.ToLower of
         'null': Result := new OptNullLiteralExpr;
+        'nan': Result := new OptNLiteralExpr(real.NaN);
+        'inf': Result := new OptNLiteralExpr(real.PositiveInfinity);
         else Result := new UnOptVarExpr(e.name);
       end;
       
