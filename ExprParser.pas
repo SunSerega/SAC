@@ -1,14 +1,14 @@
 ﻿unit ExprParser;
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
-//ToDo ?Заменить "... as T" на "T(...)"
+//ToDo Заменить "... as T" на "T(...)", и другие фиксы is/as, но только когда выйдет билд с фиксом для is-var
 
 //ToDo ClampLists:  Реализовать
-//ToDo функции:     что то для нарезания строк
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
+// - #791
 // - #1417
 // - #1418
 // - #1440
@@ -144,6 +144,14 @@ type
     public constructor(str:string) :=
     inherited Create(str, $'Expression can''t be parsed');
   end;
+  InvalidUseOfStrCut = class(ExprParsingException)
+    public constructor(str:string) :=
+    inherited Create(str, $'Invalid use of string cuting');
+  end;
+  InvalidVarException = class(ExprParsingException)
+    public constructor(vname, why:string) :=
+    inherited Create(vname, $'Variable can''t be parsed, because: {why}');
+  end;
   
   {$endregion Parsing}
   
@@ -208,25 +216,31 @@ type
   TooBigStringException = class(ExprCompilingException)
     
     public constructor(sender: object; str_l: BigInteger) :=
-    inherited Create(sender, 'Resulting string had length {str_l}. Can''t save string with length > (2^31-1)=2147483647', KV('str_l', object(str_l)));
+    inherited Create(sender, $'Resulting string had length {str_l}. Can''t save string with length > (2^31-1)=2147483647', KV('str_l', object(str_l)));
     
   end;
   CanNotMltNegStringException = class(ExprCompilingException)
     
     public constructor(sender: object; k: BigInteger) :=
-    inherited Create(sender, 'Can''t muliply string and {k}, number can''t be negative', KV(''+'k', object(k)));
+    inherited Create(sender, $'Can''t muliply string and {k}, number can''t be negative', KV(''+'k', object(k)));
     
   end;
   ExpectedNumValueException = class(ExprCompilingException)
     
     public constructor(sender: object) :=
-    inherited Create(sender, 'Expected Num Value');
+    inherited Create(sender, $'Expected Num Value');
     
   end;
   CannotConvertToIntException = class(ExprCompilingException)
     
     public constructor(sender, val: object) :=
-    inherited Create(sender, 'Can''t convert [{val}] to integer', KV('val',object(val)));
+    inherited Create(sender, $'Can''t convert [{val}] to integer', KV('val',object(val)));
+    
+  end;
+  CutOutOfRangeException = class(ExprCompilingException)
+    
+    public constructor(sender: object; s: string; i1,i2: BigInteger) :=
+    inherited Create(sender, $'Cut [{i1}..{i2}] can''t be applied to "{s}" (len={s.Length})', KV('s'+'',object(s)), KV('i1',object(i1)), KV('i2',object(i2)));
     
   end;
   
@@ -2351,7 +2365,7 @@ type
       if par.Length <> tps.Length then raise new InvalidFuncParamCountException(self, self.name, tps.Length, par.Length);
       
       for var i := 0 to tps.Length-1 do
-        if par[i].GetResType <> tps[i] then
+        if (par[i].GetResType <> tps[i]) and (par[i].GetResType <> typeof(Object)) then
           raise new InvalidFuncParamTypesException(self, self.name, i, tps[i], par[i].GetResType);
     end;
     
@@ -2843,13 +2857,84 @@ begin
       exit;
     end;
     
-    if self[from] = '(' then
-      from := self.FindNext(from+1,')') else
-    if self[from] = '"' then
-      from := self.FindNext(from+1,'"');
+    if self[from] = '(' then from := self.FindNext(from+1,')') else
+    if self[from] = '"' then from := self.FindNext(from+1,'"') else
+    if self[from] = '[' then from := self.FindNext(from+1,']');
     
     from += 1;
     
+  end;
+end;
+
+function SmartSplit(self: string; str: string := ' '; c: integer := -1): array of string; extensionmethod;
+begin
+  if (self = '') or (c = 0) then
+  begin
+    Result := new string[1]('');
+    exit;
+  end else
+  if c = 1 then
+  begin
+    Result := new string[1](self);
+    exit;
+  end;
+  
+  c -= 1;
+  var wsp := new List<integer>;
+  
+  var n := 1;
+  while n+str.Length-1 < self.Length do
+  begin
+    
+    var self_copy := self;//ToDo #791
+    
+    if self[n] = '"' then
+      n := self.FindNext(n+1,'"') else
+    if self[n] = '(' then
+      n := self.FindNext(n+1,')') else
+    if 1.&To(str.Length).All(i->self_copy[n+i-1] = str[i]) then
+    begin
+      wsp += n;
+      if wsp.Count = c then break;
+    end;
+    
+    n += 1;
+  end;
+  
+  if wsp.Count=0 then
+  begin
+    Result := new string[](self);
+    exit;
+  end;
+  
+  Result := new string[wsp.Count+1];
+  Result[0] := self.Substring(0, wsp[0]-1);
+  
+  for var i := 0 to wsp.Count-2 do
+    Result[i+1] := self.Substring(wsp[i]+str.Length-1, wsp[i+1]-wsp[i]-1);
+  
+  Result[Result.Length-1] := self.Substring(wsp[wsp.Count-1]+str.Length-1);
+  
+end;
+
+function SmartCheckAll(self: string; f: char->boolean; params allowed_chars: array of char): boolean; extensionmethod;
+begin
+  var i := 1;
+  Result := true;
+  while i < self.Length do
+  begin
+    
+    if not ( f(self[i]) or allowed_chars.Contains(self[i]) ) then
+    begin
+      Result := false;
+      exit;
+    end;
+    
+    if self[i] = '(' then i := self.FindNext(i+1,')') else
+    if self[i] = '"' then i := self.FindNext(i+1,'"') else
+    if self[i] = '[' then i := self.FindNext(i+1,']');
+    
+    i += 1;
   end;
 end;
 
@@ -2864,12 +2949,31 @@ function GetSimpleExpr(text:string; si1,si2: integer): Expr;
 begin
   
   if si1 > si2 then raise new EmptyExprException(text, si1) else
-  if text[si1] = '(' then Result := Expr.FromString(text, si1+1, si2-1) else
+  if text[si1] = '(' then
+    if text[si2] = ']' then
+    begin
+      var i := text.FindNext(si1+1, ')');
+      var str := text.Substring(si1-1,i-si1+1);
+      var cps := text.Substring(i+1,si2-i-2).SmartSplit('..');
+      if cps.Length <> 2 then raise new InvalidUseOfStrCut(text);
+      Result := new FuncExpr('cutstr', new string[](str, cps[0], cps[1]));
+    end else
+      Result := Expr.FromString(text, si1+1, si2-1) else
   if text[si1] = '"' then
   begin
     var i := text.FindNext(si1+1, '"');
-    if i <> si2 then raise new ExtraCharsException(text, si1, si2, i);
-    Result := new SLiteralExpr(text.Substring(si1,si2-si1-1));
+    if (i <> si2) and (text[i+1] = '[') then
+    begin
+      if text.FindNext(i+2,']') <> si2 then raise new ExtraCharsException(text, si1, si2, text.FindNext(i+2,']'));
+      var str := text.Substring(si1-1,i-si1+1);
+      var cps := text.Substring(i+1,si2-i-2).SmartSplit('..');
+      if cps.Length <> 2 then raise new InvalidUseOfStrCut(text);
+      Result := new FuncExpr('cutstr', new string[](str, cps[0], cps[1]));
+    end else
+    begin
+      if i <> si2 then raise new ExtraCharsException(text, si1, si2, i);
+      Result := new SLiteralExpr(text.Substring(si1,si2-si1-1));
+    end;
   end else
   begin
     var str := text.Substring(si1-1,si2-si1+1);
@@ -2877,12 +2981,12 @@ begin
     
     if real.TryParse(str,System.Globalization.NumberStyles.AllowDecimalPoint,new System.Globalization.NumberFormatInfo, r) then
       Result := new NLiteralExpr(r) else
-    if str.All(ch->ch.IsLetter or ch.IsDigit or (ch='_')) then
+    if str.SmartCheckAll(ch->ch.IsLetter or ch.IsDigit, '_', '[', '.') then
       Result := new VarExpr(str) else
-    if str.Contains('(') and (str.FindNext(str.IndexOf('(')+2,')') = si2-si1+1) then
+    if (not str.SmartCheckAll(ch->ch <> '(')) and (str.FindNext(str.FindNext(1, '(')+1,')') = si2-si1+1) then
     begin
-      var im := str.IndexOf('(')+1;
-      Result := new FuncExpr(str.Substring(0, im-1), str.Substring(im,str.Length-im-1).Split(','));
+      var im := str.FindNext(1, '(');
+      Result := new FuncExpr(str.Substring(0, im-1), str.Substring(im,str.Length-im-1).SmartSplit(','));
     end else
     begin
       //writeln(data);
@@ -3083,6 +3187,7 @@ begin
     case text[i1] of
       '(': i1 := text.FindNext(i1+1,')') + 1;
       '"': i1 := text.FindNext(i1+1,'"') + 1;
+      '[': i1 := text.FindNext(i1+1,']') + 1;
       '+': FinishCurr(plus);
       '-': FinishCurr(minus);
       '*': FinishCurr(mlt);
@@ -3372,6 +3477,63 @@ type
     end;
     
   end;
+  OptFunc_CutStr = class(OptSFuncExpr)
+    
+    public procedure CheckParams; override :=
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
+      typeof(string),
+      typeof(real),
+      typeof(real)
+    );
+    
+    public procedure Calc;
+    begin
+      var r1 := ObjToNum(par[1].GetRes);
+      var r2 := ObjToNum(par[2].GetRes);
+      if real.IsNaN(r1) or real.IsInfinity(r1) then raise new CannotConvertToIntException(self, r1);
+      if real.IsNaN(r2) or real.IsInfinity(r1) then raise new CannotConvertToIntException(self, r2);
+      var bi1 := BigInteger.Create(r1+0.5);
+      var bi2 := BigInteger.Create(r2+0.5);
+      if bi2 < bi1 then Swap(bi1, bi2);
+      self.res := ObjToStr(par[0].GetRes);
+      if (bi1 < 0) or (bi2 < 0) then raise new CutOutOfRangeException(self, self.res, bi1, bi2);
+      if (bi1 > self.res.Length) or (bi2 > self.res.Length) then raise new CutOutOfRangeException(self, self.res, bi1, bi2);
+      var i1 := integer(bi1);
+      var i2 := integer(bi2);
+      self.res := self.res.Substring(i1, i2-i1+1);
+    end;
+    
+    
+    
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
+    begin
+      yield sequence inhgc;
+      yield Action0(self.Calc);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(byte(6));
+      inherited Save(bw);
+    end;
+    
+    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object) :=
+    inherited Create(br, 'CutStr', nvn, svn, ovn);
+    
+    public constructor(par: array of OptExprBase);
+    begin
+      self.par := par;
+      self.name := 'CutStr';
+      CheckParams;
+    end;
+    
+  end;
   
 {$endregion Funcs}
 
@@ -3451,6 +3613,7 @@ type
       FuncTypes.Add('deflynum', par->new OptFunc_DeflyNum(par));
       
       FuncTypes.Add('str', par->new OptFunc_Str(par));
+      FuncTypes.Add('cutstr', par->new OptFunc_CutStr(par));
       
     end;
     
@@ -3504,7 +3667,33 @@ type
         'null': Result := new OptNullLiteralExpr;
         'nan': Result := new OptNLiteralExpr(real.NaN);
         'inf': Result := new OptNLiteralExpr(real.PositiveInfinity);
-        else Result := new UnOptVarExpr(e.name);
+        else
+        begin
+          var res := new UnOptVarExpr(e.name);
+          Result := res;
+          if e.name.Contains('[') then
+          begin
+            var i1 := e.name.FindNext(1,'[');
+            var i2 := e.name.FindNext(i1+1,']');
+            if i2 <> e.name.Length then raise new InvalidVarException(e.name, 'Invalid use of indexing');
+            var cut_str := e.name.Substring(i1,i2-i1-1);
+            if cut_str.Contains('..') then
+            begin
+              var csp := cut_str.SmartSplit('..');
+              if csp.Length <> 2 then raise new InvalidVarException(e.name, 'Invalid use of string cuting');
+              res.name := res.name.Remove(i1-1);
+              Result := new OptFunc_CutStr(new OptExprBase[](
+                res,
+                GetOptExpr(Expr.FromString(csp[0])) as OptExprBase,
+                GetOptExpr(Expr.FromString(csp[1])) as OptExprBase
+              ));
+            end;
+          end;
+          
+          if res.name.Length=0 then
+            raise new InvalidVarException(e.name, 'Var name can''t be empty');
+          
+        end;
       end;
       
     end;
@@ -3591,6 +3780,7 @@ begin
     4: Result := new OptFunc_DeflyNum(br, nvn, svn, ovn);
     
     5: Result := new OptFunc_Str(br, nvn, svn, ovn);
+    6: Result := new OptFunc_CutStr(br, nvn, svn, ovn);
     
     else raise new InvalidFuncTException(t);
   end;

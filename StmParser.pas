@@ -1982,59 +1982,6 @@ type
   
 implementation
 
-{$region General}
-
-function SmartSplit(self: string; ch: char := ' '; c: integer := -1): array of string; extensionmethod;
-begin
-  if (self = '') or (c = 0) then
-  begin
-    Result := new string[1]('');
-    exit;
-  end else
-  if c = 1 then
-  begin
-    Result := new string[1](self);
-    exit;
-  end;
-  
-  c -= 1;
-  var wsp := new List<integer>;
-  
-  var n := 1;
-  while n < self.Length do
-  begin
-    
-    if self[n] = '"' then
-      n := self.FindNext(n+1,'"') else
-    if self[n] = '(' then
-      n := self.FindNext(n+1,')') else
-    if self[n] = ch then
-    begin
-      wsp += n;
-      if wsp.Count = c then break;
-    end;
-    
-    n += 1;
-  end;
-  
-  if wsp.Count=0 then
-  begin
-    Result := new string[](self);
-    exit;
-  end;
-  
-  Result := new string[wsp.Count+1];
-  Result[0] := self.Substring(0, wsp[0]-1);
-  
-  for var i := 0 to wsp.Count-2 do
-    Result[i+1] := self.Substring(wsp[i], wsp[i+1]-wsp[i]-1);
-  
-  Result[Result.Length-1] := self.Substring(wsp[wsp.Count-1]);
-  
-end;
-
-{$endregion General}
-  
 {$region constructor's}
 
 constructor ExprStm.Create(sb: StmBlock; text: string);
