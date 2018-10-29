@@ -46,7 +46,7 @@ type
     
     public function GetSubAreas: IList<FileContextArea>; override := new FileContextArea[](self);
     
-    public class function GetAllSimpleAreas(a: FileContextArea): sequence of SimpleFileContextArea :=
+    public static function GetAllSimpleAreas(a: FileContextArea): sequence of SimpleFileContextArea :=
     a.GetSubAreas.SelectMany(
       sa->
       (sa is SimpleFileContextArea)?
@@ -54,7 +54,7 @@ type
       GetAllSimpleAreas(sa)
     );
     
-    public class function TryCombine(var a1: SimpleFileContextArea; a2: SimpleFileContextArea): boolean;
+    public static function TryCombine(var a1: SimpleFileContextArea; a2: SimpleFileContextArea): boolean;
     begin
       Result :=
         (a1.fname = a2.fname) and
@@ -101,7 +101,7 @@ type
     
     public function GetSubAreas: IList<FileContextArea>; override := sas;
     
-    public class function Combine(debug_name:string; params a: array of FileContextArea): FileContextArea;
+    public static function Combine(debug_name:string; params a: array of FileContextArea): FileContextArea;
     begin
       var scas := a.SelectMany(SimpleFileContextArea.GetAllSimpleAreas).ToList;
       scas.ForEach(procedure(ca)->ca.debug_name := '');
@@ -139,7 +139,7 @@ type
       end;
     end;
     
-    public class function Combine(params a: array of FileContextArea): FileContextArea :=
+    public static function Combine(params a: array of FileContextArea): FileContextArea :=
     Combine(
       a
       .Select(ca->ca.debug_name)
@@ -424,7 +424,7 @@ type
   end;
   OperStmBase = abstract class(StmBase)
     
-    public class function FromString(sb: StmBlock; par: array of string): OperStmBase;
+    public static function FromString(sb: StmBlock; par: array of string): OperStmBase;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -436,7 +436,7 @@ type
   end;
   DrctStmBase = abstract class(StmBase)
     
-    public class function FromString(sb: StmBlock; text: string): DrctStmBase;
+    public static function FromString(sb: StmBlock; text: string): DrctStmBase;
     
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
@@ -845,7 +845,7 @@ type
     
     public kk, dp: InputNValue;
     
-    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -896,7 +896,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -941,7 +941,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -986,7 +986,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1037,7 +1037,7 @@ type
     
     public kk, dp: InputNValue;
     
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: cardinal);
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: cardinal);
     external 'User32.dll' name 'mouse_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1098,7 +1098,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
     external 'User32.dll' name 'mouse_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1150,7 +1150,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
     external 'User32.dll' name 'mouse_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1202,7 +1202,7 @@ type
     
     public kk: InputNValue;
     
-    class procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
     external 'User32.dll' name 'mouse_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1259,7 +1259,7 @@ type
     
     public x,y: InputNValue;
     
-    class procedure SetCursorPos(x, y: integer);
+    static procedure SetCursorPos(x, y: integer);
     external 'User32.dll' name 'SetCursorPos';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1310,7 +1310,7 @@ type
     public kk: InputNValue
     public vname: string;
     
-    class function GetKeyState(nVirtKey: byte): byte;
+    static function GetKeyState(nVirtKey: byte): byte;
     external 'User32.dll' name 'GetKeyState';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1360,7 +1360,7 @@ type
     public kk: InputNValue
     public vname: string;
     
-    class function GetKeyState(nVirtKey: byte): byte;
+    static function GetKeyState(nVirtKey: byte): byte;
     external 'User32.dll' name 'GetKeyState';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1409,7 +1409,7 @@ type
     
     public x,y: string;
     
-    class procedure GetCursorPos(p: ^Point);
+    static procedure GetCursorPos(p: ^Point);
     external 'User32.dll' name 'GetCursorPos';
     
     private procedure Calc(ec: ExecutingContext);
@@ -2044,7 +2044,7 @@ begin
   self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]),sb.nvn, sb.svn);
 end;
 
-class function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
+static function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
 begin
   var p := text.Split(new char[]('='),2);
   case p[0] of
@@ -2053,7 +2053,7 @@ begin
   end;
 end;
 
-class function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
+static function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
 begin
   case par[0].ToLower of
     
@@ -2088,7 +2088,7 @@ begin
   end;
 end;
 
-class function StmBase.FromString(sb: StmBlock; s: string; par: array of string): StmBase;
+static function StmBase.FromString(sb: StmBlock; s: string; par: array of string): StmBase;
 begin
   if s.StartsWith('!') then
     Result := DrctStmBase.FromString(sb, s);
@@ -2294,7 +2294,7 @@ begin
   
 end;
 
-class function InputSValue.Load(br: System.IO.BinaryReader): InputSValue;
+static function InputSValue.Load(br: System.IO.BinaryReader): InputSValue;
 begin
   var t := br.ReadByte;
   case t of
@@ -2306,7 +2306,7 @@ begin
   end;
 end;
 
-class function InputNValue.Load(br: System.IO.BinaryReader): InputNValue;
+static function InputNValue.Load(br: System.IO.BinaryReader): InputNValue;
 begin
   var t := br.ReadByte;
   case t of
@@ -2318,7 +2318,7 @@ begin
   end;
 end;
 
-class function StmBlockRef.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBlockRef;
+static function StmBlockRef.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBlockRef;
 begin
   var t := br.ReadByte;
   case t of
@@ -2342,7 +2342,7 @@ begin
   end;
 end;
 
-class function OperStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+static function OperStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
 begin
   var t1 := br.ReadByte;
   var t2 := br.ReadByte;
@@ -2418,7 +2418,7 @@ begin
   
 end;
 
-class function DrctStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): DrctStmBase;
+static function DrctStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): DrctStmBase;
 begin
   var t1 := br.ReadByte;
   var t2 := br.ReadByte;
@@ -2438,7 +2438,7 @@ begin
   
 end;
 
-class function StmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBase;
+static function StmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBase;
 begin
   
   var t := br.ReadByte;

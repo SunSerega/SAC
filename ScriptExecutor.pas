@@ -37,7 +37,7 @@ type
     pause_keys := Lst&<byte>(192);
     form_thr: System.Threading.Thread;
     
-    class function GetKeyState(nVirtKey: byte): byte;
+    static function GetKeyState(nVirtKey: byte): byte;
     external 'User32.dll' name 'GetKeyState';
     
     constructor(entry_point: string; ep: ExecParams) :=

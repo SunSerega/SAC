@@ -5,7 +5,7 @@ type
   
   TestExpr = abstract class
     
-    class AllowedNameChars: List<char>;
+    static AllowedNameChars: List<char>;
     
     
     
@@ -24,7 +24,7 @@ type
     
     
     
-    class constructor;
+    static constructor;
     begin
       
       AllowedNameChars := new List<char>(integer('a').To(word('z')).Select(id->char(id)));
@@ -32,21 +32,21 @@ type
       
     end;
     
-    class function GetRandName(c: integer) :=
+    static function GetRandName(c: integer) :=
     new string(
       ArrGen(
         c, i->AllowedNameChars[Random(AllowedNameChars.Count)]
       )
     );
     
-    class function GetConstExprs(AllowString: boolean): sequence of TestExpr;
-    class function GetPlusExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
-    class function GetMltExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
-    class function GetPowExprs(recl: integer): sequence of TestExpr;
-    class function GetFuncExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
-    class function GetVarExprs(AllowString: boolean): sequence of TestExpr;
+    static function GetConstExprs(AllowString: boolean): sequence of TestExpr;
+    static function GetPlusExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+    static function GetMltExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+    static function GetPowExprs(recl: integer): sequence of TestExpr;
+    static function GetFuncExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+    static function GetVarExprs(AllowString: boolean): sequence of TestExpr;
     
-    class function GetAnyExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+    static function GetAnyExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
     begin
       Result := new TestExpr[0];
       if recl = 0 then exit;
@@ -65,7 +65,7 @@ type
       Result := Result + pwe;
       Result := Result + fe;
     end;
-    class function GetMultipleExprs(c: integer; AllowString: boolean; recl: integer): sequence of array of TestExpr;
+    static function GetMultipleExprs(c: integer; AllowString: boolean; recl: integer): sequence of array of TestExpr;
     const
       trl = 2;
     begin
@@ -106,13 +106,13 @@ type
     property ResNil: boolean read res=nil;
     property ResType: System.Type read res=nil?nil:res.GetType;
     
-    class function operator explicit(o: object): ExprRes;
+    static function operator explicit(o: object): ExprRes;
     begin
       Result := new ExprRes;
       Result.res := o;
     end;
     
-    class function StrEql(s1,s2:string): boolean;
+    static function StrEql(s1,s2:string): boolean;
     begin
       var ToDo := 0;//ToDo это не хорошо, по нормальному - надо находить куски которые одинаковые, и сравивать промежутки между ними
       //Чтоб "1.23abcdefg" было= "1.234abcdefg"
@@ -127,7 +127,7 @@ type
       Result := nok <= s1.Length/5;
     end;
     
-    class function operator=(r1,r2: ExprRes): boolean;
+    static function operator=(r1,r2: ExprRes): boolean;
     begin
       //var t1 := r1.res?.GetType;
       //var t2 := r2.res?.GetType;
@@ -386,14 +386,14 @@ begin
 end;
 
 
-class function TestExpr.GetConstExprs(AllowString: boolean): sequence of TestExpr;
+static function TestExpr.GetConstExprs(AllowString: boolean): sequence of TestExpr;
 begin
   loop TestConstC do yield new TestConstExpr(Random*(1024*1024));
   if AllowString then
     loop TestConstC do yield new TestConstExpr(GetRandName(Random(5)));
 end;
 
-class function TestExpr.GetVarExprs(AllowString: boolean): sequence of TestExpr;
+static function TestExpr.GetVarExprs(AllowString: boolean): sequence of TestExpr;
 begin
   var name := GetRandName(Random(1, 5));
   yield new TestVarExpr(name, nil, true);
@@ -414,7 +414,7 @@ begin
       end;
 end;
 
-class function TestExpr.GetPlusExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+static function TestExpr.GetPlusExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
 begin
   for var n := 2 to 2 do
     foreach var se in GetMultipleExprs(n, AllowString, recl-1) do
@@ -422,7 +422,7 @@ begin
         yield new TestPlusExpr(se, pn_tbl);
 end;
 
-class function TestExpr.GetMltExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+static function TestExpr.GetMltExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
 begin
   for var n := 2 to 2 do
     foreach var se in GetMultipleExprs(n, AllowString, recl-1) do
@@ -433,14 +433,14 @@ begin
             yield new TestMltExpr(se, pn_tbl);
 end;
 
-class function TestExpr.GetPowExprs(recl: integer): sequence of TestExpr;
+static function TestExpr.GetPowExprs(recl: integer): sequence of TestExpr;
 begin
   for var n := 2 to 2 do
     foreach var se in GetMultipleExprs(n, false, recl-1) do
       yield new TestPowExpr(se);
 end;
 
-class function TestExpr.GetFuncExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
+static function TestExpr.GetFuncExprs(AllowString: boolean; recl: integer): sequence of TestExpr;
 begin
   var ToDo := 0;
   exit;

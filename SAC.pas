@@ -15,7 +15,7 @@ type
     path: string;
     name: string;
     
-    class procedure FreeConsole;
+    static procedure FreeConsole;
     external 'kernel32.dll' name 'FreeConsole';
     
     procedure Start;

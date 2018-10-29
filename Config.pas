@@ -37,8 +37,8 @@ type
   ParameterState = (StOn, StOff, StPart);
   Parameter = abstract class
     
-    class RootParams := new List<Parameter>;
-    class All := new Dictionary<string,Parameter>;
+    static RootParams := new List<Parameter>;
+    static All := new Dictionary<string,Parameter>;
     
     Parent: Parameter;
     Name, Text: string;
@@ -73,7 +73,7 @@ type
     procedure ValidateName; virtual :=
     Text := Translate(Name);
     
-    class procedure ValidatePosAll;
+    static procedure ValidatePosAll;
     begin
       var y := 10;
       var maxw := 0;
@@ -85,7 +85,7 @@ type
       f.Height := y + 68;
     end;
     
-    class procedure ValidateNameAll;
+    static procedure ValidateNameAll;
     begin
       foreach var p in All.Values do
         p.ValidateName;
@@ -285,7 +285,7 @@ type
     
     public constructor := exit;
     
-    public class root := new LibDir;
+    public static root := new LibDir;
     
     public sdirs := new Dictionary<string, LibDir>;
     public fls := new List<string>;
@@ -335,14 +335,14 @@ type
   MForm = class(Form)
     
     const RegName = 'ScriptAutoClicker';
-    class ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
+    static ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
     
     const version = 1;
-    class files_loaded: boolean;
+    static files_loaded: boolean;
     
     
     
-    class procedure DeleteFolder(dir: string; params excpt: array of string);
+    static procedure DeleteFolder(dir: string; params excpt: array of string);
     begin
       if not System.IO.Directory.Exists(dir) then exit;
       System.IO.Directory.EnumerateDirectories(dir).ForEach(d->MForm.DeleteFolder(d, excpt));
@@ -351,7 +351,7 @@ type
         System.IO.Directory.Delete(dir);
     end;
     
-    class procedure FileFromStream(fname: string; str: System.IO.Stream);
+    static procedure FileFromStream(fname: string; str: System.IO.Stream);
     begin
       var f := System.IO.File.Create(fname);
       str.CopyTo(f);
@@ -359,7 +359,7 @@ type
       str.Position := 0;
     end;
     
-    class procedure LoadLib;
+    static procedure LoadLib;
     begin
       System.IO.Directory.CreateDirectory('Lib');
       var br := new System.IO.BinaryReader(GetResourceStream('lib_pack'));

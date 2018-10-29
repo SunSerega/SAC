@@ -1,5 +1,4 @@
 ﻿unit ExprParser;
-//ToDo Больше регионов. БОЛЬШЕ
 //ToDo Больше шорткатов при res=nil
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 //ToDo BigInteger.Create(real.PositiveInfinity) даёт ошибку
@@ -16,6 +15,7 @@
 // - #533
 // - #1417
 // - #1418
+// - #1440
 
 interface
 
@@ -276,7 +276,7 @@ type
     
     public function GetSubAreas: IList<ExprContextArea>; override := new ExprContextArea[](self);
     
-    public class function GetAllSimpleAreas(a: ExprContextArea): sequence of SimpleExprContextArea :=
+    public static function GetAllSimpleAreas(a: ExprContextArea): sequence of SimpleExprContextArea :=
     a.GetSubAreas.SelectMany(
       sa->
       (sa is SimpleExprContextArea)?
@@ -284,7 +284,7 @@ type
       GetAllSimpleAreas(sa)
     );
     
-    public class function TryCombine(var a1: SimpleExprContextArea; a2: SimpleExprContextArea): boolean;
+    public static function TryCombine(var a1: SimpleExprContextArea; a2: SimpleExprContextArea): boolean;
     begin
       Result :=
         ( (a1.p1 >= a2.p1-1) and (a1.p1 <= a2.p2+1) ) or
@@ -315,7 +315,7 @@ type
     
     public function GetSubAreas: IList<ExprContextArea>; override := sas;
     
-    public class function Combine(debug_name:string; params a: array of ExprContextArea): ExprContextArea;
+    public static function Combine(debug_name:string; params a: array of ExprContextArea): ExprContextArea;
     begin
       var scas := a.SelectMany(SimpleExprContextArea.GetAllSimpleAreas).ToList;
       scas.ForEach(procedure(ca)->ca.debug_name := '');
@@ -353,7 +353,7 @@ type
       end;
     end;
     
-    public class function Combine(params a: array of ExprContextArea): ExprContextArea :=
+    public static function Combine(params a: array of ExprContextArea): ExprContextArea :=
     Combine(
       a
       .Select(ca->ca.debug_name)
@@ -370,10 +370,10 @@ type
   
   Expr = abstract class
     
-    public class function FromString(text:string): Expr :=
+    public static function FromString(text:string): Expr :=
     FromString(text,1,text.Length);
     
-    public class function FromString(text:string; i1,i2:integer): Expr;
+    public static function FromString(text:string; i1,i2:integer): Expr;
     
   end;
   
@@ -471,7 +471,7 @@ type
     function Openup: IOptExpr;
     function Optimize: IOptExpr;
     
-    function GetCalc: Action0;
+    function GetCalc: sequence of Action0;
     
   end;
   OptExprBase = abstract class(IOptExpr)
@@ -517,7 +517,7 @@ type
     public function Openup: IOptExpr; virtual := self;
     public function Optimize: IOptExpr; virtual := self;
     
-    public function GetCalc:Action0; virtual := nil;
+    public function GetCalc: sequence of Action0; virtual := new Action0[0];
     
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
@@ -742,11 +742,11 @@ type
       end;
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -891,11 +891,11 @@ type
       
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1045,11 +1045,11 @@ type
       
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1186,11 +1186,11 @@ type
       
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1359,11 +1359,11 @@ type
       end;
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1507,11 +1507,11 @@ type
         Result := self;
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result += Base.GetCalc();
-      Result += Positive.GetCalc();
-      Result += self.Calc;
+      yield sequence Base.GetCalc();
+      yield sequence Positive.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1647,11 +1647,11 @@ type
         Result := self;
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result += Base.GetCalc();
-      Result += Positive.GetCalc();
-      Result += self.Calc;
+      yield sequence Base.GetCalc();
+      yield sequence Positive.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1876,11 +1876,11 @@ type
       
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2033,11 +2033,11 @@ type
       end;
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2181,11 +2181,11 @@ type
       
     end;
     
-    public function GetCalc:Action0; override;
+    public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
-        Result += oe.GetCalc();
-      Result += self.Calc;
+        yield sequence oe.GetCalc();
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2270,15 +2270,16 @@ type
       if par.All(oe->oe is IOptLiteralExpr) then
       begin
         var res := new OptNLiteralExpr;
-        GetCalc()();
+        foreach var p in GetCalc() do
+          p();
         res.res := self.res;//-_-
         Result := res;
       end else
         Result := self;
     end;
     
-    public function GetCalc: Action0; override :=
-    System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
+    public function GetCalc: sequence of Action0; override :=
+    par.SelectMany(p->p.GetCalc());
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2353,15 +2354,16 @@ type
       if par.All(oe->oe is IOptLiteralExpr) then
       begin
         var res := new OptSLiteralExpr;
-        GetCalc()();
+        foreach var p in GetCalc() do
+          p();
         res.res := self.res;//-_-
         Result := res;
       end else
         Result := self;
     end;
     
-    public function GetCalc: Action0; override :=
-    System.Delegate.Combine(par.ConvertAll(p->p.GetCalc() as System.Delegate)) as Action0;
+    public function GetCalc: sequence of Action0; override :=
+    par.SelectMany(p->p.GetCalc());
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2431,8 +2433,8 @@ type
     public procedure Calc :=
     res := souce[id];
     
-    public function GetCalc:Action0; override :=
-    self.Calc;
+    public function GetCalc: sequence of Action0; override :=
+    new Action0[](self.Calc);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2469,8 +2471,8 @@ type
     public procedure Calc :=
     res := souce[id];
     
-    public function GetCalc:Action0; override :=
-    self.Calc;
+    public function GetCalc: sequence of Action0; override :=
+    new Action0[](self.Calc);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2507,8 +2509,8 @@ type
     public procedure Calc :=
     res := souce[id];
     
-    public function GetCalc:Action0; override :=
-    self.Calc;
+    public function GetCalc: sequence of Action0; override :=
+    new Action0[](self.Calc);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2589,7 +2591,7 @@ type
       
       
       
-      self.MainCalcProc := Main.GetCalc;
+      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
       
     end;
     
@@ -2632,7 +2634,7 @@ type
       
       
       
-      self.MainCalcProc := Main.GetCalc;
+      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
       
     end;
     
@@ -3014,7 +3016,7 @@ begin
   
 end;
 
-class function Expr.FromString(text:string; i1, i2:integer): Expr;
+static function Expr.FromString(text:string; i1, i2:integer): Expr;
 begin
   var cl := new List<ExprCoord>;
   var curr: ExprCoord;
@@ -3117,11 +3119,12 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
-    public function GetCalc: Action0; override;
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result := 
-        inherited GetCalc()+
-        Calc;
+      yield sequence inhgc;
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -3159,11 +3162,12 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
-    public function GetCalc: Action0; override;
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result := 
-        inherited GetCalc()+
-        Calc;
+      yield sequence inhgc;
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -3202,11 +3206,12 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
-    public function GetCalc: Action0; override;
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result := 
-        inherited GetCalc()+
-        Calc;
+      yield sequence inhgc;
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -3269,11 +3274,12 @@ type
       
     end;
     
-    public function GetCalc: Action0; override;
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result := 
-        inherited GetCalc()+
-        Calc;
+      yield sequence inhgc;
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -3327,11 +3333,12 @@ type
       
     end;
     
-    public function GetCalc: Action0; override;
+    //ToDo #1440
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
     begin
-      Result := 
-        inherited GetCalc()+
-        Calc;
+      yield sequence inhgc;
+      yield Action0(self.Calc);
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -3357,10 +3364,10 @@ type
 
 {$region some impl}
 
-class function OptExprBase.AsStrExpr(o: OptExprBase): OptExprBase :=
+static function OptExprBase.AsStrExpr(o: OptExprBase): OptExprBase :=
 new OptFunc_Str(new OptExprBase[](o));
 
-class function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptExprBase :=
+static function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptExprBase :=
 new OptFunc_DeflyNum(new OptExprBase[](o), ifnot);
 
 function UnOptVarExpr.FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
@@ -3548,7 +3555,7 @@ type
       
       
       
-      Result.MainCalcProc := Main.GetCalc;
+      Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
       
     end;
     
@@ -3680,7 +3687,7 @@ begin
   
   
   
-  Result.MainCalcProc := Main.GetCalc;
+  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
   
 end;
 
