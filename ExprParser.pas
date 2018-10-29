@@ -1,11 +1,9 @@
 ﻿unit ExprParser;
-//ToDo Больше шорткатов при res=nil
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 //ToDo ?Заменить "... as T" на "T(...)"
 
 //ToDo ClampLists:  Реализовать
 //ToDo функции:     что то для нарезания строк
-//ToDo ToString:    переделать для выражений (обоих видов)
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
 
@@ -1728,7 +1726,7 @@ type
           if ro = nil then
           begin
             nres *= 0.0;
-            break;
+            //break;
           end else
             nres *= real(ro);
         end;
@@ -1739,7 +1737,7 @@ type
           if ro = nil then
           begin
             nres /= 0.0;
-            break;
+            //break;
           end else
             nres /= real(ro);
         end;
@@ -1856,7 +1854,7 @@ type
           if oe is OptNullLiteralExpr then
           begin
             n *= 0.0;
-            break;
+            //break;
           end else
             res.Positive.Add(oe);
         
@@ -1866,7 +1864,7 @@ type
           if oe is OptNullLiteralExpr then
           begin
             n /= 0.0;
-            break;
+            //break;
           end else
             res.Negative.Add(oe);
         
@@ -1943,7 +1941,7 @@ type
       for var i := 1 to Positive.Count-1 do
         res *= Positive[i].res;
       
-      res := Power(Positive[0].res, res);
+      res := Positive[0].res ** res;
     end;
     
     private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
@@ -2003,12 +2001,13 @@ type
       
       if lc = Positive.Count then
       begin
-        var res := new OptNLiteralExpr;
+        var res := new OptNLiteralExpr(Positive[0].res);
+        var pow := 1.0;
         
-        res.res := Positive[0].res;
         foreach var oe in Positive.Skip(1) do
-          res.res := Power(res.res, oe.res);
+          pow *= oe.res;
         
+        res.res := res.res ** pow;
         Result := res;
       end else
       if lc < 2 then
@@ -2016,13 +2015,16 @@ type
       if Positive[0] is IOptLiteralExpr then
       begin
         var res := new OptNPowExpr;
+        var rb := Positive[0];
+        res.Positive.Add(rb);
+        var pow := 1.0;
         
-        res.Positive.Add(self.Positive[0]);
         foreach var oe in self.Positive.Skip(1) do
           if oe is IOptLiteralExpr then
-            res.res := Power(res.res, oe.res) else
+            pow *= oe.res else
             res.Positive.Add(oe);
         
+        rb.res := rb.res ** pow;
         Result := res;
       end else
       begin
@@ -2088,7 +2090,7 @@ type
         if ro = nil then
         begin
           nres *= 0.0;
-          break;
+          //break;
         end else
           nres *= real(ro);
       end;
@@ -2096,7 +2098,7 @@ type
       var ro := Positive[0].GetRes;
       if ro = nil then ro := 0.0 else
       if ro is string then raise new CannotPowStringException(self);
-      res := Power(real(ro), nres);
+      res := real(ro) ** nres;
     end;
     
     private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
@@ -2164,12 +2166,14 @@ type
         var res := new OptOPowExpr;
         var rb := new OptNLiteralExpr(ObjToNumUnsafe(iol.GetRes));
         res.Positive.Add(rb);
+        var pow := 1.0;
         
         foreach var oe in Positive.Skip(1) do
           if oe as IOptExpr is IOptLiteralExpr(var iol2) then
-            rb.res := Power(rb.res, ObjToNumUnsafe(iol2.GetRes)) else
+            pow *= ObjToNumUnsafe(iol2.GetRes) else
             res.Positive.Add(oe);
         
+        rb.res := rb.res ** pow;
         Result := res;
       end else
       begin
