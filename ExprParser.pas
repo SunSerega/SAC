@@ -1,8 +1,6 @@
 ﻿unit ExprParser;
 //ToDo Больше шорткатов при res=nil
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
-//ToDo BigInteger.Create(real.PositiveInfinity) даёт ошибку
-//ToDo Delegate.Combine вместо всех +=
 //ToDo ?Заменить "... as T" на "T(...)"
 
 //ToDo ClampLists:  Реализовать
@@ -370,6 +368,8 @@ type
   
   Expr = abstract class
     
+    public static nfi := new System.Globalization.NumberFormatInfo;
+    
     public static function FromString(text:string): Expr :=
     FromString(text,1,text.Length);
     
@@ -385,7 +385,7 @@ type
     self.val := val;
     
     public function ToString: string; override :=
-    $'{val}';
+    val.ToString(nfi);
     
   end;
   SLiteralExpr = class(Expr)
@@ -409,19 +409,19 @@ type
   PlusExpr = class(ComplexExpr)
     
     public function ToString: string; override :=
-    $'(+[{Positive.JoinIntoString(''+'')}]-[{Negative.JoinIntoString(''+'')}])';
+    $'({Positive.JoinIntoString(''+'')}-{Negative.JoinIntoString(''-'')})';
     
   end;
   MltExpr = class(ComplexExpr)
     
     public function ToString: string; override :=
-    $'(*[{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}])';
+    $'({Positive.JoinIntoString(''*'')}/{Negative.JoinIntoString(''/'')})';
     
   end;
   PowExpr = class(ComplexExpr)
     
     public function ToString: string; override :=
-    $'PowExpr({Positive.First}^[{Positive.Skip(1).JoinIntoString('','')}])';
+    $'({Positive.First}^{Positive.Skip(1).JoinIntoString(''^'')})';
     
   end;
   
@@ -448,7 +448,7 @@ type
     self.name := name;
     
     public function ToString: string; override :=
-    $'{name}';
+    name;
     
   end;
   
@@ -776,7 +776,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( [{Positive.JoinIntoString(''+'')}]-[{Negative.JoinIntoString(''+'')}] )';
+    $'({Positive.JoinIntoString(''+'')}{Negative.Select(oe->''-''+oe.ToString).JoinIntoString('''')})';
     
   end;
   OptSSPlusExpr = class(OptSExprBase, IOptPlusExpr)
@@ -918,7 +918,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( [{Positive.JoinIntoString(''+'')}]] )';
+    $'({Positive.JoinIntoString(''+'')})';
     
   end;
   OptSOPlusExpr = class(OptSExprBase, IOptPlusExpr)
@@ -1072,7 +1072,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'[ {Positive.JoinIntoString(''+'')} ]';
+    $'({Positive.JoinIntoString(''+'')})';
     
   end;
   OptOPlusExpr = class(OptOExprBase, IOptPlusExpr)
@@ -1220,7 +1220,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( [{Positive.JoinIntoString(''+'')}]-[{Negative.JoinIntoString(''+'')}] )';
+    $'({Positive.JoinIntoString(''+'')}{Negative.Select(oe->''-''+oe.ToString).JoinIntoString('''')})';
     
   end;
   
@@ -1393,7 +1393,9 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
+    Positive.Any?
+    $'({Positive.JoinIntoString(''*'')}{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})':
+    $'(1{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})';
     
   end;
   OptSNMltExpr = class(OptSExprBase, IOptMltExpr)
@@ -1405,6 +1407,7 @@ type
     begin
       var r := Base.res;
       var cr := Positive.res;
+      if real.IsNaN(cr) or real.IsInfinity(cr) then raise new CannotConvertToIntException(self, cr);
       var ci := BigInteger.Create(cr+0.5);
       if ci < 0 then raise new CanNotMltNegStringException(self, ci);
       var cap := ci * r.Length;
@@ -1494,6 +1497,7 @@ type
       begin
         var r := Base.res;
         var cr := Positive.res;
+        if real.IsNaN(cr) or real.IsInfinity(cr) then raise new CannotConvertToIntException(self, cr);
         var ci := BigInteger.Create(cr+0.5);
         if ci < 0 then raise new CanNotMltNegStringException(self, ci);
         var cap := ci * r.Length;
@@ -1533,7 +1537,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( {Base}*{Positive} )';
+    $'({Base}*{Positive})';
     
   end;
   OptSOMltExpr = class(OptSExprBase, IOptMltExpr)
@@ -1551,7 +1555,9 @@ type
         exit;
       end;
       if co is string then raise new CannotMltALotStringsException(self, new object[](Base, co));
-      var ci := BigInteger.Create(real(co)+0.5);
+      var cr := real(co);
+      if real.IsNaN(cr) or real.IsInfinity(cr) then raise new CannotConvertToIntException(self, cr);
+      var ci := BigInteger.Create(cr+0.5);
       if ci < 0 then raise new CanNotMltNegStringException(self, ci);
       var cap := ci * r.Length;
       if cap > integer.MaxValue then raise new TooBigStringException(self, cap);
@@ -1673,7 +1679,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( {Base}*{Positive} )';
+    $'({Base}*{Positive})';
     
   end;
   OptOMltExpr = class(OptOExprBase, IOptMltExpr)
@@ -1704,6 +1710,7 @@ type
               n *= real(ro);
         end;
         
+        if real.IsNaN(n) or real.IsInfinity(n) then raise new CannotConvertToIntException(self, n);
         var ci := BigInteger.Create(n+0.5);
         if ci < 0 then raise new CanNotMltNegStringException(self,ci);
         var cap := ci * nres.Length;
@@ -1910,7 +1917,9 @@ type
     end;
     
     public function ToString: string; override :=
-    $'( [{Positive.JoinIntoString(''*'')}]/[{Negative.JoinIntoString(''*'')}] )';
+    Positive.Any?
+    $'({Positive.JoinIntoString(''*'')}{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})':
+    $'(1{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})';
     
   end;
   
@@ -2060,7 +2069,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'PowExpr({Positive.First}^[{Positive.Skip(1).JoinIntoString('','')}])';
+    $'({Positive.First}^{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
     
   end;
   OptOPowExpr = class(OptNExprBase, IOptPowExpr)
@@ -2208,7 +2217,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'PowExpr({Positive.First}^[{Positive.Skip(1).JoinIntoString('','')}])';
+    $'({Positive.First}^{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
     
   end;
   
@@ -2302,7 +2311,7 @@ type
     end;
     
     public function ToString: string; override :=
-    '{n}'+$'{name}({par.JoinIntoString('','')})';
+    $'{name}({par.JoinIntoString('','')})';
     
   end;
   OptSFuncExpr = abstract class(OptSExprBase, IOptFuncExpr)
@@ -2386,7 +2395,7 @@ type
     end;
     
     public function ToString: string; override :=
-    '{s}'+$'{name}({par.JoinIntoString('','')})';
+    $'{name}({par.JoinIntoString('','')})';
     
   end;
   
@@ -2414,7 +2423,7 @@ type
     self.name := name;
     
     public function ToString: string; override :=
-    $'obj_var[?]';
+    'var#?';
     
   end;
   OptNVarExpr = class(OptNExprBase, IOptVarExpr)
@@ -2452,7 +2461,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'num_var[{id}]';
+    $'num_var#{id}';
     
   end;
   OptSVarExpr = class(OptSExprBase, IOptVarExpr)
@@ -2490,7 +2499,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'str_var[{id}]';
+    $'str_var#{id}';
     
   end;
   OptOVarExpr = class(OptOExprBase, IOptVarExpr)
@@ -2528,7 +2537,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'obj_var[{id}]';
+    $'obj_var#{id}';
     
   end;
   
