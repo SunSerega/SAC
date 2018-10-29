@@ -4,20 +4,13 @@
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 //ToDo BigInteger.Create(real.PositiveInfinity) даёт ошибку
 //ToDo Delegate.Combine вместо всех +=
-//ToDo Заменить "... as T" на "T(...)"
+//ToDo ?Заменить "... as T" на "T(...)"
 
 //ToDo ClampLists:  Реализовать
 //ToDo функции:     что то для нарезания строк
 //ToDo ToString:    переделать для выражений (обоих видов)
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
-
-//ToDo OptNilLiteralExpr:
-// - Проверить чтоб всюду были проверки. В программе полно месте где идёт расчёт на то, что OExprBase констант нету
-
-//ToDo Optimize:    оптимизация 5*(i+0) => 5*(+i) => 5*i
-// - Если константа 1 и она =0 - удалить
-// - Если осталось 1 выражение в скобочка - можно и открыть
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
@@ -706,6 +699,16 @@ type
     public function Optimize: IOptExpr; override;
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
+      
+      self.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 0.0));
+      self.Negative.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 0.0));
+      
+      if (Positive.Count=1) and (Negative.Count=0) then
+      begin
+        Result := Positive[0];
+        exit;
+      end;
+      
       var pn := Positive.Concat(Negative);
       var lc :=  pn.Count(oe->oe is IOptLiteralExpr);
       
@@ -834,6 +837,15 @@ type
     public function Optimize: IOptExpr; override;
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
+      
+      self.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = ''));
+      
+      if Positive.Count=1 then
+      begin
+        Result := Positive[0];
+        exit;
+      end;
+      
       var lc := Positive.Count(oe->oe is IOptLiteralExpr);
       
       if lc = Positive.Count then
@@ -949,6 +961,14 @@ type
     public function Openup: IOptExpr; override;
     begin
       TransformAllSubExprs(oe->oe.Openup);
+      
+      self.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (ObjToStr(oe.GetRes)=''));
+      
+      if Positive.Count=1 then
+      begin
+        Result := AsStrExpr(Positive[0]).Optimize;
+        exit;
+      end;
       
       if Positive.Any(oe->(oe is IOptPlusExpr) and (oe is OptSExprBase)) then
       begin
@@ -1118,6 +1138,14 @@ type
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(self, Negative);
       
+      Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
+      
+      if (Positive.Count=1) and (Negative.Count=0) then
+      begin
+        Result := Positive[0];
+        exit;
+      end;
+      
       if Positive.Any(oe->oe is OptSExprBase) then
       begin
         if Negative.Any then raise new CannotSubStringExprException(self, Negative);
@@ -1286,12 +1314,21 @@ type
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
-      var pn := Positive.Concat(Negative);
-      var lc := pn.Count(oe->oe is IOptLiteralExpr);
+      self.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 1.0));
+      self.Negative.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 1.0));
       
-      if lc = Positive.Count+Negative.Count then
+      if (Positive.Count=1) and (Negative.Count=0) then
       begin
-        var res := new OptNLiteralExpr(1);
+        Result := Positive[0];
+        exit;
+      end;
+      
+      var plc := Positive.Count(oe->oe is IOptLiteralExpr);
+      var nlc := Negative.Count(oe->oe is IOptLiteralExpr);
+      
+      if (plc = Positive.Count) and (nlc = Negative.Count) then
+      begin
+        var res := new OptNLiteralExpr(1.0);
         
         foreach var oe in self.Positive do
           res.res *= oe.res;
@@ -1301,7 +1338,7 @@ type
         
         Result := res;
       end else
-      if lc < 2 then
+      if (plc < 2) and (nlc = 0) then
         Result := self else
       begin
         var res := new OptNNMltExpr;
@@ -1465,6 +1502,8 @@ type
         loop integer(ci) do sb += r;
         Result := new OptSLiteralExpr(sb.ToString);
       end else
+      if (Positive is IOptLiteralExpr) and (Positive.res = 1.0) then
+        Result := Base else
         Result := self;
     end;
     
@@ -1595,6 +1634,15 @@ type
         res.Base := self.Base;
         res.Positive := self.Positive as OptNExprBase;
         Result := res.Optimize;
+      end else
+      if (Positive is IOptLiteralExpr) then
+      begin
+        var res := ObjToNum(Positive.GetRes);
+        if res = 0.0 then
+          Result := new OptSLiteralExpr('') else
+        if res = 1.0 then
+          Result := Base else
+          Result := self;
       end else
         Result := self;
     end;
@@ -1753,6 +1801,15 @@ type
     public function Optimize: IOptExpr; override;
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
+      
+      self.Positive.RemoveAll(oe->(not (oe is OptSExprBase)) and (oe is IOptLiteralExpr) and (ObjToNumUnsafe(oe.GetRes) = 1.0));
+      self.Negative.RemoveAll(oe->(not (oe is OptSExprBase)) and (oe is IOptLiteralExpr) and (ObjToNumUnsafe(oe.GetRes) = 1.0));
+      
+      if (Positive.Count=1) and (Negative.Count=0) then
+      begin
+        Result := Positive[0];
+        exit;
+      end;
       
       var pn := Positive.Concat(Negative);
       var sc := pn.Count(oe->oe is OptSExprBase);
@@ -1925,6 +1982,14 @@ type
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
+      self.Positive.RemoveAll(oe->(not (oe = Positive[0])) and (oe is IOptLiteralExpr) and (oe.res = 1.0));
+      
+      if Positive.Count=1 then
+      begin
+        Result := Positive[0];
+        exit;
+      end;
+      
       var lc := Positive.Count(oe->oe is IOptLiteralExpr);
       
       if lc = Positive.Count then
@@ -2068,6 +2133,14 @@ type
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       if Positive.Any(oe->oe is OptSExprBase) then raise new CannotPowStringException(self);
+      
+      self.Positive.RemoveAll(oe->(not (oe = Positive[0])) and (oe is IOptLiteralExpr) and (ObjToNumUnsafe(oe.GetRes) = 1.0));
+      
+      if Positive.Count=1 then
+      begin
+        Result := AsDefinitelyNumExpr(Positive[0]);
+        exit;
+      end;
       
       if Positive.All(oe->oe is OptNExprBase) then
       begin
