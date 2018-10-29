@@ -112,33 +112,61 @@ type
       Result.res := o;
     end;
     
-    static function StrEql(s1,s2:string): boolean;
+    static function StrEql(s1,s2:string): real;
+    const
+      max_search_l=1000;
     begin
-      var ToDo := 0;//ToDo это не хорошо, по нормальному - надо находить куски которые одинаковые, и сравивать промежутки между ними
-      //Чтоб "1.23abcdefg" было= "1.234abcdefg"
-      if s1.Length < s2.Length then s2 := s2.Substring(0, s1.Length) else
-      if s2.Length < s1.Length then s1 := s1.Substring(0, s2.Length);
       
-      var nok := 0;
-      for var i := 1 to s1.Length do
-        if s1[i] <> s2[i] then
-          nok += 1;
+      var ok := 0;
+      var i1 := 1;
+      var i2 := 1;
+      while (i1 <= s1.Length) and (i2 <= s2.Length) do
+        if s1[i1] = s2[i2] then
+        begin
+          ok += 1;
+          i1 += 1;
+          i2 += 1;
+        end else
+        begin
+          
+          var nok1 := -1;
+          var nok2 := -1;
+          
+          var l1 := Min(s1.Length-i1, max_search_l);
+          for var ni1 := i1+1 to i1+l1 do
+          begin
+            var l2 := Min(s2.Length-i2-ni1+i1, max_search_l);
+            for var ni2 := i2+1 to i2+l2 do
+              if (s1[ni1] = s2[ni2]) then
+                if (nok1=-1) or (ni1+ni2 < nok1+nok2) or ((ni1+ni2 = nok1+nok2) and (abs(ni1-ni2) < abs(nok1-nok2))) then
+                begin
+                  nok1 := ni1;
+                  nok2 := ni2;
+                end;
+          end;
+          
+          if nok1=-1 then break;
+          i1 := nok1;
+          i2 := nok2;
+          
+        end;
       
-      Result := nok <= s1.Length/5;
+      Result := ok/(s1.Length+s2.Length)*2;
     end;
     
-    static function operator=(r1,r2: ExprRes): boolean;
+    static function CalcEqu(r1,r2: ExprRes): real;
     begin
       //var t1 := r1.res?.GetType;
       //var t2 := r2.res?.GetType;
       
       if r1.res = nil then
-        Result := r2.res = nil else
-      if r1.res is real(var n1) then
-        Result := (r2.res is real(var n2)) and ( (n1=n2) or ((real.IsNaN(n1)) and (real.IsNaN(n2))) or (abs(n1-n2) < 0.1)) else
-      if r1.res is string(var s1) then
-        Result := (r2.res is string(var s2)) and StrEql(s1,s2) else
-        Result := false;
+        Result := (r2.res = nil)?1:0 else
+        Result := StrEql(r1.ToString, r2.ToString);
+//      if r1.res is real(var n1) then
+//        Result := ((r2.res is real(var n2)) and ( (n1=n2) or ((real.IsNaN(n1)) and (real.IsNaN(n2))) or (abs(n1-n2) < 0.1)))?1:0 else
+//      if r1.res is string(var s1) then
+//        Result := (r2.res is string(var s2))?StrEql(s1,s2):0 else
+//        Result := 0;
     end;
     
     public function ToString: string; override;
@@ -175,17 +203,21 @@ type
     val: object;
     as_obj: boolean;
     
+    static Prohibited_names := Arr('null', 'inf', 'nan');
+    
     function GetExpRes: object; override := val;
     function ContainsString: boolean; override := val is string;
     
     procedure FindAllVars; override;
     begin
+      if Prohibited_names.Contains(name) then raise new OkException;
+      
       inherited FindAllVars;
       if as_obj then
         ovs.Add(name, val) else
-        if val is real(var n) then
-          nvs.Add(name, n) else
-          svs.Add(name, val as string);
+      if val is real(var n) then
+        nvs.Add(name, n) else
+        svs.Add(name, val as string);
     end;
     
     constructor(name: string; val: object; as_obj: boolean);
@@ -294,6 +326,8 @@ type
             c /= real(o)
         );
         
+        if c < -0.5 then raise new OkException;
+        if real.IsNaN(c) or real.IsInfinity(c) then raise new OkException;
         var ic := BigInteger.Create(c+0.5);
         if ic > 10000 then raise new OkException;
         var cap := ic * res.Length;
@@ -452,19 +486,21 @@ end;
 
 
 begin
+  
   Randomize(0);
   
   //TestExpr.GetAnyExprs(true, 3).Count.Print;
   //exit;
   
   var skiping: integer;
-  //skiping := 0;
+  skiping := 1500000;
   var n := 0;
   
   foreach var te in TestExpr.GetAnyExprs(true, 3) do
   try
     n += 1;
     if n < skiping then continue;
+    if n = skiping then writeln('done skiping');
     if n mod 1000 = 0 then writeln($'#{n}');
     
     
@@ -485,7 +521,7 @@ begin
     var oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
     var res2 := ExprRes(oe.Calc(nvs, svs));
     
-    if not (res1 = res2) then
+    if ExprRes.CalcEqu(res1,res2) < 0.2 then
     begin
       writeln($'#{n}');
       writeln($'Ошибка, неправильный результат');
@@ -503,7 +539,7 @@ begin
       oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
       res1 := ExprRes(te.GetExpRes);
       res2 := ExprRes(oe.Calc(nvs, svs));
-      var b := res1=res2;
+      var b := ExprRes.CalcEqu(res1,res2);
       readln;
     end;
   except
@@ -516,4 +552,7 @@ begin
       readln;
     end;
   end;
+  
+  writeln('done');
+  readln;
 end.

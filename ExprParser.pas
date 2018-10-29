@@ -1301,18 +1301,18 @@ type
         var res := new OptNNMltExpr;
         
         foreach var oe in Positive do
-          if oe is OptNNPlusExpr(var onnp) then
+          if oe is OptNNMltExpr(var onmp) then
           begin
-            res.Positive.AddRange(onnp.Positive);
-            res.Negative.AddRange(onnp.Negative);
+            res.Positive.AddRange(onmp.Positive);
+            res.Negative.AddRange(onmp.Negative);
           end else
             res.Positive.Add(oe);
         
         foreach var oe in Negative do
-          if oe is OptNNPlusExpr(var onnp) then
+          if oe is OptNNMltExpr(var onmp) then
           begin
-            res.Negative.AddRange(onnp.Positive);
-            res.Positive.AddRange(onnp.Negative);
+            res.Negative.AddRange(onmp.Positive);
+            res.Positive.AddRange(onmp.Negative);
           end else
             res.Negative.Add(oe);
         
@@ -1486,7 +1486,10 @@ type
             //--------
         
         if res.Positive is OptNNMltExpr(var onme) then
-          p.Positive.AddRange(onme.Positive) else
+        begin
+          p.Positive.AddRange(onme.Positive);
+          p.Negative.AddRange(onme.Negative);
+        end else
           p.Positive.Add(res.Positive);
         
         nres.Positive := p;
@@ -1500,7 +1503,8 @@ type
     begin
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
-      if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
+      //см. поч. стр. 1647
+      //if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if
         (Base is IOptLiteralExpr) and
@@ -1614,6 +1618,7 @@ type
         var res := new OptSNMltExpr;
         var res_copy := res;//ToDo убрать, #533. + даёт лишнее предупреждение изза #1315 XD
         var p := new OptNNMltExpr;
+        res.Positive := p;
         
         foreach var oe in ome.GetPositive do
           if oe is OptSExprBase then
@@ -1628,11 +1633,25 @@ type
             p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))) as OptNExprBase);
             //--------
         
-        if res.Positive is OptNNMltExpr(var onme) then
-          p.Positive.AddRange(onme.Positive) else
-          p.Positive.Add(res.Positive);
+        foreach var oe in ome.GetNegative do
+          if oe is OptSExprBase then
+            raise new CannotDivStringExprException(self, ome.GetPositive, ome.GetNegative) else
+          if oe is OptNExprBase then
+            p.Negative.Add(oe as OptNExprBase) else
+            
+            //--------//ToDo #1417 //ToDo #1418
+            p.Negative.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil, nil)) as OptNExprBase);
+            //--------
         
-        res.Positive := p;
+        if self.Positive as IOptExpr is IOptMltExpr(var ome2) then
+        begin
+          //--------//ToDo #1417 //ToDo #1418
+          p.Positive.AddRange(ome2.GetPositive.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,nil)) as OptNExprBase));
+          p.Negative.AddRange(ome2.GetNegative.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil,nil)) as OptNExprBase));
+        end else
+          //--------//ToDo #1417 //ToDo #1418
+          p.Positive.Add(AsDefinitelyNumExpr(self.Positive, procedure->raise new CannotMltALotStringsException(nil,nil)) as OptNExprBase);
+        
         Result := res;
       end else
         Result := self;
@@ -1644,7 +1663,8 @@ type
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       if Positive is OptSExprBase then raise new CannotMltALotStringsException(self, new object[](Base, Positive));
-      if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
+      //"a"*(5/3) - должно компилироваться, всё с ним нормально
+      //if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if Positive is OptNExprBase then
       begin
@@ -1796,18 +1816,18 @@ type
         var res := new OptOMltExpr;
         
         foreach var oe in Positive do
-          if oe as IOptExpr is IOptPlusExpr(var onnp) then
+          if oe as IOptExpr is IOptMltExpr(var ime) then
           begin
-            res.Positive.AddRange(onnp.GetPositive);
-            res.Negative.AddRange(onnp.GetNegative);
+            res.Positive.AddRange(ime.GetPositive);
+            res.Negative.AddRange(ime.GetNegative);
           end else
             res.Positive.Add(oe);
         
         foreach var oe in Negative do
-          if oe as IOptExpr is IOptPlusExpr(var onnp) then
+          if oe as IOptExpr is IOptMltExpr(var ime) then
           begin
-            res.Negative.AddRange(onnp.GetPositive);
-            res.Positive.AddRange(onnp.GetNegative);
+            res.Negative.AddRange(ime.GetPositive);
+            res.Positive.AddRange(ime.GetNegative);
           end else
             res.Negative.Add(oe);
         
@@ -1863,8 +1883,8 @@ type
         var n := 1.0;
         
         foreach var oe in self.Positive do
-          if oe is OptNExprBase(var ane) then
-            n *= ane.res else
+          if oe is OptNLiteralExpr(var anle) then
+            n *= anle.res else
           if oe is OptNullLiteralExpr then
           begin
             n *= 0.0;
@@ -1873,8 +1893,8 @@ type
             res.Positive.Add(oe);
         
         foreach var oe in self.Negative do
-          if oe is OptNExprBase(var ane) then
-            n /= ane.res else
+          if oe is OptNLiteralExpr(var anle) then
+            n /= anle.res else
           if oe is OptNullLiteralExpr then
           begin
             n /= 0.0;
@@ -1950,12 +1970,11 @@ type
     
     private procedure Calc;
     begin
-      res := 1.0;
+      res := Positive[0].res;
       
       for var i := 1 to Positive.Count-1 do
-        res *= Positive[i].res;
+        res := res ** Positive[i].res;
       
-      res := Positive[0].res ** res;
     end;
     
     private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
@@ -2016,12 +2035,10 @@ type
       if lc = Positive.Count then
       begin
         var res := new OptNLiteralExpr(Positive[0].res);
-        var pow := 1.0;
         
         foreach var oe in Positive.Skip(1) do
-          pow *= oe.res;
+          res.res := res.res ** oe.res;
         
-        res.res := res.res ** pow;
         Result := res;
       end else
       if lc < 2 then
@@ -2029,16 +2046,14 @@ type
       if Positive[0] is IOptLiteralExpr then
       begin
         var res := new OptNPowExpr;
-        var rb := Positive[0];
+        var rb :=Positive[0] as OptNLiteralExpr;
         res.Positive.Add(rb);
-        var pow := 1.0;
         
         foreach var oe in self.Positive.Skip(1) do
           if oe is IOptLiteralExpr then
-            pow *= oe.res else
+            rb.res := rb.res ** oe.res else
             res.Positive.Add(oe);
         
-        rb.res := rb.res ** pow;
         Result := res;
       end else
       begin
@@ -2047,7 +2062,7 @@ type
         
         res.Positive.Add(self.Positive[0]);
         foreach var oe in self.Positive.Skip(1) do
-          if oe is IOptLiteralExpr then
+          if (oe is IOptLiteralExpr) and not real.IsInfinity(oe.res) then
             n *= oe.res else
             res.Positive.Add(oe);
         
@@ -2085,7 +2100,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'({Positive.First}^{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
+    $'({Positive.First}{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
     
   end;
   OptOPowExpr = class(OptNExprBase, IOptPowExpr)
@@ -2094,25 +2109,21 @@ type
     
     private procedure Calc;
     begin
-      var nres := 1.0;
-      
-      for var i := 1 to Positive.Count-1 do
-      begin
-        var ro := Positive[i].GetRes;
-        if ro is string then
-          raise new CannotPowStringException(self) else
-        if ro = nil then
-        begin
-          nres *= 0.0;
-          //break;
-        end else
-          nres *= real(ro);
-      end;
-      
       var ro := Positive[0].GetRes;
       if ro = nil then ro := 0.0 else
       if ro is string then raise new CannotPowStringException(self);
-      res := real(ro) ** nres;
+      res := real(ro);
+      
+      for var i := 1 to Positive.Count-1 do
+      begin
+        ro := Positive[i].GetRes;
+        if ro is string then
+          raise new CannotPowStringException(self) else
+        if ro = nil then
+          res := res ** 0.0 else
+          res := res ** real(ro);
+      end;
+      
     end;
     
     private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
@@ -2180,14 +2191,12 @@ type
         var res := new OptOPowExpr;
         var rb := new OptNLiteralExpr(ObjToNumUnsafe(iol.GetRes));
         res.Positive.Add(rb);
-        var pow := 1.0;
         
         foreach var oe in Positive.Skip(1) do
           if oe as IOptExpr is IOptLiteralExpr(var iol2) then
-            pow *= ObjToNumUnsafe(iol2.GetRes) else
+            rb.res := rb.res ** ObjToNumUnsafe(iol2.GetRes) else
             res.Positive.Add(oe);
         
-        rb.res := rb.res ** pow;
         Result := res;
       end else
       begin
@@ -2196,7 +2205,7 @@ type
         
         res.Positive.Add(self.Positive[0]);
         foreach var oe in Positive.Skip(1) do
-          if oe as IOptExpr is IOptLiteralExpr(var iol) then
+          if (oe as IOptExpr is IOptLiteralExpr(var iol)) and not real.IsInfinity(ObjToNumUnsafe(iol.GetRes)) then
             n *= ObjToNumUnsafe(iol.GetRes) else
             res.Positive.Add(oe);
         
@@ -2235,7 +2244,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'({Positive.First}^{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
+    $'({Positive.First}{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
     
   end;
   
