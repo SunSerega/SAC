@@ -26,11 +26,13 @@ try
     p := System.Diagnostics.Process.Start(comp);
     p.WaitForExit;
     //write(p.StandardOutput.ReadToEnd+#10);
+    
+    Sleep(100);
   end;
   
   comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
   //comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-  comp.Arguments := $'"{curr_dir}\{fname}.pas"';
+  comp.Arguments := $'"{curr_dir}\{fname}.pas" "" "Debug=0"';
   
   p := System.Diagnostics.Process.Start(comp);
   p.WaitForExit;
@@ -38,6 +40,8 @@ try
   
   if integer(flags and exec) <> 0 then
   begin
+    Sleep(100);
+    
     comp.FileName := $'{fname}.exe';
     comp.Arguments := '';
     p := System.Diagnostics.Process.Start(comp);
@@ -47,6 +51,8 @@ try
   
   if integer(flags and mnft) <> 0 then
   begin
+    Sleep(100);
+    
     comp.FileName := 'ManifestGen\mt.exe';
     comp.Arguments := $'-nologo -manifest "{System.IO.Path.GetFullPath(fname)}.exe.manifest" -outputresource:"{System.IO.Path.GetFullPath(fname)}.exe;#1"';
     p := System.Diagnostics.Process.Start(comp);
@@ -82,6 +88,9 @@ begin
     
     CompileAsync('SAC', gres or mnft);
     CompileAsync('Editor');
+    CompileAsync('FuncHelp', gres);
+    CompileAsync('OperHelp', gres);
+    CompileAsync('DrctHelp', gres);
     CompileAsync('Help', gres);
     
     System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);

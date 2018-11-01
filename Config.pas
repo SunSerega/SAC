@@ -394,11 +394,17 @@ type
       {$resource 'Icon.ico'}
       {$resource 'Editor.exe'}
       {$resource 'Help.exe'}
+      {$resource 'FuncHelp.exe'}
+      {$resource 'OperHelp.exe'}
+      {$resource 'DrctHelp.exe'}
       {$resource 'WK.exe'}
       {$resource 'SAC.exe'}
       FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
       FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
       FileFromStream('Help.exe', GetResourceStream('Help.exe'));
+      FileFromStream('FuncHelp.exe', GetResourceStream('FuncHelp.exe'));
+      FileFromStream('OperHelp.exe', GetResourceStream('OperHelp.exe'));
+      FileFromStream('DrctHelp.exe', GetResourceStream('DrctHelp.exe'));
       FileFromStream('WK.exe', GetResourceStream('WK.exe'));
       FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       
@@ -508,7 +514,8 @@ type
         
         
         
-        key := Registry;
+        //key := Registry;
+        var Main_ToDo := 0;
         
         
         
@@ -531,6 +538,9 @@ type
           FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
           FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
           FileFromStream('Help.exe', GetResourceStream('Help.exe'));
+          FileFromStream('FuncHelp.exe', GetResourceStream('FuncHelp.exe'));
+          FileFromStream('OperHelp.exe', GetResourceStream('OperHelp.exe'));
+          FileFromStream('DrctHelp.exe', GetResourceStream('DrctHelp.exe'));
           FileFromStream('WK.exe', GetResourceStream('WK.exe'));
           FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
           LoadLib;
@@ -663,6 +673,9 @@ type
           System.IO.File.Delete('Icon.ico');
           System.IO.File.Delete('Editor.exe');
           System.IO.File.Delete('Help.exe');
+          System.IO.File.Delete('FuncHelp.exe');
+          System.IO.File.Delete('OperHelp.exe');
+          System.IO.File.Delete('DrctHelp.exe');
           System.IO.File.Delete('WK.exe');
           System.IO.File.Delete('SAC.exe');
           

@@ -5,6 +5,7 @@
 //ToDo Контекст ошибок, то есть при оптимизации надо сохранять номер строки
 //ToDo Оптимизация блоков, так чтоб они знали когда их результат - константа
 
+//ToDo Directives:  !StartPos (но запретить начинать с % меток)
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
 
@@ -1540,7 +1541,7 @@ type
     begin
       if (o1 is real) and (o2 is real) then
         case compr of
-          equ: Result := real(o1) = real(o2);
+          equ: Result := (real(o1) = real(o2)) or (real.IsNaN(real(o1)) and real.IsNaN(real(o2)));
           less: Result := real(o1) < real(o2);
           more: Result := real(o1) > real(o2);
         end else

@@ -28,8 +28,11 @@ begin
           if s = '' then continue;
           var s_sp := s.Split(new char[]('='), 2);
           
+          if (s_sp.Length=2) and (s_sp[0].Last='\') then
+            s_sp := new string[](s_sp[0].Remove(s_sp[0].Length-1)+'='+s_sp[1]);
+          
           if (s_sp.Length=2) and (s_sp[1]='\') then
-            sw.WriteLine(s_sp[0].TrimEnd(#9)+'='+sr.ReadLine.TrimStart(#9)) else
+            sw.WriteLine(s_sp[0].TrimEnd(#9)+'='+sr.ReadLine.TrimStart(#9).Replace('\=','=')) else
             sw.WriteLine(
               s_sp
               .Reverse

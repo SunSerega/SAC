@@ -1,0 +1,21 @@
+%EnterName=Enter directive name for it's description\
+Enter empty string for list of directives
+H|FRef=Loads file, even if it isn't used by program
+T|FRef=!Fref "f1.sac"\
+Will add all code from file "f1.sac" to currently loaded script\
+\
+!Fref "f1.sac" "f2.sac"\
+Will add all code from all specified files\
+\
+This directive have unlimited amount of operands, so you can't add comments to it
+~RU
+%EnterName=Введите имя директивы чтоб получить её описание\
+Введите пустую строку для списка директив
+H|FRef=Загружает файл, даже если он не будет использован в скрипте
+T|FRef=!Fref "f1.sac"\
+Добавить весь код из файла "f1.sac" в загруженный скрипт\
+\
+!Fref "f1.sac" "f2.sac"\
+Will add all code from all specified files\
+\
+This directive have unlimited amount of operands, so you can't add comments to it

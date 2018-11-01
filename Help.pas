@@ -4,39 +4,21 @@ uses LocaleData;
 uses SettingsData;
 
 var
-  h: string;
-  d := new Dictionary<string, string>;
+  scts := new List<string>;
 
 procedure Load;
 begin
-  var l := new List<string>;
-  
-  var nlcl := new Dictionary<(string, string), string>;
   
   foreach var n in Locale do
     if n.Key.Item1=CurrLocale then
-      if n.Key.Item2.StartsWith('H|') then
-        l.Add(n.Key.Item2.Remove(0,2)) else
-      if n.Value <> '' then
-        nlcl.Add(n.Key, n.Value) else
-        l.Add('');
-        
+      if n.Key.Item2.All(ch->ch.IsDigit) then
+        scts.Add(n.Value);
   
-  var ll := l.Select(s->s.Length).Max+5;
+  System.Console.WindowWidth := scts.SelectMany(l->l.Split(#10)).Select(s->s.Length).Max+1;
+  System.Console.WindowHeight := scts.Select(l->l.Split(#10).Length).Max+10;
   
-  foreach var s in l do
-    if s = '' then
-      h += #10 else
-    begin
-      h += s + ' '*(ll-s.Length) + Translate('H|'+s)+#10;
-      d.Add(s.ToLower, Translate('T|'+s));
-    end;
-  
-  var lns := h.Split(#10);
-  System.Console.WindowWidth := lns.Select(s->s.Length).Max+1;
-  System.Console.WindowHeight := lns.Length+10;
-  
-  Locale := nlcl;
+  scts.Capacity := scts.Count;
+  Locale := Locale.Where(kvp-> (kvp.Key.Item1=CurrLocale) and (kvp.Key.Item2.Length<>1) ).ToDictionary(kvp->kvp.Key,kvp->kvp.Value);
 end;
 
 begin
@@ -52,18 +34,29 @@ begin
 //    System.Console.Clear;
 //  end;
   
-  write(h);
+  var curr := 1;
+  var last := 0;
   
   while true do
   begin
     
-    loop 3 do writeln;
-    writeln(Translate('%EnterName'));
-    var s := ReadlnString.ToLower;
-    System.Console.Clear;
-    if d.ContainsKey(s) then
-      writeln(d[s]) else
-      write(h);
+    if curr <> last then
+    begin
+      System.Console.Clear;
+      writeln(scts[curr]);
+      last := curr;
+      loop 3 do writeln;
+      writeln(Translate('%EnterID'));
+    end;
+    
+    var key := System.Console.ReadKey(true);
+    if (key.KeyChar >= '0') and (key.KeyChar <= (scts.Count-1).ToString[1]) then
+      curr := key.KeyChar.ToString.ToInteger else
+    case key.Key of
+      System.ConsoleKey.DownArrow, System.ConsoleKey.RightArrow:  curr := (curr+1) mod scts.Count;
+      System.ConsoleKey.UpArrow, System.ConsoleKey.LeftArrow:     curr := (curr+scts.Count-1) mod scts.Count;
+      System.ConsoleKey.Enter:                                    curr := 0;
+    end;
     
   end;
   

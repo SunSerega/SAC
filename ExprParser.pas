@@ -3275,18 +3275,23 @@ type
   OptFunc_Num = class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
-    CheckParamsBase;
+    if par.Length <> 1 then
+      raise new InvalidFuncParamCountException(self, self.name, 1, par.Length);
     
     public function GetTps: array of System.Type; override :=
     new System.Type[](
-      typeof(string)
+      typeof(Object)
     );
     
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if not ( (pr is string) and TryStrToFloat(pr as string, self.res) ) then
-        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
+      if pr is real then
+        res := real(pr) else
+      if pr = nil then
+        res := 0.0 else
+      if not TryStrToFloat(pr as string, self.res) then
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(real), pr?.GetType);
     end;
     
     //ToDo #1440

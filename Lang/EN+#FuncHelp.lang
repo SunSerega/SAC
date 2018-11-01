@@ -1,0 +1,75 @@
+
+
+%EnterName=\
+	Enter function name for it's description\
+	Enter empty string for list of functions
+
+
+
+H|Length					=Gets length of Str
+T|Length					=\
+	l\=Length("abcd")\
+	Will set l to 4\
+	\
+	l1\=Length(null)\
+	l2\=Length(5.3)\
+	Both will give error
+
+
+H|Num						=Converts value to Num
+T|Num						=\
+	n1\=Num(5.5)\
+	n2\=Num("5.6")\
+	n3\=Num(null)\
+	\
+	n1 is 5.5\
+	n2 is 5.6\
+	n3 is 0\
+	\
+	n\=Num("abc") (error, can't convert to Num)
+
+
+H|Ord						=Gets id of symbol
+T|Ord						=\
+	KeyP Ord("G")\
+	Will press letter "G" on keyboard\
+	Only works for eng. letters\
+	\
+	Also can be used with Chr for Unicode encoding/decoding
+
+
+%1=
+
+
+
+H|Str						=Converts value to Num
+T|Str						=\
+	s1\=Str(5.5)\
+	s2\=Str("abc")\
+	s3\=Str(null)\
+	\
+	s1 is "5.5"\
+	s2 is "abc"\
+	s3 is ""
+
+
+H|CutStr					=Cuts and returns part of Str
+T|CutStr					=\
+	s\=CutStr("abcdef",2,4)\
+	s is "cde" (because from letter #2, to letter #4)\
+	\
+	There is also shortcut:\
+	s\="abcdef"[2..4]
+
+
+%2=
+
+
+
+H|DeflyNum					=[Internal] Gives error if expression isn't Num
+T|DeflyNum					=\
+	n1\=DeflyNum(null) //0\
+	n2\=DeflyNum(3.4) //3.4\
+	n3\=DeflyNum("abc") //error
+
+

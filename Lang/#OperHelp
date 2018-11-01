@@ -1,0 +1,337 @@
+%EnterName=Enter operator name for it's description\
+Enter empty string for list of operators
+H|Key=Presses/unpresses keyboard button
+T|Key=Key 65 0\
+Will do nothing\
+\
+Key 65 1\
+Will press "A" on keyboard, and will left it pressed\
+\
+Key 65 2\
+Will unpress "A" on keyboard\
+\
+Key 65 3\
+Will press and then unpress "A" on keyboard\
+\
+Note, last operand of this operator looks only on last 2 bits\
+So 10(0x1010) would work like 2(0x0010), etc.\
+\
+You can find out key code by running WK.exe and pressing that key
+H|KeyD=Presses keyboard button
+T|KeyD=KeyD 65\
+Will press "A" on keyboard, and will left it pressed\
+\
+You can find out key code by running WK.exe and pressing that key
+H|KeyU=Unpresses keyboard button
+T|KeyU=KeyU 65\
+Will unpress "A" on keyboard\
+\
+You can find out key code by running WK.exe and pressing that key
+H|KeyP=Presses and then unpresses keyboard button
+T|KeyP=KeyP 65\
+Will press and then unpress "A" on keyboard\
+\
+You can find out key code by running WK.exe and pressing that key
+%1=
+H|Mouse=Presses/unpresses mouse button
+T|Mouse=Mouse 2 0\
+Will do nothing\
+\
+Mouse 2 1\
+Will press RMB, and will left it pressed\
+\
+Mouse 2 2\
+Will unpress RMB\
+\
+Mouse 2 3\
+Will press and unpress RMB\
+\
+Note, last operand of this operator looks only on last 2 bits\
+So 10(0x1010) would work like 2(0x0010), etc.\
+\
+Valid MB codes:\
+1: LMB\
+2: RMB\
+4: MMB\
+5: SideMB1\
+6: SideMB2
+H|MouseD=Presses mouse button
+T|MouseD=MouseD 2\
+Will press RMB, and will left it pressed\
+\
+Valid MB codes:\
+1: LMB\
+2: RMB\
+4: MMB\
+5: SideMB1\
+6: SideMB2
+H|MouseU=Unpresses mouse button
+T|MouseU=MouseU 2\
+Will unpress RMB\
+\
+Valid MB codes:\
+1: LMB\
+2: RMB\
+4: MMB\
+5: SideMB1\
+6: SideMB2
+H|MouseP=Presses and then unpresses mouse button
+T|MouseP=MouseP 2\
+Will press and unpress RMB\
+\
+Valid MB codes:\
+1: LMB\
+2: RMB\
+4: MMB\
+5: SideMB1\
+6: SideMB2
+%2=
+H|MousePos=Moves mouse to specified coords
+T|MousePos=MousePos 123 456\
+Will Move mouse to coordinates (123; 456), counting from top left corner
+H|GetKey=Finds out if key is pressed
+T|GetKey=GetKey 65 KeyA\
+Will store 1 ("A" pressed) or 0 ("A" unpressed) in variable "KeyA"\
+\
+This also works for mouse keys\
+\
+You can find out key code by running WK.exe and pressing that key
+H|GetKeyTrigger=Finds out if key is triggered (like CapsLock)
+T|GetKeyTrigger=GetKeyTrigger 20 CapsLockKey\
+Will store 1 (CapsLock on) or 0 (CapsLock off) in variable "CapsLockKey"\
+\
+You can find out key code by running WK.exe and pressing that key
+H|GetMousePos=Reads cursor position
+T|GetMousePos=GetMousePos MouseX MouseY\
+Will store cursor position in variables "MouseX" and "MouseY",\
+counting from top left corner
+%3=
+H|Jump=Transfers control to target label
+T|Jump=Jump "#label1"\
+Will find label "label1" in current file and continue execution from it\
+\
+Jump "file1.sac"\
+Will find file "file1.sac" and execute it, instead of current file\
+\
+Jump "file2.sac#label2"\
+Will find label "label2" in "file2.sac" file and execute it\
+\
+Jump null\
+Will work like Return, because it's a jump to nowhere\
+(Mostly used in JumpIf)
+H|JumpIf=Transfers control to 1 of 2 target labels
+T|JumpIf=JumpIf n < 5 #label1 null\
+If n is less then 5 - will perform Jump "#label1"\
+Otherwise will perform Jump null\
+\
+	You can only use ">", "<" or "=" as comparers
+%4=
+H|Call=Transfers control to target label, saving current position
+T|Call=Call exec_point_name\
+Works like Jump, but saves current execution position\
+When end of file or Return found - last execution position will be loaded\
+You can save a lot of positions on top of each other,\
+this allows for recursion\
+\
+Call null\
+Will be ignored, because it saves exec.pos. and immediately loads back\
+(Jump null works like Return)
+H|CallIf=Transfers control to 1 of 2 target labels, saving current position
+T|CallIf=CallIf n < 5 #label1 null\
+If n is less then 5 - will perform Call "#label1"\
+Otherwise will perform Call null\
+\
+	You can only use ">", "<" or "=" as comparers
+%5=
+H|Susp=Suspends execution and waits for resume key(s)
+T|Susp=Susp\
+Will suspend execution and wait for resume key(s)\
+You can specify resume key(s) by pressing "Set key" when script is loaded
+H|Return=Works as end of file
+T|Return=Return\
+Will return to last call to Call/CallIf operator\
+If there wasn't any - will perform Halt operator\
+\
+The same happens on the end of the file 
+H|Halt=Shuts down script
+T|Halt=Halt\
+Will immediately stop script execution
+%6=
+H|Sleep=Waits specified number of milliseconds
+T|Sleep=Sleep 500\
+Will do nothing for half a second
+H|Random=Generates pseudo-random number
+T|Random=Random r\
+Will generate pseudo-random number in range [0,1) and store in variable "r"
+H|Output=Writes value to output
+T|Output=Output 5+3\
+Will write "8" to output
+~RU
+%EnterName=Введите имя оператора чтоб получить его описание\
+Введите пустую строку для списка операторов
+H|Key=Нажимает/отжимает кнопку на клавиатуре
+T|Key=Key 65 0\
+Ничего не сделает\
+\
+Key 65 1\
+Нажмёт латинскую "A" на клавиатуре, и оставит её нажатой\
+\
+Key 65 2\
+Отожмёт латинскую "A" на клавиатуре\
+\
+Key 65 3\
+Нажмёт и затем отожмёт латинскую "A" на клавиатуре\
+\
+Обратите внимание, последний операнд этого оператора смотрит только на последние 2 бита\
+Поэтому 10(0x1010) будет работать как 2(0x0010), и т.д.\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+H|KeyD=Нажимает кнопку на клавиатуре
+T|KeyD=KeyD 65\
+Нажмёт латинскую "A" на клавиатуре, и оставит её нажатой\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+H|KeyU=Отжимает кнопку на клавиатуре
+T|KeyU=KeyU 65\
+Отожмёт латинскую "A" на клавиатуре\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+H|KeyP=Нажимает и затем отжимает кнопку на клавиатуре
+T|KeyP=KeyP 65\
+Нажмёт и затем отожмёт латинскую "A" на клавиатуре\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+%1=
+H|Mouse=Нажимает/отжимает кнопку мышки
+T|Mouse=Mouse 2 0\
+Ничего не сделает\
+\
+Mouse 2 1\
+Нажмёт ПКМ, и оставит её нажатой\
+\
+Mouse 2 2\
+Отожмёт ПКМ\
+\
+Mouse 2 3\
+Нажмёт и затем отожмёт ПКМ\
+\
+Обратите внимание, последний операнд этого оператора смотрит только на последние 2 бита\
+Поэтому 10(0x1010) будет работать как 2(0x0010), и т.д.\
+\
+Коды кнопок мыши:\
+1: ЛКМ\
+2: ПКМ\
+4: СКМ\
+5: Боковая кнопка1\
+6: Боковая кнопка2
+H|MouseD=Нажимает кнопку мышки
+T|MouseD=MouseD 2\
+Нажмёт ПКМ, и оставит её нажатой\
+\
+Коды кнопок мыши:\
+Коды кнопок мыши:\
+1: ЛКМ\
+2: ПКМ\
+4: СКМ\
+5: Боковая кнопка1\
+6: Боковая кнопка2
+H|MouseU=Отжимает кнопку мышки
+T|MouseU=MouseU 2\
+Отожмёт ПКМ\
+\
+Коды кнопок мыши:\
+Коды кнопок мыши:\
+1: ЛКМ\
+2: ПКМ\
+4: СКМ\
+5: Боковая кнопка1\
+6: Боковая кнопка2
+H|MouseP=Нажимает и затем отжимает кнопку мышки
+T|MouseP=MouseP 2\
+Нажмёт и затем отожмёт ПКМ\
+\
+Коды кнопок мыши:\
+Коды кнопок мыши:\
+1: ЛКМ\
+2: ПКМ\
+4: СКМ\
+5: Боковая кнопка1\
+6: Боковая кнопка2
+%2=
+H|MousePos=Передвигает мышку к указанным координатам
+T|MousePos=MousePos 123 456\
+Передвинет мышку на координаты (123; 456), считая с левого верхнего угла
+H|GetKey=Узнаёт нажата ли кнопка
+T|GetKey=GetKey 65 KeyA\
+Запишет 1 (латинское "A" нажато) или 0 (латинское "A" отжато) в переменной "KeyA"\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+H|GetKeyTrigger=Узнаёт активирован ли триггер кнопки (как у CapsLock)
+T|GetKeyTrigger=GetKeyTrigger 20 CapsLockKey\
+Сохранит 1 (CapsLock включён) или 0 (CapsLock выключен) в переменной "CapsLockKey"\
+\
+Вы можете узнать код кнопки, запустив WK.exe и нажав нужную кнопку
+H|GetMousePos=Получает позицию курсора
+T|GetMousePos=GetMousePos MouseX MouseY\
+Запишет позицию курсора в "MouseX" и "MouseY", считая с левого верхнего угла
+%3=
+H|Jump=Переставляет точку выполнения к указаной метке
+T|Jump=Jump "#lable1"\
+Найдет метку "lable1" в данном файле и продолжит выполнение с неё\
+\
+Jump "file1.sac"\
+Найдёт файл "file1.sac" и выполнит его, вместо текущего\
+\
+Jump "file2.sac#lable2"\
+Найдёт метку "lable2" в файле "file2.sac" и продолжит выполнение с неё\
+\
+Jump null\
+Сработает как Return, потому что это прыжок в никуда\
+(В основном используется в JumpIf)
+H|JumpIf=Переставляет точку выполнения к 1 из 2 указаных меток
+T|JumpIf=JumpIf n < 5 #lable1 null\
+Если n меньше чем 5 - будет выполнено Jump "#lable1"\
+Иначе будет выполнено Jump null\
+\
+	В качестве символа сравнения можно использовать только ">", "<" или "="
+%4=
+H|Call=Переставляет точку выполнения к указаной метке, сохраняя текущую позицию
+T|Call=Call exec_point_name\
+Работает так же как Jump, но сохраняет текущую позицию\
+Когда будет выполнен Return или достигнут конец файла - будет загружена последняя сохранённая позиция\
+Вы можете сохранять несколько позиций друг за другому,\
+это позволяет делать рекурсивные алгоритмы\
+\
+Call null\
+Будет проигнорировано, потому что оно сохраняет позицию и сразу загружает её назад\
+(Jump null работает как Return)
+H|CallIf=Переставляет точку выполнения к 1 из 2 указаных меток, сохраняя текущую позицию
+T|CallIf=CallIf n < 5 #lable1 null\
+Если n меньше чем 5 - будет выполнено Call "#lable1"\
+Иначе будет выполнено Call null\
+\
+	В качестве символа сравнения можно использовать только ">", "<" или "="
+%5=
+H|Susp=Приостанавливает выполнение и ожидает нажатия кнопки(-ок) возобновления
+T|Susp=Susp\
+Приостановит выполнение и будет ждать нажатия кнопки(-ок) возобновления\
+Вы можете выбрать кнопки возобновления, нажав "Уст. кнопку" когда скрипт загружен
+H|Return=Работает как конец файла
+T|Return=Return\
+Вернёться к последнему вызову оператора Call/CallIf\
+Если их не было - выполнит Halt\
+\
+То же самое происходит в конце файла
+H|Halt=Останавливает скрипт
+T|Halt=Halt\
+Вызовет немедленное завершение работы SAC.exe
+%6=
+H|Sleep=Ждёт указанное кол-во миллисекунд
+T|Sleep=Sleep 500\
+Подождёт пол секунды, перед тем как продолжить выполняться
+H|Random=Генерирует псевдо-случайное число
+T|Random=Random r\
+Сгенерирует псевдо-случайное число в диапазоне [0,1) и сохранит в переменной "r"
+H|Output=Выписывает значение в вывод
+T|Output=Output 5+3\
+Выпишет "8" в стандартный вывод
