@@ -21,13 +21,25 @@ try
   
   if integer(flags and gres) <> 0 then
   begin
-    comp.FileName := 'ResGen\RC.exe';
-    comp.Arguments := $'"{System.IO.Path.GetFullPath(fname)}.rc"';
-    p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    //write(p.StandardOutput.ReadToEnd+#10);
     
-    Sleep(100);
+    loop 10 do
+    begin
+      comp.FileName := 'ResGen\RC.exe';
+      comp.Arguments := $'"{System.IO.Path.GetFullPath(fname)}.rc"';
+      p := System.Diagnostics.Process.Start(comp);
+      p.WaitForExit;
+      
+      var otp := p.StandardOutput.ReadToEnd;
+      if otp.Count(ch->ch=#10) > 3 then
+      begin
+        write($'{fname}: {otp}{#10}');
+        Sleep(1000);
+      end else
+        break;
+      
+    end;
+    
+    write($'{fname}: Created res{#10}{#10}');
   end;
   
   comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
@@ -40,8 +52,6 @@ try
   
   if integer(flags and exec) <> 0 then
   begin
-    Sleep(100);
-    
     comp.FileName := $'{fname}.exe';
     comp.Arguments := '';
     p := System.Diagnostics.Process.Start(comp);
@@ -51,14 +61,25 @@ try
   
   if integer(flags and mnft) <> 0 then
   begin
-    Sleep(100);
     
-    comp.FileName := 'ManifestGen\mt.exe';
-    comp.Arguments := $'-nologo -manifest "{System.IO.Path.GetFullPath(fname)}.exe.manifest" -outputresource:"{System.IO.Path.GetFullPath(fname)}.exe;#1"';
-    p := System.Diagnostics.Process.Start(comp);
-    p.WaitForExit;
-    var otp := p.StandardOutput.ReadToEnd;
-    if otp <> '' then write(otp+#10);
+    loop 10 do
+    begin
+      
+      comp.FileName := 'ManifestGen\mt.exe';
+      comp.Arguments := $'-nologo -manifest "{System.IO.Path.GetFullPath(fname)}.exe.manifest" -outputresource:"{System.IO.Path.GetFullPath(fname)}.exe;#1"';
+      p := System.Diagnostics.Process.Start(comp);
+      p.WaitForExit;
+      
+      var otp := p.StandardOutput.ReadToEnd;
+      if otp <> '' then
+      begin
+        write($'{fname}: {otp}{#10}');
+        Sleep(1000);
+      end else
+        break;
+    end;
+    
+    write($'{fname}: Added manifest{#10}{#10}');
   end;
   
 except

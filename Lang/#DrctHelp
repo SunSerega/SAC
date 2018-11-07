@@ -9,13 +9,13 @@ Will add all code from all specified files\
 \
 This directive have unlimited amount of operands, so you can't add comments to it
 ~RU
-%EnterName=Введите имя директивы чтоб получить её описание\
+%EnterName=Введите имя директивы, чтоб получить её описание\
 Введите пустую строку для списка директив
 H|FRef=Загружает файл, даже если он не будет использован в скрипте
 T|FRef=!Fref "f1.sac"\
 Добавить весь код из файла "f1.sac" в загруженный скрипт\
 \
 !Fref "f1.sac" "f2.sac"\
-Will add all code from all specified files\
+Добавить весь код из все указанные файлы\
 \
-This directive have unlimited amount of operands, so you can't add comments to it
+Эта директива имеет неограниченное кол-во операндов, поэтому к ней нельзя добавить комментарии

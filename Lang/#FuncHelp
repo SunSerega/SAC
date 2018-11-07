@@ -19,8 +19,8 @@ n3 is 0\
 n=Num("abc") (error, can't convert to Num)
 H|Ord=Gets id of symbol
 T|Ord=KeyP Ord("G")\
-Will press leter "G" on keyboard\
-Only works for eng. leters\
+Will press letter "G" on keyboard\
+Only works for eng. letters\
 \
 Also can be used with Chr for Unicode encoding/decoding
 %1=
@@ -34,7 +34,7 @@ s2 is "abc"\
 s3 is ""
 H|CutStr=Cuts and returns part of Str
 T|CutStr=s=CutStr("abcdef",2,4)\
-s is "cde" (because from leter #2, to leter #4)\
+s is "cde" (because from letter #2, to letter #4)\
 \
 There is also shortcut:\
 s="abcdef"[2..4]
@@ -44,7 +44,7 @@ T|DeflyNum=n1=DeflyNum(null) //0\
 n2=DeflyNum(3.4) //3.4\
 n3=DeflyNum("abc") //error
 ~RU
-%EnterName=Введите имя функции чтоб получить её описание\
+%EnterName=Введите имя функции, чтоб получить её описание\
 Введите пустую строку для списка функций
 H|Length=Получает длину строки
 T|Length=l=Length("abcd")\

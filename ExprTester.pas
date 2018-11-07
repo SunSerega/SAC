@@ -518,7 +518,8 @@ begin
     var res1 := ExprRes(te.GetExpRes);
     
     var e := Expr.FromString(s);
-    var oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
+    var oe := OptExprWrapper.FromExpr(e);
+    oe.Optimize(nvs.Keys.ToList, svs.Keys.ToList);
     var res2 := ExprRes(oe.Calc(nvs, svs));
     
     if ExprRes.CalcEqu(res1,res2) < 0.2 then
@@ -536,7 +537,8 @@ begin
       writeln($'Ожидалось:      {res1}');
       writeln($'Получили:       {res2}');
       write('-'*50);
-      oe := OptExprWrapper.FromExpr(e, nvs.Keys.ToList, svs.Keys.ToList);
+      oe := OptExprWrapper.FromExpr(e);
+      oe.Optimize(nvs.Keys.ToList, svs.Keys.ToList);
       res1 := ExprRes(te.GetExpRes);
       res2 := ExprRes(oe.Calc(nvs, svs));
       var b := ExprRes.CalcEqu(res1,res2);

@@ -1,11 +1,11 @@
 ﻿unit StmParser;
-//ToDo Убрать лишние поля StmBlock (там список локальных переменных и т.п., что должно сущесвовать только в определённых процедурах)
-//ToDo Добавить DeduseVarsTypes и Instatiate в ExprParser
+//ToDo Добавить DeduseVarsTypes в ExprParser
 //ToDo Удобный способ смотреть изначальный и оптимизированный вариант
 //ToDo Контекст ошибок, то есть при оптимизации надо сохранять номер строки
-//ToDo Оптимизация блоков, так чтоб они знали когда их результат - константа
+//ToDo Оптимизация стейтменов, так чтоб они знали когда их результат - константа
+//ToDo Jump и Call операторы не наследуют IFileRefStm
+//ToDo GetCalc должно возвращать последовательность экшенов, а не один комбинированный. Из OptExprWrapper тоже лучше перенести всё в GetCalc
 
-//ToDo Directives:  !StartPos (но запретить начинать с % меток)
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
 
@@ -21,6 +21,8 @@ type
   {$region pre desc}
   
   StmBase = class;
+  
+  StmBlockRef = class;
   
   StmBlock = class;
   Script = class;
@@ -190,7 +192,7 @@ type
   end;
   RefFileNotFound = class(FileCompilingException)
     
-    public constructor(source: StmBlock; fname: string) :=
+    public constructor(source: object; fname: string) :=
     inherited Create(source, $'File "{fname}" not found');
     
   end;
@@ -240,6 +242,12 @@ type
     
     public constructor(source: Script; comp: string) :=
     inherited Create(source, $'"{comp}" is not compare operator', KV('comp', object(comp)));
+    
+  end;
+  InvalidUseStartPosException = class(FileCompilingException)
+    
+    public constructor(source: Script) :=
+    inherited Create(source, $'!StartPos can only be placed after label or on begining of the file');
     
   end;
   
@@ -372,12 +380,15 @@ type
     
     public function GetCalc: Action<ExecutingContext>; abstract;
     
-    public function Optimize(nvs: Dictionary<string, real>; svs: Dictionary<string, string>; ovs: List<string>): StmBase; virtual := self;
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; virtual := self;
     
     public static function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
     
     public static function ObjToStr(o: object) :=
     OptExprBase.ObjToStr(o);
+    
+    public static function ObjToNum(o: object) :=
+    OptExprBase.ObjToNum(o);
     
     public function NumToInt(n: real): integer;
     begin
@@ -390,8 +401,6 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
     public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBase;
-    
-    public procedure FixPreLoadedStmBlockRefs(sbs: array of StmBlock); virtual := exit;
     
   end;
   ExprStm = sealed class(StmBase)
@@ -456,16 +465,16 @@ type
   
   StmBlock = class
     
+    public StartPos := false;
     public stms := new List<StmBase>;
-    public nvn := new List<string>;
-    public svn := new List<string>;
     public next: StmBlock := nil;
     public Execute: Action<ExecutingContext>;
     
     public fname: string;
+    public lbl: string;
     public scr: Script;
     
-    public function GetAllFRefs: sequence of OptExprBase;
+    public function GetAllFRefs: sequence of StmBlockRef;
     
     public procedure Seal;
     begin
@@ -476,9 +485,24 @@ type
     self.scr := scr;
     
     public procedure Save(bw: System.IO.BinaryWriter);
+    begin
+      bw.Write(StartPos);
+      
+      bw.Write(stms.Count);
+      foreach var stm in stms do
+        stm.Save(bw);
+      
+      if next=nil then
+        bw.Write(-1) else
+        next.SaveId(bw)
+      
+    end;
+    
+    public procedure SaveId(bw: System.IO.BinaryWriter);
     
     public procedure Load(br: System.IO.BinaryReader; sbs: array of StmBlock);
     begin
+      StartPos := br.ReadBoolean;
       
       var c := br.ReadInt32;
       self.stms := new List<StmBase>(c);
@@ -499,17 +523,22 @@ type
     end;
     
   end;
+  
   Script = class
     
     private static nfi := new System.Globalization.NumberFormatInfo;
     
-    public main_file_name: string;
+    public read_start_lbl_name: string;
     
     public otp: procedure(s: string);
     public susp_called: procedure;
     public stoped: procedure;
     
+    public LoadedFiles := new HashSet<string>;
     public sbs := new Dictionary<string, StmBlock>;
+    
+    private procedure ReadFile(context: object; lbl: string; fQu: List<StmBlock>);
+    private procedure ReadFileBatch(context: object; lbl: string);
     
     private static function CombinePaths(p1, p2: string): string;
     begin
@@ -546,15 +575,14 @@ type
     
     public constructor(fname: string);
     
-    public procedure Optimize(load_done: boolean);
+    public procedure Optimize;
     
     public procedure Execute :=
-    Execute(main_file_name);
+    Execute(read_start_lbl_name);
     
     public procedure Execute(entry_point: string);
     begin
-      if not entry_point.Split('\').Last.Contains('#') then entry_point += '#';
-      entry_point := (new System.IO.FileInfo(entry_point)).FullName;
+      if not entry_point.Contains('#') then entry_point += '#';
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
       while ec.ExecuteNext do;
       if stoped <> nil then
@@ -570,7 +598,7 @@ type
       
       var bw := new System.IO.BinaryWriter(str);
       
-      var main_fname := main_file_name.Split('#')[0];
+      var main_fname := read_start_lbl_name.Split('#')[0];
       var main_path := main_fname.Split('\').SkipLast.JoinIntoString('\');
       bw.Write(main_fname.Split('\').Last);
       
@@ -594,6 +622,7 @@ type
         end;
       end;
       
+      //str.Flush;
       str.Close;
     end;
     
@@ -617,9 +646,9 @@ type
         
         for var i := 0 to lsbs.Length-1 do
         begin
-          var lbl := $'{fname}#{br.ReadString}';
-          self.sbs.Add(lbl, lsbs[i]);
           lsbs[i].fname := fname;
+          lsbs[i].lbl := '#'+br.ReadString;
+          self.sbs.Add(fname + lsbs[i].lbl, lsbs[i]);
           lsbs[i].Load(br, lsbs);
           lsbs[i].Seal;
         end;
@@ -629,7 +658,7 @@ type
     end;
     
   end;
-  
+
   {$endregion Stm containers}
   
   {$region InputValue}
@@ -640,8 +669,6 @@ type
     
     public function GetRes: object; abstract;
     
-    public function Optimize(nvn, svn: List<string>): InputValue; virtual := self;
-    
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
   end;
@@ -651,6 +678,8 @@ type
     public res: string;
     
     public function GetRes: object; override := res;
+    
+    public function Optimize(nvn, svn: List<string>): InputSValue; virtual := self;
     
     public static function Load(br: System.IO.BinaryReader): InputSValue;
     
@@ -676,11 +705,11 @@ type
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Optimize(nvn, svn: List<string>): InputValue; override;
+    public function Optimize(nvn, svn: List<string>): InputSValue; override;
     begin
       oe.Optimize(nvn, svn);
       if oe.GetMain as IOptExpr is IOptLiteralExpr(var me) then
-        Result := new SInputSValue(string(me.GetRes)) else
+        Result := new SInputSValue(StmBase.ObjToStr(me.GetRes)) else
         Result := self;
     end;
     
@@ -690,7 +719,7 @@ type
     end;
     
     public constructor(s: string; bl: StmBlock) :=
-    oe := OptSExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, OptExprBase.AsStrExpr));
+    oe := OptSExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -705,6 +734,8 @@ type
     public res: real;
     
     public function GetRes: object; override := res;
+    
+    public function Optimize(nvn, svn: List<string>): InputNValue; virtual := self;
     
     public static function Load(br: System.IO.BinaryReader): InputNValue;
     
@@ -730,11 +761,11 @@ type
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Optimize(nvn, svn: List<string>): InputValue; override;
+    public function Optimize(nvn, svn: List<string>): InputNValue; override;
     begin
       oe.Optimize(nvn, svn);
       if oe.GetMain as IOptExpr is IOptLiteralExpr(var me) then
-        Result := new SInputNValue(real(me.GetRes)) else
+        Result := new SInputNValue(StmBase.ObjToNum(me.GetRes)) else
         Result := self;
     end;
     
@@ -744,7 +775,7 @@ type
     end;
     
     public constructor(s: string; bl: StmBlock) :=
-    oe := OptNExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), bl.nvn, bl.svn, oe->OptExprBase.AsDefinitelyNumExpr(oe)));
+    oe := OptNExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), oe->OptExprBase.AsDefinitelyNumExpr(oe)));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -760,9 +791,11 @@ type
   
   StmBlockRef = abstract class
     
-    function GetCalc: Action<ExecutingContext>; virtual := nil;
+    public function GetCalc: Action<ExecutingContext>; virtual := nil;
     
-    function GetBlock(ec: ExecutingContext): StmBlock; abstract;
+    public function GetBlock(curr: StmBlock): StmBlock; abstract;
+    
+    public function Optimize(bl: StmBlock; nvn: List<string>; svn: List<string>): StmBlockRef; virtual := self;
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -771,40 +804,55 @@ type
   end;
   StaticStmBlockRef = class(StmBlockRef)
     
-    bl: StmBlock;
+    public bl: StmBlock;
     
-    function GetBlock(ec: ExecutingContext): StmBlock; override := bl;
+    public function GetBlock(curr: StmBlock): StmBlock; override := bl;
+    
+    public constructor(bl: StmBlock) :=
+    self.bl := bl;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(1));
-      if bl = nil then bw.Write(-1) else
-      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=bl)[0]);
+      if bl = nil then
+        bw.Write(-1) else
+        bl.SaveId(bw);
     end;
     
   end;
   DynamicStmBlockRef = class(StmBlockRef)
     
-    s: InputSValue;
+    public s: InputSValue;
     
-    function GetCalc: Action<ExecutingContext>; override := s.GetCalc;
+    public function GetCalc: Action<ExecutingContext>; override := s.GetCalc();
     
-    function GetBlock(ec: ExecutingContext): StmBlock; override;
+    public function GetBlock(curr: StmBlock): StmBlock; override;
     begin
       var res := s.res;
       if res <> '' then
       begin
         if res.StartsWith('#') then
-          res := ec.curr.fname+res else
-          res := Script.CombinePaths(System.IO.Path.GetDirectoryName(ec.curr.fname), res);
+          res := curr.fname+res else
+          res := Script.CombinePaths(System.IO.Path.GetDirectoryName(curr.fname), res);
         
-        if not ec.scr.sbs.TryGetValue(res, Result) then
-          raise new LabelNotFoundException(ec.scr, res);
+        if not curr.scr.sbs.TryGetValue(res, Result) then
+          raise new LabelNotFoundException(curr.scr, res);
       end;
     end;
     
-    constructor(s: InputSValue) :=
+    public constructor(s: InputSValue) :=
     self.s := s;
+    
+    public function Optimize(bl: StmBlock; nvn: List<string>; svn: List<string>): StmBlockRef; override;
+    begin
+      s := s.Optimize(nvn, svn);
+      if s is SInputSValue then
+        Result := new StaticStmBlockRef(self.GetBlock(bl)) else
+        Result := self;
+    end;
+    
+    public function Optimize(bl: StmBlock) :=
+    Optimize(bl, new List<string>, new List<string>);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -820,19 +868,20 @@ type
   
   IFileRefStm = interface
     
-    function GetRefs: sequence of OptExprBase;
+    function GetRefs: sequence of StmBlockRef;
     
   end;
   
-  IJumpCallOper = interface
+  ///всё что перемещает точку выполнения (Jump, Call, Return, Halt, ...)
+  IContextJumpOper = interface
     
   end;
+  ///только Jump и Call операторы
+  IJumpCallOper = interface(IContextJumpOper)
+    
+  end;
+  ///только Call операторы
   ICallOper = interface(IJumpCallOper)
-    
-    property JumpBl: StmBlock read write;
-    
-  end;
-  IJumpOper = interface(IJumpCallOper)
     
   end;
   
@@ -1455,15 +1504,15 @@ type
   
   {$endregion Other simulators}
   
-  {$region Call/Jump}
+  {$region Jump/Call}
   
-  OperJump = class(OperStmBase, IJumpOper)
+  OperJump = class(OperStmBase, IJumpCallOper)
     
     public CalledBlock: StmBlockRef;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.next := self.CalledBlock.GetBlock(ec);
+      ec.next := CalledBlock.GetBlock(ec.curr);
     end;
     
     
@@ -1473,6 +1522,17 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+    end;
+    
+    public constructor(CalledBlock: StmBlockRef) :=
+    self.CalledBlock := CalledBlock;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
+      if CalledBlock is StaticStmBlockRef(var sbf) then
+        bl.next := sbf.bl else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1497,7 +1557,7 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperJumpIf = class(OperStmBase, IJumpOper)
+  OperJumpIf = class(OperStmBase, IJumpCallOper)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
@@ -1508,15 +1568,13 @@ type
     begin
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
+      ec.next :=
+        comp_obj(res1,res2)?
+        CalledBlock1.GetBlock(ec.curr):
+        CalledBlock2.GetBlock(ec.curr);
     end;
     
     
-    
-    public function Optimize(nvs: Dictionary<string, real>; svs: Dictionary<string, string>; ovs: List<string>): StmBase; override;
-    begin
-      
-    end;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -1530,8 +1588,8 @@ type
         else raise new InvalidCompNameException(sb.scr, par[2]);
       end;
       
-      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
-      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]), sb.nvn, sb.svn);
+      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
+      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]));
       
       CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
@@ -1550,6 +1608,22 @@ type
           less: Result := ObjToStr(o1) < ObjToStr(o2);
           more: Result := ObjToStr(o1) > ObjToStr(o2);
         end;
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      e1.Optimize(nvn, svn);
+      e2.Optimize(nvn, svn);
+      if
+        (e1.GetMain() is IOptLiteralExpr) and
+        (e2.GetMain() is IOptLiteralExpr)
+      then
+        Result := OperJump.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).Optimize(nvn, svn) else
+      begin
+        CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
+        CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
+        Result := self;
+      end;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1597,20 +1671,55 @@ type
     
   end;
   
-  OperCall = class(OperStmBase, ICallOper)
+  OperConstCall = class(OperStmBase, ICallOper)
     
-    public CalledBlock: StmBlockRef;
-    public next: StmBlock;
+    public CalledBlock: StmBlock;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(self.next);
-      ec.next := self.CalledBlock.GetBlock(ec);
+      ec.Push(bl.next);
+      ec.next := self.CalledBlock;
     end;
     
     
     
-    public property JumpBl: StmBlock read next write next;
+    public constructor(CalledBlock: StmBlock) :=
+    self.CalledBlock := CalledBlock;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(5));
+      CalledBlock.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    begin
+      var res := new OperConstCall;
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < sbs.Length then
+          res.bl := sbs[n] else
+          raise new InvalidStmBlIdException(n, sbs.Length);
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    self.Calc;
+    
+  end;
+  OperCall = class(OperStmBase, ICallOper)
+    
+    public CalledBlock: StmBlockRef;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.Push(bl.next);
+      ec.next := self.CalledBlock.GetBlock(ec.curr);
+    end;
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -1619,28 +1728,31 @@ type
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
     end;
     
+    public constructor(CalledBlock: StmBlockRef) :=
+    self.CalledBlock := CalledBlock;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
+      if CalledBlock is StaticStmBlockRef(var sbf) then
+        Result := new OperConstCall(sbf.bl) else
+        Result := self;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
       bw.Write(byte(4));
       bw.Write(byte(3));
       CalledBlock.Save(bw);
-      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=next)[0]);
     end;
     
     public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
     begin
       var res := new OperCall;
       res.CalledBlock := StmBlockRef.Load(br, sbs);
-      var n := br.ReadInt32;
-      if n <> -1 then
-        if cardinal(n) < sbs.Length then
-          res.next := sbs[n] else
-          raise new InvalidStmBlIdException(n, sbs.Length);
       Result := res;
     end;
-    
-    public procedure FixPreLoadedStmBlockRefs(sbs: array of StmBlock); override := exit;//ToDo
     
     public function GetCalc: Action<ExecutingContext>; override :=
     System.Delegate.Combine(
@@ -1655,19 +1767,19 @@ type
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
-    public next: StmBlock;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(self.next);
+      ec.Push(bl.next);
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
-      ec.next := comp_obj(res1,res2)?CalledBlock1.GetBlock(ec):CalledBlock2.GetBlock(ec);
+      ec.next :=
+        comp_obj(res1,res2)?
+        CalledBlock1.GetBlock(ec.curr):
+        CalledBlock2.GetBlock(ec.curr);
     end;
     
     
-    
-    public property JumpBl: StmBlock read next write next;
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -1681,8 +1793,8 @@ type
         else raise new InvalidCompNameException(sb.scr, par[2]);
       end;
       
-      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]), sb.nvn, sb.svn);
-      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]), sb.nvn, sb.svn);
+      e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
+      e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]));
       
       CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
@@ -1703,6 +1815,22 @@ type
         end;
     end;
     
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      e1.Optimize(nvn, svn);
+      e2.Optimize(nvn, svn);
+      if
+        (e1.GetMain() is IOptLiteralExpr) and
+        (e2.GetMain() is IOptLiteralExpr)
+      then
+        Result := OperCall.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).Optimize(nvn, svn) else
+      begin
+        CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
+        CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
+        Result := self;
+      end;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1713,7 +1841,6 @@ type
       e2.Save(bw);
       CalledBlock1.Save(bw);
       CalledBlock2.Save(bw);
-      bw.Write(bl.scr.sbs.Values.Numerate(0).First(t->t[1]=next)[0]);
     end;
     
     public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
@@ -1737,11 +1864,6 @@ type
       res.CalledBlock1 := StmBlockRef.Load(br, sbs);
       res.CalledBlock2 := StmBlockRef.Load(br, sbs);
       
-      var n := br.ReadInt32;
-      if cardinal(n) < sbs.Length then
-        res.next := sbs[n] else
-        raise new InvalidStmBlIdException(n, sbs.Length);
-        
       Result := res;
     end;
     
@@ -1754,7 +1876,7 @@ type
     
   end;
   
-  {$endregion Call/Jump}
+  {$endregion Jump/Call}
   
   {$region ExecutingContext chandgers}
   
@@ -1782,7 +1904,7 @@ type
     end;
     
   end;
-  OperReturn = class(OperStmBase, IJumpOper)
+  OperReturn = class(OperStmBase, IContextJumpOper)
     
     public constructor(bl: StmBlock);
     begin
@@ -1800,7 +1922,7 @@ type
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
-  OperHalt = class(OperStmBase, IJumpOper)
+  OperHalt = class(OperStmBase, IContextJumpOper)
     
     public constructor(bl: StmBlock);
     begin
@@ -1950,8 +2072,8 @@ type
     
     public fns: array of string;
     
-    function GetRefs: sequence of OptExprBase :=
-    fns.Select(fn->new OptSLiteralExpr(fn) as OptExprBase);
+    function GetRefs: sequence of StmBlockRef :=
+    fns.Select(fn->DynamicStmBlockRef.Create(new SInputSValue(fn)).Optimize(self.bl));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1985,19 +2107,28 @@ implementation
 
 {$region constructor's}
 
+{$region Single stm}
+
 constructor ExprStm.Create(sb: StmBlock; text: string);
 begin
   var ss := text.SmartSplit('=', 2);
   self.v_name := ss[0];
-  self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]),sb.nvn, sb.svn);
+  self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]));
 end;
 
 static function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
 begin
   var p := text.Split(new char[]('='),2);
-  case p[0] of
+  case p[0].ToLower of
+    
     '!fref': Result := new DrctFRef(p[1].Split(','));
-  else raise new UndefinedDirectiveNameException(sb, text);
+    
+    '!startpos':
+    if (sb.stms.Count = 0) and (not sb.lbl.StartsWith('#%')) and not sb.StartPos then
+      sb.StartPos := true else
+      raise new InvalidUseStartPosException(sb.scr);
+    
+    else raise new UndefinedDirectiveNameException(sb, text);
   end;
 end;
 
@@ -2032,122 +2163,130 @@ begin
     'random': Result := new OperRandom(sb, par);
     'output': Result := new OperOutput(sb, par);
     
-  else raise new UndefinedOperNameException(sb, par[0]);
+    else raise new UndefinedOperNameException(sb, par[0]);
   end;
 end;
 
 static function StmBase.FromString(sb: StmBlock; s: string; par: array of string): StmBase;
 begin
   if s.StartsWith('!') then
-    Result := DrctStmBase.FromString(sb, s);
+    Result := DrctStmBase.FromString(sb, s) else
   if par[0].Contains('=') then
     Result := ExprStm.Create(sb, s) else
     Result := OperStmBase.FromString(sb, par);
   
+  if Result=nil then exit;
   Result.bl := sb;
   Result.scr := sb.scr;
 end;
 
-constructor Script.Create(fname: string);
+{$endregion Single stm}
+
+{$region Script}
+
+procedure Script.ReadFile(context: object; lbl: string; fQu: List<StmBlock>);
+begin
+  if not LoadedFiles.Add(lbl) then exit;
+  
+  var fi := new System.IO.FileInfo(lbl);
+  if not fi.Exists then raise new RefFileNotFound(context, fi.FullName);
+  var ffname := fi.FullName;
+  
+  var lns: array of string;
+  begin
+    var str := fi.OpenRead;
+    
+    var sr := new System.IO.StreamReader(str);
+    
+    var pc_str := '!PreComp=';
+    var buff := new char[pc_str.Length];
+    sr.ReadBlock(buff,0,buff.Length);
+    if new string(buff) = pc_str then
+    begin
+      str.Position := buff.Length;
+      var br := new System.IO.BinaryReader(str);
+      self.Load(ffname, br);
+      exit;
+    end;
+    
+    str.Position := 0;
+    sr := new System.IO.StreamReader(str);
+    lns := sr.ReadToEnd.Remove(#13).Split(#10);
+    sr.Close;
+    
+  end;
+  
+  var last := new StmBlock(self);
+  var lname := ffname+'#';
+  
+  var tmp_b_c := 0;
+  var skp_ar := false;
+  
+  foreach var ss in lns do
+    if ss <> '' then
+    begin
+      var s := ss.SmartSplit(' ',2)[0];
+      
+      if s.StartsWith('#') then
+      begin
+        
+        if s.Contains('%') then raise new InvalidLabelCharactersException(last, s, '%');
+        sbs.Add(lname, last);
+        last.fname := ffname;
+        last.lbl := lname.Remove(0,lname.IndexOf('#'));
+        if skp_ar then
+        begin
+          last.Seal;
+          last := new StmBlock(self);
+          skp_ar := false;
+        end else
+        begin
+          last.Seal;
+          last.next := new StmBlock(self);
+          last := last.next;
+        end;
+        lname := ffname+s;
+        
+      end else
+        if (s <> '') and not skp_ar then
+        begin
+          var stm := StmBase.FromString(last, s, ss.SmartSplit);
+          if stm=nil then continue;
+          
+          if stm is ICallOper then
+          begin
+            last.stms.Add(stm);
+            sbs.Add(lname, last);
+            last.fname := ffname;
+            last.lbl := lname.Remove(0,lname.IndexOf('#'));
+            last.Seal;
+            last.next := new StmBlock(self);
+            last := last.next;
+            lname := $'{ffname}#%{tmp_b_c}';
+            tmp_b_c += 1;
+          end else
+          if stm is IContextJumpOper then
+          begin
+            if stm is IJumpCallOper then last.stms.Add(stm);
+            skp_ar := true;
+          end else
+            last.stms.Add(stm);
+        end;
+    end;
+  
+  last.fname := ffname;
+  last.lbl := lname.Remove(0,lname.IndexOf('#'));
+  last.Seal;
+  sbs.Add(lname, last);
+end;
+
+procedure Script.ReadFileBatch(context: object; lbl: string);
 begin
   var fQu := new List<StmBlock>;
   
-  var LoadedFiles := new HashSet<string>;
-  {$region LoadFile}
-  var LoadFile: procedure(sb: StmBlock; f: string) :=
-  (sb, f)->
-  begin
-    if not LoadedFiles.Add(f) then exit;
-    
-    var fi := new System.IO.FileInfo(f);
-    if not fi.Exists then raise new RefFileNotFound(sb, fi.FullName);
-    var ffname := fi.FullName;
-    
-    var lns: array of string;
-    begin
-      var str := fi.OpenRead;
-      
-      var sr := new System.IO.StreamReader(str);
-      
-      var pc_str := '!PreComp=';
-      var buff := new char[pc_str.Length];
-      sr.ReadBlock(buff,0,buff.Length);
-      if new string(buff) = pc_str then
-      begin
-        str.Position := buff.Length;
-        var br := new System.IO.BinaryReader(str);
-        self.Load(ffname, br);
-        exit;
-      end;
-      
-      str.Position := 0;
-      sr := new System.IO.StreamReader(str);
-      lns := sr.ReadToEnd.Remove(#13).Split(#10);
-      sr.Close;
-      
-    end;
-    
-    var last := new StmBlock(self);
-    var lname := ffname+'#';
-    
-    var tmp_b_c := 0;
-    var skp_ar := false;
-    
-    foreach var ss in lns do
-      if ss <> '' then
-      begin
-        var s := ss.SmartSplit(' ',2)[0];
-        
-        if s.StartsWith('#') then
-        begin
-          
-          if s.Contains('%') then raise new InvalidLabelCharactersException(last, s, '%');
-          sbs.Add(lname, last);
-          last.fname := ffname;
-          if skp_ar then
-          begin
-            last.Seal;
-            last := new StmBlock(self);
-            skp_ar := false;
-          end else
-          begin
-            last.next := new StmBlock(self);
-            last.Seal;
-            last := last.next;
-          end;
-          lname := ffname+s;
-          
-        end else
-          if (s <> '') and not skp_ar then
-          begin
-            var stm := StmBase.FromString(last, s, ss.SmartSplit);
-            last.stms.Add(stm);
-            if stm is ICallOper{(var ico)} then//ToDo #незнаю_ибо_нет_инета
-            begin
-              sbs.Add(lname, last);
-              last.fname := ffname;
-              last.Seal;
-              last := new StmBlock(self);
-              //ico.SetNext(last);//ToDo #незнаю_ибо_нет_инета
-              ICallOper(stm).JumpBl := last;
-              lname := ffname+'#%'+tmp_b_c;
-              tmp_b_c += 1;
-            end else
-            if stm is IJumpOper then
-              skp_ar := true;
-          end;
-      end;
-    
-    last.fname := ffname;
-    last.Seal;
-    sbs.Add(lname, last);
-  end;
-  {$endregion LoadFile}
-  
-  main_file_name := (new System.IO.FileInfo(fname)).FullName;
-  LoadFile(nil, main_file_name);
+  ReadFile(context, lbl, fQu);
   var any_done := true;
-  var all_frefs_static := true;
+  
   while any_done do
   begin
     any_done := false;
@@ -2158,61 +2297,45 @@ begin
     begin
       var dir := System.IO.Path.GetDirectoryName(sb.fname)+'\';
       
-      foreach var oe in sb.GetAllFRefs do
-        if oe is IOptLiteralExpr then
+      foreach var ref in sb.GetAllFRefs do
+        if ref is StaticStmBlockRef then
         begin
-          var res := oe.GetRes;
-          if (res = nil) or (res as string = 'null') then continue;
-          if res is real(var n) then
-            res := n.ToString(nfi);
-          
-          var s := res as string;
+          var s := StmBase.ObjToStr(ref.GetBlock(nil));
+          if s = '' then continue;
           s := s.Split(new char[]('#'),2)[0];
           
-          LoadFile(sb, CombinePaths(dir, s));
-        end else
-          all_frefs_static := false;
+          ReadFile(nil, CombinePaths(dir, s), fQu);
+        end;
       
     end;
     
   end;
   
-  self.Optimize(all_frefs_static);
 end;
+
+constructor Script.Create(fname: string);
+begin
+  
+  read_start_lbl_name := System.IO.Path.GetFullPath(fname);
+  ReadFileBatch(nil, read_start_lbl_name);
+  
+  self.Optimize;
+end;
+
+{$endregion Script}
 
 {$endregion constructor's}
 
-function StmBlock.GetAllFRefs: sequence of OptExprBase;
+{$region Misc Impl}
+
+procedure StmBlock.SaveId(bw: System.IO.BinaryWriter) :=
+bw.Write(scr.sbs.Values.Numerate(0).First(t->t[1]=self)[0]);
+
+function StmBlock.GetAllFRefs: sequence of StmBlockRef;
 begin
   foreach var op in stms do
     if op as object is IFileRefStm(var frs) then
       yield sequence frs.GetRefs;
-end;
-
-procedure Script.Optimize(load_done: boolean);
-begin
-  
-  exit;
-  var njbs: List<StmBlock>;
-  njbs := self.sbs.Values.Where(bl->not (bl.stms.Last is IJumpCallOper)).ToList;//ошибка если в stms нету ни 1 оператора
-  var prev_njbs := new HashSet<StmBlock>;
-  while njbs.Count <> 0 do
-  begin
-    foreach var njb in njbs do
-      foreach var bl: StmBlock in self.sbs.Values do
-        if (bl.stms.Last as object is IJumpOper(var ijo)) and false then//ToDo if ijo.next=njb
-        begin
-          var Main_ToDo_Opt := 0;
-          bl.stms.Remove(bl.stms.Last);
-          bl.stms.AddRange(njb.stms);
-        end else
-        if (not (bl.stms.Last is IJumpCallOper)) and (bl.next = njb) then
-          bl.stms.AddRange(njb.stms);
-    
-    prev_njbs += njbs;
-    njbs := self.sbs.Values.Where(bl->not (prev_njbs.Contains(bl) or (bl.stms.Last is IJumpCallOper))).ToList;
-  end;
-  
 end;
 
 function ExecutingContext.ExecuteNext: boolean;
@@ -2227,20 +2350,142 @@ begin
   end;
 end;
 
-{$region Save/Load}
+{$endregion Misc Impl}
 
-procedure StmBlock.Save(bw: System.IO.BinaryWriter);
+{$region Script optimization}
+
+function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>): boolean;
 begin
+  Result := true;
   
-  bw.Write(stms.Count);
-  foreach var stm in stms do
-    stm.Save(bw);
+  var curr := bl;
   
-  var ind := scr.sbs.Values.Numerate(0).FirstOrDefault(t->t[1]=next);
+  var nvn := new List<string>;
+  var svn := new List<string>;
   
-  bw.Write(ind=nil?-1:ind[0]);
+  while curr <> nil do
+  begin
+    
+    var pi := bl_lst.IndexOf(curr);
+    if pi <> -1 then
+    begin
+      
+      if pi <> 0 then
+      begin
+        bl.next := bl_lst[pi];
+        var stm_ind := ind_lst[pi-1];
+        stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
+        bl_lst.RemoveRange(pi, bl_lst.Count-pi);
+        //ind_lst.RemoveRange//нигде дальше всё равно не используется
+      end;
+      
+      Result := false;
+      break;
+    end;
+    
+    
+    
+    bl_lst.Add(curr);
+    
+    foreach var stm in curr.stms do
+      stm_lst.Add(stm.Optimize(nvn, svn));
+    
+    var last := stm_lst[stm_lst.Count-1];
+    if last is OperConstCall(var occ) then
+    begin
+      stm_lst.RemoveLast;
+      ind_lst.Add(stm_lst.Count);
+      
+      if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst) then
+      begin
+        Result := false;//bl.next не надо присваивать, его уже изменило в рекурсивном вызове GetBlockChain
+        break;
+      end;
+      
+    end else
+      ind_lst.Add(stm_lst.Count);
+    
+    
+    
+    if stm_lst[stm_lst.Count-1] is IJumpCallOper then
+    begin
+      bl.next := nil;
+      Result := false;
+      break;
+    end;
+    
+    curr := curr.next;
+  end;
   
 end;
+
+procedure Script.Optimize;
+begin
+  
+  var nopt: boolean;
+  repeat
+    nopt := true;
+    
+    foreach var bl: StmBlock in sbs.Values do
+    begin
+      var stms := new List<StmBase>;
+      
+      if GetBlockChain(bl, new List<StmBlock>, stms, new List<integer>) then
+        bl.next := nil;
+      
+      nopt := nopt and bl.stms.SequenceEqual(stms);
+      
+      bl.stms := stms;
+      
+    end;
+    
+  until nopt;
+  
+  
+  
+  if sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
+  begin
+    LoadedFiles := nil;
+    var skip_nsp := sbs.Values.Any(sb->sb.StartPos);
+    
+    var ref_bl := new HashSet<StmBlock>;
+    foreach var bl: StmBlock in sbs.Values do
+      if bl.StartPos or not skip_nsp then
+      begin
+        ref_bl += bl;
+        ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
+        ref_bl += bl.next;
+      end;
+    
+    var lc: integer;
+    
+    repeat
+      lc := ref_bl.Count;
+      
+      foreach var bl in ref_bl.ToList do
+        if bl.StartPos or not skip_nsp then
+        begin
+          ref_bl += bl;
+          ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
+          ref_bl += bl.next;
+        end;
+      
+    until lc=ref_bl.Count;
+    
+    foreach var kvp: KeyValuePair<string, StmBlock> in sbs.ToList do
+      if not ref_bl.Contains(kvp.Value) then
+        sbs.Remove(kvp.Key);
+    
+  end;
+    
+  foreach var bl: StmBlock in sbs.Values do
+    bl.Seal;
+  
+end;
+
+{$endregion Script optimizing}
+
+{$region Save/Load}
 
 static function InputSValue.Load(br: System.IO.BinaryReader): InputSValue;
 begin
@@ -2400,10 +2645,6 @@ begin
 end;
 
 {$endregion Save/Load}
-
-{$region temp_reg}
-
-{$endregion temp_reg}
 
 begin
   try

@@ -1,6 +1,7 @@
 ﻿unit ExprParser;
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
-//ToDo Заменить "... as T" на "T(...)", и другие фиксы is/as, но только когда выйдет билд с фиксом для is-var
+//ToDo Заменить "... as T" на "T(...)", и другие фиксы is/as (билд с фиксом для is-var вышел)
+//ToDo OptExprBase.Load неправильные имена. не svn, nvn и т.д., а sv, nv
 
 //ToDo ClampLists:  Реализовать
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
@@ -2713,7 +2714,7 @@ type
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; abstract;
     
-    public static function FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase := nil): OptExprWrapper;
+    public static function FromExpr(e: Expr; conv: OptExprBase->OptExprBase := nil): OptExprWrapper;
     
     public procedure Save(bw: System.IO.BinaryWriter);
     begin
@@ -3726,32 +3727,11 @@ type
       end;
     end;
     
-    static function GetOptExprWrapper(e: Expr; g_n_vars_names, g_s_vars_names: List<string>; conv: OptExprBase->OptExprBase): OptExprWrapper;
+    static function GetOptExprWrapper(e: Expr; conv: OptExprBase->OptExprBase): OptExprWrapper;
     begin
       
       var Main := GetOptExpr(e);
-      
-      var lnvn := new List<string>;
-      var lsvn := new List<string>;
-      var lovn := new List<string>;
-      foreach var vn in Main.GetVarNames(nil,nil,nil) do
-        if g_n_vars_names.Contains(vn) then
-          lnvn.Add(vn) else
-        if g_s_vars_names.Contains(vn) then
-          lsvn.Add(vn) else
-          lovn.Add(vn);
-      
-      var n_vars := ArrFill(lnvn.Count, 0.0);
-      var s_vars := ArrFill(lsvn.Count, '');
-      var o_vars := ArrFill(lovn.Count, object(nil));
-      
-      var n_vars_names := lnvn.ToArray;
-      var s_vars_names := lsvn.ToArray;
-      var o_vars_names := lovn.ToArray;
-      
       if conv <> nil then Main := conv(Main as OptExprBase);
-      Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
-      Main := Main.Optimize.Openup.Optimize;
       
       if Main is OptNExprBase then
         Result := new OptNExprWrapper(Main as OptNExprBase) else
@@ -3759,17 +3739,23 @@ type
         Result := new OptSExprWrapper(Main as OptSExprBase) else
         Result := new OptOExprWrapper(Main as OptOExprBase);
       
+      Result.n_vars_names := new string[0];
+      Result.s_vars_names := new string[0];
+      Result.o_vars_names := Main.GetVarNames(nil,nil,nil).ToArray;
       
+      Result.n_vars := new real[0];
+      Result.s_vars := new string[0];
+      Result.o_vars := ArrFill(Result.o_vars_names.Length, object(nil));
       
-      Result.n_vars_names := n_vars_names;
-      Result.s_vars_names := s_vars_names;
-      Result.o_vars_names := o_vars_names;
-      
-      Result.n_vars := n_vars;
-      Result.s_vars := s_vars;
-      Result.o_vars := o_vars;
-      
-      
+      Main := Main.FixVarExprs(
+        Result.n_vars,
+        Result.s_vars,
+        Result.o_vars,
+        
+        Result.n_vars_names,
+        Result.s_vars_names,
+        Result.o_vars_names
+      );
       
       Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
       
@@ -3777,8 +3763,8 @@ type
     
   end;
 
-static function OptExprWrapper.FromExpr(e: Expr; n_vars_names, s_vars_names: List<string>; conv: OptExprBase->OptExprBase) :=
-OptConverter.GetOptExprWrapper(e, n_vars_names, s_vars_names, conv);
+static function OptExprWrapper.FromExpr(e: Expr; conv: OptExprBase->OptExprBase) :=
+OptConverter.GetOptExprWrapper(e, conv);
 
 {$endregion OptConverter}
 
