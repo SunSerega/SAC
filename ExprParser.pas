@@ -470,6 +470,9 @@ type
   
   {$region Base}
   
+  OptNExprBase=class;
+  OptSExprBase=class;
+  
   IOptExpr = interface
     
     function GetRes: Object;
@@ -490,8 +493,8 @@ type
     
     protected static nfi := new System.Globalization.NumberFormatInfo;
     
-    public static function AsStrExpr(o: OptExprBase): OptExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
-    public static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
+    public static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptNExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
+    public static function AsStrExpr(o: OptExprBase): OptSExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
     
     public static function ObjToStr(o: object): string;
     begin
@@ -837,7 +840,7 @@ type
         
         foreach var oe in Positive do
           if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
-            res.Positive.AddRange(ope.GetPositive.Select(oe->AsStrExpr(oe) as OptSExprBase)) else
+            res.Positive.AddRange(ope.GetPositive.Select(oe->AsStrExpr(oe))) else
             res.Positive.Add(oe);
         
         Result := res;
@@ -1481,8 +1484,8 @@ type
             p.Positive.Add(oe as OptNExprBase) else
             
             //--------//ToDo #1417 //ToDo #1418
-            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](Base, oe))) as OptNExprBase);
-            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))) as OptNExprBase);
+            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](Base, oe))));
+            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))));
             //--------
         
         if res.Positive is OptNNMltExpr(var onme) then
@@ -1629,8 +1632,8 @@ type
             p.Positive.Add(oe as OptNExprBase) else
             
             //--------//ToDo #1417 //ToDo #1418
-            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](res_copy.Base, oe))) as OptNExprBase);
-            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))) as OptNExprBase);
+            //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](res_copy.Base, oe))));
+            p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))));
             //--------
         
         foreach var oe in ome.GetNegative do
@@ -1640,17 +1643,17 @@ type
             p.Negative.Add(oe as OptNExprBase) else
             
             //--------//ToDo #1417 //ToDo #1418
-            p.Negative.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil, nil)) as OptNExprBase);
+            p.Negative.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil, nil)));
             //--------
         
         if self.Positive is IOptMltExpr(var ome2) then
         begin
           //--------//ToDo #1417 //ToDo #1418
-          p.Positive.AddRange(ome2.GetPositive.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,nil)) as OptNExprBase));
-          p.Negative.AddRange(ome2.GetNegative.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil,nil)) as OptNExprBase));
+          p.Positive.AddRange(ome2.GetPositive.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,nil))));
+          p.Negative.AddRange(ome2.GetNegative.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil,nil))));
         end else
           //--------//ToDo #1417 //ToDo #1418
-          p.Positive.Add(AsDefinitelyNumExpr(self.Positive, procedure->raise new CannotMltALotStringsException(nil,nil)) as OptNExprBase);
+          p.Positive.Add(AsDefinitelyNumExpr(self.Positive, procedure->raise new CannotMltALotStringsException(nil,nil)));
         
         Result := res;
       end else
@@ -2010,7 +2013,7 @@ type
         foreach var oe in ope.GetPositive do
           if oe is OptNExprBase then
             res.Positive.Add(oe as OptNExprBase) else
-            res.Positive.Add(AsDefinitelyNumExpr(oe) as OptNExprBase);
+            res.Positive.Add(AsDefinitelyNumExpr(oe));
         
         res.Positive.AddRange(self.Positive.Skip(1));
         Result := res;
@@ -3547,11 +3550,11 @@ type
 
 {$region some impl}
 
-static function OptExprBase.AsStrExpr(o: OptExprBase): OptExprBase :=
-new OptFunc_Str(new OptExprBase[](o));
-
-static function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptExprBase :=
+static function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptNExprBase :=
 new OptFunc_DeflyNum(new OptExprBase[](o), ifnot);
+
+static function OptExprBase.AsStrExpr(o: OptExprBase): OptSExprBase :=
+new OptFunc_Str(new OptExprBase[](o));
 
 function UnOptVarExpr.FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
 begin

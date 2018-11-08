@@ -1,6 +1,8 @@
 ﻿unit StmParser;
 //ToDo Добавить DeduseVarsTypes в ExprParser
 //ToDo Контекст ошибок
+//ToDo использовать FinalFixVarExprs (превращает все не найденные переменные в null)
+
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
 // - так же если следующий блок не может быть стартовой пизицией - можно перенести переменную-литерал в него
 
@@ -729,7 +731,7 @@ type
     end;
     
     public constructor(s: string; bl: StmBlock) :=
-    oe := OptSExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr));
+    oe := OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr) as OptSExprWrapper;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -785,7 +787,7 @@ type
     end;
     
     public constructor(s: string; bl: StmBlock) :=
-    oe := OptNExprWrapper(OptExprWrapper.FromExpr(Expr.FromString(s), oe->OptExprBase.AsDefinitelyNumExpr(oe)));
+    oe := OptExprWrapper.FromExpr(Expr.FromString(s), oe->OptExprBase.AsDefinitelyNumExpr(oe)) as OptNExprWrapper;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
