@@ -1,10 +1,9 @@
 ﻿unit StmParser;
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo Удобный способ смотреть изначальный и оптимизированный вариант
-//ToDo Контекст ошибок, то есть при оптимизации надо сохранять номер строки
-//ToDo Оптимизация стейтменов, так чтоб они знали когда их результат - константа
-//ToDo Jump и Call операторы не наследуют IFileRefStm
+//ToDo Контекст ошибок
 //ToDo GetCalc должно возвращать последовательность экшенов, а не один комбинированный. Из OptExprWrapper тоже лучше перенести всё в GetCalc
+//ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
+// - так же если следующий блок не может быть стартовой пизицией - можно перенести переменную-литерал в него
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -235,7 +234,7 @@ type
   InvalidMouseKeyCodeException = class(FileCompilingException)
     
     public constructor(source: Script; k: integer) :=
-    inherited Create(source, $'Mouse key code must be 1..2 or 4..6, it can''t be {k}', KV('k'+'', object(k)));
+    inherited Create(source, $'Mouse key code must be 1,2 or 4..6, it can''t be {k}', KV('k'+'', object(k)));
     
   end;
   InvalidCompNameException = class(FileCompilingException)
@@ -529,6 +528,7 @@ type
     private static nfi := new System.Globalization.NumberFormatInfo;
     
     public read_start_lbl_name: string;
+    public start_pos_def := false;
     
     public otp: procedure(s: string);
     public susp_called: procedure;
@@ -708,7 +708,7 @@ type
     public function Optimize(nvn, svn: List<string>): InputSValue; override;
     begin
       oe.Optimize(nvn, svn);
-      if oe.GetMain as IOptExpr is IOptLiteralExpr(var me) then
+      if oe.Main as IOptExpr is IOptLiteralExpr(var me) then
         Result := new SInputSValue(StmBase.ObjToStr(me.GetRes)) else
         Result := self;
     end;
@@ -764,7 +764,7 @@ type
     public function Optimize(nvn, svn: List<string>): InputNValue; override;
     begin
       oe.Optimize(nvn, svn);
-      if oe.GetMain as IOptExpr is IOptLiteralExpr(var me) then
+      if oe.Main as IOptExpr is IOptLiteralExpr(var me) then
         Result := new SInputNValue(StmBase.ObjToNum(me.GetRes)) else
         Result := self;
     end;
@@ -836,7 +836,11 @@ type
           res := Script.CombinePaths(System.IO.Path.GetDirectoryName(curr.fname), res);
         
         if not curr.scr.sbs.TryGetValue(res, Result) then
-          raise new LabelNotFoundException(curr.scr, res);
+        begin
+          curr.scr.ReadFileBatch(nil, res);
+          if not curr.scr.sbs.TryGetValue(res, Result) then
+            raise new LabelNotFoundException(curr.scr, res);
+        end;
       end;
     end;
     
@@ -891,57 +895,112 @@ type
   
   {$region Key}
   
-  OperKey = class(OperStmBase)
+  OperConstKeyDown = class(OperStmBase)
     
-    public kk, dp: InputNValue;
+    public kk: byte;
+    
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    keybd_event(kk, 0, 0, 0);
+    
+    
+    
+    public constructor(kk: byte) :=
+    self.kk := kk;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte($80 and 2));
+      bw.Write(kk);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstKeyDown;
+      res.kk := br.ReadByte;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  OperConstKeyUp = class(OperStmBase)
+    
+    public kk: byte;
+    
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    keybd_event(kk, 0, 2, 0);
+    
+    
+    
+    public constructor(kk: byte) :=
+    self.kk := kk;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(1));
+      bw.Write(byte($80 and 3));
+      bw.Write(kk);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstKeyUp;
+      res.kk := br.ReadByte;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  OperConstKeyPress = class(OperStmBase)
+    
+    public kk: byte;
     
     static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
-      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-      var p := NumToInt(dp.res);
-      if p and $1 = $1 then keybd_event(n,0,0,0);
-      if p and $2 = $2 then keybd_event(n,0,2,0);
+      keybd_event(kk, 0, 0, 0);
+      keybd_event(kk, 0, 2, 0);
     end;
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
-    begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
-      
-      kk := new DInputNValue(par[1], sb);
-      dp := new DInputNValue(par[2], sb);
-    end;
+    public constructor(kk: byte) :=
+    self.kk := kk;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
       bw.Write(byte(1));
-      bw.Write(byte(1));
-      kk.Save(bw);
-      dp.Save(bw);
+      bw.Write(byte($80 and 4));
+      bw.Write(kk);
     end;
     
     public static function Load(br: System.IO.BinaryReader): OperStmBase;
     begin
-      var res := new OperKey;
-      res.kk := InputNValue.Load(br);
-      res.dp := InputNValue.Load(br);
+      var res := new OperConstKeyPress;
+      res.kk := br.ReadByte;
       Result := res;
     end;
     
     public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
-      kk.GetCalc(),
-      dp.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+    Calc;
     
   end;
+  
   OperKeyDown = class(OperStmBase)
     
     public kk: InputNValue;
@@ -963,6 +1022,21 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
+        Result := new OperConstKeyDown(ikk);
+      end else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1008,6 +1082,21 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
+        Result := new OperConstKeyUp(ikk);
+      end else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1056,6 +1145,21 @@ type
       kk := new DInputNValue(par[1], sb);
     end;
     
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
+        Result := new OperConstKeyPress(ikk);
+      end else
+        Result := self;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1078,35 +1182,20 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  
-  {$endregion Key}
-  
-  {$region Mouse}
-  
-  OperMouse = class(OperStmBase)
+  OperKey = class(OperStmBase)
     
     public kk, dp: InputNValue;
     
-    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: cardinal);
-    external 'User32.dll' name 'mouse_event';
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      
-      var p: cardinal;
-      case NumToInt(kk.res) of
-        1: p := $002;
-        2: p := $008;
-        4: p := $020;
-        5: p := $080;
-        6: p := $200;
-        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
-      end;
-      
-      mouse_event(
-        (NumToInt(dp.res) and $3) * p,
-        0,0,0,0
-      );
+      var n := NumToInt(kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var p := NumToInt(dp.res);
+      if p and $1 = $1 then keybd_event(n,0,0,0);
+      if p and $2 = $2 then keybd_event(n,0,2,0);
     end;
     
     
@@ -1119,10 +1208,26 @@ type
       dp := new DInputNValue(par[2], sb);
     end;
     
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      dp := dp.Optimize(nvn, svn);
+      if dp is SInputNValue then
+      case NumToInt(dp.res) and $3 of
+        0: Result := nil;
+        1: Result := OperKeyDown.Create(kk).Optimize(nvn, svn);
+        2: Result := OperKeyUp.Create(kk).Optimize(nvn, svn);
+        3: Result := OperKeyPress.Create(kk).Optimize(nvn, svn);
+      end else
+      begin
+        kk := kk.Optimize(nvn, svn);
+        Result := self;
+      end;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
-      bw.Write(byte(2));
+      bw.Write(byte(1));
       bw.Write(byte(1));
       kk.Save(bw);
       dp.Save(bw);
@@ -1130,7 +1235,7 @@ type
     
     public static function Load(br: System.IO.BinaryReader): OperStmBase;
     begin
-      var res := new OperMouse;
+      var res := new OperKey;
       res.kk := InputNValue.Load(br);
       res.dp := InputNValue.Load(br);
       Result := res;
@@ -1144,6 +1249,183 @@ type
     ) as Action<ExecutingContext>;
     
   end;
+  
+  {$endregion Key}
+  
+  {$region Mouse}
+  
+  OperConstMouseDown = class(OperStmBase)
+    
+    public kk: byte;
+    
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc1(ec: ExecutingContext) :=
+    mouse_event($002, 0,0,0,0);
+    
+    private procedure Calc2(ec: ExecutingContext) :=
+    mouse_event($008, 0,0,0,0);
+    
+    private procedure Calc4(ec: ExecutingContext) :=
+    mouse_event($020, 0,0,0,0);
+    
+    private procedure Calc5(ec: ExecutingContext) :=
+    mouse_event($080, 0,0,0,0);
+    
+    private procedure Calc6(ec: ExecutingContext) :=
+    mouse_event($200, 0,0,0,0);
+    
+    
+    
+    public constructor(kk: byte) :=
+    self.kk := kk;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte($80 and 2));
+      bw.Write(kk);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstMouseDown;
+      res.kk := br.ReadByte;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override;
+    begin
+      
+      case kk of
+        1: Result := Calc1;
+        2: Result := Calc2;
+        4: Result := Calc4;
+        5: Result := Calc5;
+        6: Result := Calc6;
+        else raise new InvalidMouseKeyCodeException(scr, kk);
+      end;
+      
+    end;
+    
+  end;
+  OperConstMouseUp = class(OperStmBase)
+    
+    public kk: byte;
+    
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc1(ec: ExecutingContext) :=
+    mouse_event($004, 0,0,0,0);
+    
+    private procedure Calc2(ec: ExecutingContext) :=
+    mouse_event($010, 0,0,0,0);
+    
+    private procedure Calc4(ec: ExecutingContext) :=
+    mouse_event($040, 0,0,0,0);
+    
+    private procedure Calc5(ec: ExecutingContext) :=
+    mouse_event($100, 0,0,0,0);
+    
+    private procedure Calc6(ec: ExecutingContext) :=
+    mouse_event($400, 0,0,0,0);
+    
+    
+    
+    public constructor(kk: byte) :=
+    self.kk := kk;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte($80 and 3));
+      bw.Write(kk);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstMouseUp;
+      res.kk := br.ReadByte;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override;
+    begin
+      
+      case kk of
+        1: Result := Calc1;
+        2: Result := Calc2;
+        4: Result := Calc4;
+        5: Result := Calc5;
+        6: Result := Calc6;
+        else raise new InvalidMouseKeyCodeException(scr, kk);
+      end;
+      
+    end;
+    
+  end;
+  OperConstMousePress = class(OperStmBase)
+    
+    public kk: byte;
+    
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: longword);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc1(ec: ExecutingContext) :=
+    mouse_event($006, 0,0,0,0);
+    
+    private procedure Calc2(ec: ExecutingContext) :=
+    mouse_event($018, 0,0,0,0);
+    
+    private procedure Calc4(ec: ExecutingContext) :=
+    mouse_event($060, 0,0,0,0);
+    
+    private procedure Calc5(ec: ExecutingContext) :=
+    mouse_event($180, 0,0,0,0);
+    
+    private procedure Calc6(ec: ExecutingContext) :=
+    mouse_event($600, 0,0,0,0);
+    
+    
+    
+    public constructor(kk: byte) :=
+    self.kk := kk;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte($80 and 4));
+      bw.Write(kk);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstMousePress;
+      res.kk := br.ReadByte;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override;
+    begin
+      
+      case kk of
+        1: Result := Calc1;
+        2: Result := Calc2;
+        4: Result := Calc4;
+        5: Result := Calc5;
+        6: Result := Calc6;
+        else raise new InvalidMouseKeyCodeException(scr, kk);
+      end;
+      
+    end;
+    
+  end;
+  
   OperMouseDown = class(OperStmBase)
     
     public kk: InputNValue;
@@ -1172,6 +1454,25 @@ type
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1], sb);
+    end;
+    
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        
+        case ikk of
+          1,2,4..6: Result := new OperConstMouseDown(ikk);
+          else raise new InvalidMouseKeyCodeException(scr, ikk);
+        end;
+        
+      end else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1226,6 +1527,25 @@ type
       kk := new DInputNValue(par[1], sb);
     end;
     
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        
+        case ikk of
+          1,2,4..6: Result := new OperConstMouseUp(ikk);
+          else raise new InvalidMouseKeyCodeException(scr, ikk);
+        end;
+        
+      end else
+        Result := self;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1278,6 +1598,25 @@ type
       kk := new DInputNValue(par[1], sb);
     end;
     
+    public constructor(kk: InputNValue) :=
+    self.kk := kk;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var ikk := NumToInt(kk.res);
+        
+        case ikk of
+          1,2,4..6: Result := new OperConstMousePress(ikk);
+          else raise new InvalidMouseKeyCodeException(scr, ikk);
+        end;
+        
+      end else
+        Result := self;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1300,10 +1639,207 @@ type
     ) as Action<ExecutingContext>;
     
   end;
+  OperMouse = class(OperStmBase)
+    
+    public kk, dp: InputNValue;
+    
+    static procedure mouse_event(dwFlags, dx, dy, dwData, dwExtraInfo: cardinal);
+    external 'User32.dll' name 'mouse_event';
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      
+      var p: cardinal;
+      case NumToInt(kk.res) of
+        1: p := $002;
+        2: p := $008;
+        4: p := $020;
+        5: p := $080;
+        6: p := $200;
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
+      end;
+      
+      mouse_event(
+        (NumToInt(dp.res) and $3) * p,
+        0,0,0,0
+      );
+    end;
+    
+    
+    
+    public constructor(sb: StmBlock; par: array of string);
+    begin
+      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      
+      kk := new DInputNValue(par[1], sb);
+      dp := new DInputNValue(par[2], sb);
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      dp := dp.Optimize(nvn, svn);
+      if dp is SInputNValue then
+      case NumToInt(dp.res) and $3 of
+        0: Result := nil;
+        1: Result := OperMouseDown.Create(kk).Optimize(nvn, svn);
+        2: Result := OperMouseUp.Create(kk).Optimize(nvn, svn);
+        3: Result := OperMousePress.Create(kk).Optimize(nvn, svn);
+      end else
+      begin
+        kk := kk.Optimize(nvn, svn);
+        Result := self;
+      end;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(2));
+      bw.Write(byte(1));
+      kk.Save(bw);
+      dp.Save(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperMouse;
+      res.kk := InputNValue.Load(br);
+      res.dp := InputNValue.Load(br);
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    System.Delegate.Combine(
+      kk.GetCalc(),
+      dp.GetCalc(),
+      Action&<ExecutingContext>(self.Calc)
+    ) as Action<ExecutingContext>;
+    
+  end;
   
   {$endregion Key/Mouse}
   
   {$region Other simulators}
+  
+  OperConstMousePos = class(OperStmBase)
+    
+    public x,y: integer;
+    
+    static procedure SetCursorPos(x, y: integer);
+    external 'User32.dll' name 'SetCursorPos';
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    SetCursorPos(x,y);
+    
+    
+    
+    public constructor(x,y: integer);
+    begin
+      self.x := x;
+      self.y := y;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte($80 and 1));
+      bw.Write(x);
+      bw.Write(y);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstMousePos;
+      res.x := br.ReadInt32;
+      res.y := br.ReadInt32;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  OperConstGetKey = class(OperStmBase)
+    
+    public kk: byte;
+    public vname: string;
+    
+    static function GetKeyState(nVirtKey: byte): byte;
+    external 'User32.dll' name 'GetKeyState';
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    ec.SetVar(vname, (GetKeyState(kk) and $80 <> 0)?1.0:0.0);
+    
+    
+    
+    public constructor(kk: byte; vname: string);
+    begin
+      self.kk := kk;
+      self.vname := vname;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte($80 and 2));
+      bw.Write(kk);
+      bw.Write(vname);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstGetKey;
+      res.kk := br.ReadByte;
+      res.vname := br.ReadString;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  OperConstGetKeyTrigger = class(OperStmBase)
+    
+    public kk: byte;
+    public vname: string;
+    
+    static function GetKeyState(nVirtKey: byte): byte;
+    external 'User32.dll' name 'GetKeyState';
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    ec.SetVar(vname, (GetKeyState(kk) and $01 <> 0)?1.0:0.0);
+    
+    
+    
+    public constructor(kk: byte; vname: string);
+    begin
+      self.kk := kk;
+      self.vname := vname;
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(3));
+      bw.Write(byte($80 and 3));
+      bw.Write(kk);
+      bw.Write(vname);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstGetKeyTrigger;
+      res.kk := br.ReadByte;
+      res.vname := br.ReadString;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
   
   OperMousePos = class(OperStmBase)
     
@@ -1328,6 +1864,15 @@ type
       
       x := new DInputNValue(par[1], sb);
       y := new DInputNValue(par[2], sb);
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      x := x.Optimize(nvn, svn);
+      y := y.Optimize(nvn, svn);
+      if (x is SInputNValue) and (y is SInputNValue) then
+        Result := new OperConstMousePos(NumToInt(x.res), NumToInt(y.res)) else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1381,6 +1926,18 @@ type
       vname := par[2];
     end;
     
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var n := NumToInt(kk.res);
+        if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+        Result := new OperConstGetKey(n, vname);
+      end else
+        Result := self;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1429,6 +1986,18 @@ type
       
       kk := new DInputNValue(par[1], sb);
       vname := par[2];
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      if kk is SInputNValue then
+      begin
+        var n := NumToInt(kk.res);
+        if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+        Result := new OperConstGetKeyTrigger(n, vname);
+      end else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1506,7 +2075,7 @@ type
   
   {$region Jump/Call}
   
-  OperJump = class(OperStmBase, IJumpCallOper)
+  OperJump = class(OperStmBase, IJumpCallOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
@@ -1517,9 +2086,12 @@ type
     
     
     
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](CalledBlock);
+    
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
     end;
@@ -1557,7 +2129,7 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperJumpIf = class(OperStmBase, IJumpCallOper)
+  OperJumpIf = class(OperStmBase, IJumpCallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
@@ -1576,9 +2148,12 @@ type
     
     
     
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](CalledBlock1, CalledBlock2);
+    
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientOperParamCount(sb.scr, 6, par);
       
       if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
       case par[2][1] of
@@ -1671,7 +2246,7 @@ type
     
   end;
   
-  OperConstCall = class(OperStmBase, ICallOper)
+  OperConstCall = class(OperStmBase, ICallOper, IFileRefStm)
     
     public CalledBlock: StmBlock;
     
@@ -1683,6 +2258,9 @@ type
     
     
     
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
+    
     public constructor(CalledBlock: StmBlock) :=
     self.CalledBlock := CalledBlock;
     
@@ -1690,7 +2268,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(4));
-      bw.Write(byte(5));
+      bw.Write(byte($80 and 3));
       CalledBlock.SaveId(bw);
     end;
     
@@ -1709,7 +2287,8 @@ type
     self.Calc;
     
   end;
-  OperCall = class(OperStmBase, ICallOper)
+  
+  OperCall = class(OperStmBase, ICallOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
@@ -1721,9 +2300,12 @@ type
     
     
     
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](CalledBlock);
+    
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
     end;
@@ -1761,7 +2343,7 @@ type
     ) as Action<ExecutingContext>;
     
   end;
-  OperCallIf = class(OperStmBase, ICallOper)
+  OperCallIf = class(OperStmBase, ICallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
@@ -1781,9 +2363,12 @@ type
     
     
     
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](CalledBlock1, CalledBlock2);
+    
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientOperParamCount(self.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientOperParamCount(sb.scr, 6, par);
       
       if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
       case par[2][1] of
@@ -1919,6 +2504,8 @@ type
       bw.Write(byte(2));
     end;
     
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override := nil;
+    
     public function GetCalc: Action<ExecutingContext>; override := nil;
     
   end;
@@ -1946,26 +2533,103 @@ type
   
   {$region Misc}
   
+  OperConstSleep = class(OperStmBase)
+    
+    public l: integer;
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    Sleep(l);
+    
+    
+    
+    public constructor(l: integer) :=
+    self.l := l;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(6));
+      bw.Write(byte($80 and 1));
+      bw.Write(l);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstSleep;
+      res.l := br.ReadInt32;
+      Result := res;
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  OperConstOutput = class(OperStmBase)
+    
+    public otp: string;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      var p := ec.scr.otp;
+      if p <> nil then
+        p(otp);
+    end;
+    
+    
+    
+    public constructor(otp: string) :=
+    self.otp := otp;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(6));
+      bw.Write(byte($80 and 3));
+      bw.Write(otp);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): OperStmBase;
+    begin
+      var res := new OperConstOutput;
+      res.otp := br.ReadString;
+      Result := res;
+    end;
+    
+    public public function GetCalc: Action<ExecutingContext>; override :=
+    Calc;
+    
+  end;
+  
   OperSleep = class(OperStmBase)
     
     public l: InputNValue;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var r := l.res;
-      if real.IsNaN(r) or real.IsInfinity(r) then raise new CannotConvertToIntException(l, r);
-      var i := BigInteger.Create(r);
-      if (i < 0) or (i > integer.MaxValue) then raise new InvalidSleepLengthException(ec.scr, i);
-      Sleep(integer(i));
+      var i := NumToInt(l.res);
+      if i < 0 then raise new InvalidSleepLengthException(ec.scr, i);
+      Sleep(i);
     end;
     
     
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
       l := new DInputNValue(par[1], sb);
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      l := l.Optimize(nvn, svn);
+      if l is SInputNValue then
+      begin
+        var il := NumToInt(l.res);
+        if il < 0 then raise new InvalidSleepLengthException(nil, il);
+        Result := new OperConstSleep(il);
+      end else
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1996,7 +2660,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
       vname := par[1];
     end;
@@ -2035,8 +2699,16 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       otp := new DInputSValue(par[1],sb);
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      otp := otp.Optimize(nvn, svn);
+      if otp is SInputSValue then
+        Result := new OperConstOutput(otp.res);
+        Result := self;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2075,6 +2747,20 @@ type
     function GetRefs: sequence of StmBlockRef :=
     fns.Select(fn->DynamicStmBlockRef.Create(new SInputSValue(fn)).Optimize(self.bl));
     
+    public constructor(par: array of string);
+    begin
+      self.fns := par;
+    end;
+    
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      
+      foreach var fn in fns do
+        scr.ReadFileBatch(nil, fn);
+      
+      Result := nil;
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2092,11 +2778,6 @@ type
       for var i := 0 to res.fns.Length-1 do
         res.fns[i] := br.ReadString;
       Result := res;
-    end;
-    
-    public constructor(par: array of string);
-    begin
-      self.fns := par;
     end;
     
   end;
@@ -2125,7 +2806,10 @@ begin
     
     '!startpos':
     if (sb.stms.Count = 0) and (not sb.lbl.StartsWith('#%')) and not sb.StartPos then
-      sb.StartPos := true else
+    begin
+      sb.scr.start_pos_def := true;
+      sb.StartPos := true
+    end else
       raise new InvalidUseStartPosException(sb.scr);
     
     else raise new UndefinedDirectiveNameException(sb, text);
@@ -2252,10 +2936,10 @@ begin
         begin
           var stm := StmBase.FromString(last, s, ss.SmartSplit);
           if stm=nil then continue;
+          last.stms.Add(stm);
           
           if stm is ICallOper then
           begin
-            last.stms.Add(stm);
             sbs.Add(lname, last);
             last.fname := ffname;
             last.lbl := lname.Remove(0,lname.IndexOf('#'));
@@ -2266,11 +2950,7 @@ begin
             tmp_b_c += 1;
           end else
           if stm is IContextJumpOper then
-          begin
-            if stm is IJumpCallOper then last.stms.Add(stm);
             skp_ar := true;
-          end else
-            last.stms.Add(stm);
         end;
     end;
   
@@ -2282,6 +2962,7 @@ end;
 
 procedure Script.ReadFileBatch(context: object; lbl: string);
 begin
+  //if LoadedFiles=nil then exit;//Если загрузка уже была завершена. Но поидее этого вызова не может произойти
   var fQu := new List<StmBlock>;
   
   ReadFile(context, lbl, fQu);
@@ -2388,7 +3069,11 @@ begin
     bl_lst.Add(curr);
     
     foreach var stm in curr.stms do
-      stm_lst.Add(stm.Optimize(nvn, svn));
+    begin
+      var opt := stm.Optimize(nvn, svn);
+      if opt <> nil then
+        stm_lst.Add(opt);
+    end;
     
     var last := stm_lst[stm_lst.Count-1];
     if last is OperConstCall(var occ) then
@@ -2446,11 +3131,10 @@ begin
   if sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
   begin
     LoadedFiles := nil;
-    var skip_nsp := sbs.Values.Any(sb->sb.StartPos);
     
     var ref_bl := new HashSet<StmBlock>;
     foreach var bl: StmBlock in sbs.Values do
-      if bl.StartPos or not skip_nsp then
+      if bl.StartPos or not start_pos_def then
       begin
         ref_bl += bl;
         ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
@@ -2461,9 +3145,10 @@ begin
     
     repeat
       lc := ref_bl.Count;
+      ref_bl.Remove(nil);
       
       foreach var bl in ref_bl.ToList do
-        if bl.StartPos or not skip_nsp then
+        if bl.StartPos or not start_pos_def then
         begin
           ref_bl += bl;
           ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
@@ -2550,6 +3235,10 @@ begin
       3: Result := OperKeyUp.Load(br);
       4: Result := OperKeyPress.Load(br);
       
+      $82: Result := OperConstKeyDown.Load(br);
+      $83: Result := OperConstKeyUp.Load(br);
+      $84: Result := OperConstKeyPress.Load(br);
+      
       else raise new InvalidOperTException(t1,t2);
     end;
     
@@ -2560,6 +3249,10 @@ begin
       2: Result := OperMouseDown.Load(br);
       3: Result := OperMouseUp.Load(br);
       4: Result := OperMousePress.Load(br);
+      
+      $82: Result := OperConstMouseDown.Load(br);
+      $83: Result := OperConstMouseUp.Load(br);
+      $84: Result := OperConstMousePress.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -2572,6 +3265,10 @@ begin
       3: Result := OperGetKeyTrigger.Load(br);
       4: Result := OperGetMousePos.Load(br);
       
+      $81: Result := OperConstMousePos.Load(br);
+      $82: Result := OperConstGetKey.Load(br);
+      $83: Result := OperConstGetKeyTrigger.Load(br);
+      
       else raise new InvalidOperTException(t1,t2);
     end;
     
@@ -2582,6 +3279,8 @@ begin
       2: Result := OperJumpIf.Load(br, sbs);
       3: Result := OperCall.Load(br, sbs);
       4: Result := OperCallIf.Load(br, sbs);
+      
+      $83: Result := OperConstCall.Load(br, sbs);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -2602,6 +3301,9 @@ begin
       1: Result := OperSleep.Load(br);
       2: Result := OperRandom.Load(br);
       3: Result := OperOutput.Load(br);
+      
+      $81: Result := OperConstSleep.Load(br);
+      $83: Result := OperConstOutput.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;

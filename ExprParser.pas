@@ -1,7 +1,7 @@
 ﻿unit ExprParser;
 //ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
 //ToDo Заменить "... as T" на "T(...)", и другие фиксы is/as (билд с фиксом для is-var вышел)
-//ToDo OptExprBase.Load неправильные имена. не svn, nvn и т.д., а sv, nv
+//ToDo OptExprBase.Load неправильные имена. не "svn, nvn, ovn", а "sv, nv, ov"
 
 //ToDo ClampLists:  Реализовать
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
@@ -12,7 +12,7 @@
 // - #791
 // - #1417
 // - #1418
-// - #1440
+// - #1440 (исправлено)
 
 interface
 
