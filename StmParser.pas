@@ -1,7 +1,6 @@
 ﻿unit StmParser;
 //ToDo Добавить DeduseVarsTypes в ExprParser
 //ToDo Контекст ошибок
-//ToDo GetCalc должно возвращать последовательность экшенов, а не один комбинированный. Из OptExprWrapper тоже лучше перенести всё в GetCalc
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
 // - так же если следующий блок не может быть стартовой пизицией - можно перенести переменную-литерал в него
 
@@ -377,7 +376,7 @@ type
     public bl: StmBlock;
     public scr: Script;
     
-    public function GetCalc: Action<ExecutingContext>; abstract;
+    public function GetCalc: sequence of Action<ExecutingContext>; abstract;
     
     public function Optimize(nvn: List<string>; svn: List<string>): StmBase; virtual := self;
     
@@ -407,14 +406,18 @@ type
     public v_name: string;
     public e: OptExprWrapper;
     
-    public constructor(sb: StmBlock; text: string);
-    
-    public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
+    private procedure Calc(ec: ExecutingContext) :=
     ec.SetVar(v_name, e.Calc(
       ec.nvs,
       ec.svs
     ));
+    
+    
+    
+    public constructor(sb: StmBlock; text: string);
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -447,7 +450,8 @@ type
     
     public static function FromString(sb: StmBlock; text: string): DrctStmBase;
     
-    public function GetCalc: Action<ExecutingContext>; override := nil;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[0];
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -477,7 +481,13 @@ type
     
     public procedure Seal;
     begin
-      Execute := System.Delegate.Combine(stms.ToArray.ConvertAll(stm->stm.GetCalc() as System.Delegate)) as Action<ExecutingContext>;
+      Execute :=
+        System.Delegate.Combine(
+          stms
+          .SelectMany(stm->stm.GetCalc())
+          .Cast&<System.Delegate>
+          .ToArray
+        ) as Action<ExecutingContext>;
     end;
     
     public constructor(scr: Script) :=
@@ -914,7 +924,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(1));
-      bw.Write(byte($80 and 2));
+      bw.Write(byte($80 or 2));
       bw.Write(kk);
     end;
     
@@ -925,8 +935,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
   end;
   OperConstKeyUp = class(OperStmBase)
@@ -948,7 +958,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(1));
-      bw.Write(byte($80 and 3));
+      bw.Write(byte($80 or 3));
       bw.Write(kk);
     end;
     
@@ -959,8 +969,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
   end;
   OperConstKeyPress = class(OperStmBase)
@@ -985,7 +995,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(1));
-      bw.Write(byte($80 and 4));
+      bw.Write(byte($80 or 4));
       bw.Write(kk);
     end;
     
@@ -996,8 +1006,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
   end;
   
@@ -1054,11 +1064,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperKeyUp = class(OperStmBase)
@@ -1114,11 +1124,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperKeyPress = class(OperStmBase)
@@ -1175,11 +1185,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperKey = class(OperStmBase)
@@ -1241,12 +1251,12 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
       dp.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   
@@ -1285,7 +1295,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(2));
-      bw.Write(byte($80 and 2));
+      bw.Write(byte($80 or 2));
       bw.Write(kk);
     end;
     
@@ -1296,15 +1306,15 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override;
+    public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
       case kk of
-        1: Result := Calc1;
-        2: Result := Calc2;
-        4: Result := Calc4;
-        5: Result := Calc5;
-        6: Result := Calc6;
+        1: Result := new Action<ExecutingContext>[](Calc1);
+        2: Result := new Action<ExecutingContext>[](Calc2);
+        4: Result := new Action<ExecutingContext>[](Calc4);
+        5: Result := new Action<ExecutingContext>[](Calc5);
+        6: Result := new Action<ExecutingContext>[](Calc6);
         else raise new InvalidMouseKeyCodeException(scr, kk);
       end;
       
@@ -1342,7 +1352,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(2));
-      bw.Write(byte($80 and 3));
+      bw.Write(byte($80 or 3));
       bw.Write(kk);
     end;
     
@@ -1353,15 +1363,15 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override;
+    public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
       case kk of
-        1: Result := Calc1;
-        2: Result := Calc2;
-        4: Result := Calc4;
-        5: Result := Calc5;
-        6: Result := Calc6;
+        1: Result := new Action<ExecutingContext>[](Calc1);
+        2: Result := new Action<ExecutingContext>[](Calc2);
+        4: Result := new Action<ExecutingContext>[](Calc4);
+        5: Result := new Action<ExecutingContext>[](Calc5);
+        6: Result := new Action<ExecutingContext>[](Calc6);
         else raise new InvalidMouseKeyCodeException(scr, kk);
       end;
       
@@ -1399,7 +1409,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(2));
-      bw.Write(byte($80 and 4));
+      bw.Write(byte($80 or 4));
       bw.Write(kk);
     end;
     
@@ -1410,15 +1420,15 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override;
+    public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
       case kk of
-        1: Result := Calc1;
-        2: Result := Calc2;
-        4: Result := Calc4;
-        5: Result := Calc5;
-        6: Result := Calc6;
+        1: Result := new Action<ExecutingContext>[](Calc1);
+        2: Result := new Action<ExecutingContext>[](Calc2);
+        4: Result := new Action<ExecutingContext>[](Calc4);
+        5: Result := new Action<ExecutingContext>[](Calc5);
+        6: Result := new Action<ExecutingContext>[](Calc6);
         else raise new InvalidMouseKeyCodeException(scr, kk);
       end;
       
@@ -1490,11 +1500,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperMouseUp = class(OperStmBase)
@@ -1561,11 +1571,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperMousePress = class(OperStmBase)
@@ -1632,11 +1642,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperMouse = class(OperStmBase)
@@ -1708,12 +1718,12 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
       dp.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   
@@ -1743,7 +1753,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(3));
-      bw.Write(byte($80 and 1));
+      bw.Write(byte($80 or 1));
       bw.Write(x);
       bw.Write(y);
     end;
@@ -1756,8 +1766,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   OperConstGetKey = class(OperStmBase)
@@ -1783,7 +1793,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(3));
-      bw.Write(byte($80 and 2));
+      bw.Write(byte($80 or 2));
       bw.Write(kk);
       bw.Write(vname);
     end;
@@ -1796,8 +1806,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   OperConstGetKeyTrigger = class(OperStmBase)
@@ -1823,7 +1833,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(3));
-      bw.Write(byte($80 and 3));
+      bw.Write(byte($80 or 3));
       bw.Write(kk);
       bw.Write(vname);
     end;
@@ -1836,8 +1846,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   
@@ -1892,12 +1902,12 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       x.GetCalc(),
       y.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperGetKey = class(OperStmBase)
@@ -1955,11 +1965,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperGetKeyTrigger = class(OperStmBase)
@@ -2017,11 +2027,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       kk.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperGetMousePos = class(OperStmBase)
@@ -2066,8 +2076,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    self.Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   
@@ -2122,11 +2132,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       CalledBlock.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperJumpIf = class(OperStmBase, IJumpCallOper, IFileRefStm)
@@ -2237,12 +2247,12 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       CalledBlock1.GetCalc(),
       CalledBlock2.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action&<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   
@@ -2268,7 +2278,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(4));
-      bw.Write(byte($80 and 3));
+      bw.Write(byte($80 or 3));
       CalledBlock.SaveId(bw);
     end;
     
@@ -2283,8 +2293,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    self.Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   
@@ -2336,11 +2346,11 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       CalledBlock.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperCallIf = class(OperStmBase, ICallOper, IFileRefStm)
@@ -2452,12 +2462,12 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       CalledBlock1.GetCalc(),
       CalledBlock2.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   
@@ -2466,6 +2476,13 @@ type
   {$region ExecutingContext chandgers}
   
   OperSusp = class(OperStmBase)
+    
+    private static procedure Calc(ec: ExecutingContext) :=
+    if ec.scr.susp_called = nil then
+      System.Threading.Thread.CurrentThread.Suspend else
+      ec.scr.susp_called();
+    
+    
     
     public constructor(bl: StmBlock);
     begin
@@ -2480,13 +2497,8 @@ type
       bw.Write(byte(1));
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    ec->
-    begin
-      if ec.scr.susp_called <> nil then
-        ec.scr.susp_called();
-      System.Threading.Thread.CurrentThread.Suspend;
-    end;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
   end;
   OperReturn = class(OperStmBase, IContextJumpOper)
@@ -2506,10 +2518,16 @@ type
     
     public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override := nil;
     
-    public function GetCalc: Action<ExecutingContext>; override := nil;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[0];
     
   end;
   OperHalt = class(OperStmBase, IContextJumpOper)
+    
+    private static procedure Calc(ec: ExecutingContext) :=
+    Halt;
+    
+    
     
     public constructor(bl: StmBlock);
     begin
@@ -2524,8 +2542,8 @@ type
       bw.Write(byte(3));
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    oe->Halt();
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
     
   end;
   
@@ -2549,7 +2567,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(6));
-      bw.Write(byte($80 and 1));
+      bw.Write(byte($80 or 1));
       bw.Write(l);
     end;
     
@@ -2560,8 +2578,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   OperConstOutput = class(OperStmBase)
@@ -2584,7 +2602,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(6));
-      bw.Write(byte($80 and 3));
+      bw.Write(byte($80 or 3));
       bw.Write(otp);
     end;
     
@@ -2595,8 +2613,8 @@ type
       Result := res;
     end;
     
-    public public function GetCalc: Action<ExecutingContext>; override :=
-    Calc;
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   
@@ -2647,16 +2665,21 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       l.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   OperRandom = class(OperStmBase)
     
     public vname: string;
+    
+    private procedure Calc(ec: ExecutingContext) :=
+    ec.SetVar(vname, Random());
+    
+    
     
     public constructor(sb: StmBlock; par: array of string);
     begin
@@ -2680,8 +2703,8 @@ type
       Result := res;
     end;
     
-    public function GetCalc: Action<ExecutingContext>; override :=
-    ec->ec.SetVar(vname, Random());
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
   end;
   OperOutput = class(OperStmBase)
@@ -2707,7 +2730,7 @@ type
     begin
       otp := otp.Optimize(nvn, svn);
       if otp is SInputSValue then
-        Result := new OperConstOutput(otp.res);
+        Result := new OperConstOutput(otp.res) else
         Result := self;
     end;
     
@@ -2726,11 +2749,11 @@ type
       Result := res;
     end;
     
-    public public function GetCalc: Action<ExecutingContext>; override :=
-    System.Delegate.Combine(
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](
       otp.GetCalc(),
-      Action&<ExecutingContext>(self.Calc)
-    ) as Action<ExecutingContext>;
+      self.Calc
+    );
     
   end;
   
@@ -3235,9 +3258,9 @@ begin
       3: Result := OperKeyUp.Load(br);
       4: Result := OperKeyPress.Load(br);
       
-      $82: Result := OperConstKeyDown.Load(br);
-      $83: Result := OperConstKeyUp.Load(br);
-      $84: Result := OperConstKeyPress.Load(br);
+      $80 or 2: Result := OperConstKeyDown.Load(br);
+      $80 or 3: Result := OperConstKeyUp.Load(br);
+      $80 or 4: Result := OperConstKeyPress.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -3250,9 +3273,9 @@ begin
       3: Result := OperMouseUp.Load(br);
       4: Result := OperMousePress.Load(br);
       
-      $82: Result := OperConstMouseDown.Load(br);
-      $83: Result := OperConstMouseUp.Load(br);
-      $84: Result := OperConstMousePress.Load(br);
+      $80 or 2: Result := OperConstMouseDown.Load(br);
+      $80 or 3: Result := OperConstMouseUp.Load(br);
+      $80 or 4: Result := OperConstMousePress.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -3265,9 +3288,9 @@ begin
       3: Result := OperGetKeyTrigger.Load(br);
       4: Result := OperGetMousePos.Load(br);
       
-      $81: Result := OperConstMousePos.Load(br);
-      $82: Result := OperConstGetKey.Load(br);
-      $83: Result := OperConstGetKeyTrigger.Load(br);
+      $80 or 1: Result := OperConstMousePos.Load(br);
+      $80 or 2: Result := OperConstGetKey.Load(br);
+      $80 or 3: Result := OperConstGetKeyTrigger.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -3280,7 +3303,7 @@ begin
       3: Result := OperCall.Load(br, sbs);
       4: Result := OperCallIf.Load(br, sbs);
       
-      $83: Result := OperConstCall.Load(br, sbs);
+      $80 or 3: Result := OperConstCall.Load(br, sbs);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -3302,8 +3325,8 @@ begin
       2: Result := OperRandom.Load(br);
       3: Result := OperOutput.Load(br);
       
-      $81: Result := OperConstSleep.Load(br);
-      $83: Result := OperConstOutput.Load(br);
+      $80 or 1: Result := OperConstSleep.Load(br);
+      $80 or 3: Result := OperConstOutput.Load(br);
       
       else raise new InvalidOperTException(t1,t2);
     end;

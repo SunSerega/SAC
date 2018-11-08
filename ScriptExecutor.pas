@@ -45,12 +45,12 @@ type
       
       {$region Script}
       
-      scr := new Script(entry_point.SmartSplit('#',2)[0]);
+      scr := new Script(entry_point);
       scr_thr := new System.Threading.Thread(
         ()->
         try
           scr_thr.Suspend;
-          scr.Execute(entry_point);
+          scr.Execute;
         except
           on e: Exception do
           begin
@@ -284,7 +284,11 @@ type
       {$endregion Pause/Resume}
       
       scr.otp += procedure(s)->Output.Invoke(procedure->Output.Text += s+#10);
-      scr.susp_called += procedure->Running.Checked := false;
+      scr.susp_called += ()->
+      begin
+        Running.Checked := false;
+        System.Threading.Thread.CurrentThread.Suspend;
+      end;
       scr.stoped += Halt;
       
       scr_thr.Start;
