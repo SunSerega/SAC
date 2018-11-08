@@ -1,18 +1,17 @@
 ﻿unit ExprParser;
-//ToDo Сохранять контекст, чтоб при вызове ошибки показывало начало и конец выражения
-//ToDo Заменить "... as T" на "T(...)", и другие фиксы is/as (билд с фиксом для is-var вышел)
-//ToDo OptExprBase.Load неправильные имена. не "svn, nvn, ovn", а "sv, nv, ov"
 
+//ToDo Контекст ошибок
 //ToDo ClampLists:  Реализовать
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
+
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
+// - наверное стоит объеденить Openup и Optimize
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
 // - #791
 // - #1417
 // - #1418
-// - #1440 (исправлено)
 
 interface
 
@@ -291,7 +290,7 @@ type
     a.GetSubAreas.SelectMany(
       sa->
       (sa is SimpleExprContextArea)?
-      Seq(sa as SimpleExprContextArea):
+      (new ExprContextArea[](sa)).Cast&<SimpleExprContextArea>:
       GetAllSimpleAreas(sa)
     );
     
@@ -535,7 +534,7 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
     
-    public static function Load(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object): OptExprBase;
+    public static function Load(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object): OptExprBase;
     
     
     
@@ -777,14 +776,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Positive.Add(OptNExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
       loop br.ReadInt32 do
-        Negative.Add(OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Negative.Add(OptNExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
     end;
     
@@ -837,7 +836,7 @@ type
         var res := new OptSSPlusExpr;
         
         foreach var oe in Positive do
-          if (oe is OptSExprBase) and (oe as IOptExpr is IOptPlusExpr(var ope)) then
+          if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
             res.Positive.AddRange(ope.GetPositive.Select(oe->AsStrExpr(oe) as OptSExprBase)) else
             res.Positive.Add(oe);
         
@@ -922,11 +921,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptSExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Positive.Add(OptSExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
     end;
     
@@ -988,7 +987,7 @@ type
         var res := new OptSOPlusExpr;
         
         foreach var oe in Positive do
-          if (oe is OptSExprBase) and (oe as IOptExpr is IOptPlusExpr(var ope)) then
+          if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
             res.Positive.AddRange(ope.GetPositive) else
             res.Positive.Add(oe);
         
@@ -1076,11 +1075,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Positive.Add(OptExprBase.Load(br, nv, sv, ov));
       
     end;
     
@@ -1221,14 +1220,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Positive.Add(OptExprBase.Load(br, nv, sv, ov));
       
       loop br.ReadInt32 do
-        Negative.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Negative.Add(OptExprBase.Load(br, nv, sv, ov));
       
     end;
     
@@ -1394,14 +1393,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Positive.Add(OptNExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
       loop br.ReadInt32 do
-        Negative.Add(OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Negative.Add(OptNExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
     end;
     
@@ -1463,7 +1462,7 @@ type
       
       var res := self;
       
-      if res.Base as IOptExpr is IOptMltExpr(var ome) then
+      if res.Base is IOptMltExpr(var ome) then
       begin
         var nres := new OptSNMltExpr;
         var p := new OptNNMltExpr;
@@ -1505,7 +1504,7 @@ type
       TransformAllSubExprs(oe->oe.Optimize.Openup.Optimize);
       
       //см. поч. стр. 1647
-      //if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
+      //if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if
         (Base is IOptLiteralExpr) and
@@ -1545,11 +1544,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
-      Base := OptSExprBase(OptExprBase.Load(br, nvn, svn, ovn));
-      Positive := OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn));
+      Base := OptSExprBase(OptExprBase.Load(br, nv, sv, ov));
+      Positive := OptNExprBase(OptExprBase.Load(br, nv, sv, ov));
       
     end;
     
@@ -1614,7 +1613,7 @@ type
     begin
       TransformAllSubExprs(oe->oe.Openup);
       
-      if Base as IOptExpr is IOptMltExpr(var ome) then
+      if Base is IOptMltExpr(var ome) then
       begin
         var res := new OptSNMltExpr;
         var res_copy := res;//ToDo убрать, #533. + даёт лишнее предупреждение изза #1315 XD
@@ -1644,7 +1643,7 @@ type
             p.Negative.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotDivStringExprException(nil,nil, nil)) as OptNExprBase);
             //--------
         
-        if self.Positive as IOptExpr is IOptMltExpr(var ome2) then
+        if self.Positive is IOptMltExpr(var ome2) then
         begin
           //--------//ToDo #1417 //ToDo #1418
           p.Positive.AddRange(ome2.GetPositive.Select(oe->AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,nil)) as OptNExprBase));
@@ -1665,7 +1664,7 @@ type
       
       if Positive is OptSExprBase then raise new CannotMltALotStringsException(self, new object[](Base, Positive));
       //"a"*(5/3) - должно компилироваться, всё с ним нормально
-      //if (Positive as IOptExpr is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
+      //if (Positive is IOptMltExpr(var ome)) and ome.AnyNegative then raise new CannotDivStringExprException(self, ome.GetPositive.Prepend(Base as OptExprBase), ome.GetNegative);
       
       if Positive is OptNExprBase then
       begin
@@ -1703,11 +1702,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
-      Base := OptSExprBase(OptExprBase.Load(br, nvn, svn, ovn));
-      Positive := OptExprBase.Load(br, nvn, svn, ovn);
+      Base := OptSExprBase(OptExprBase.Load(br, nv, sv, ov));
+      Positive := OptExprBase.Load(br, nv, sv, ov);
       
     end;
     
@@ -1817,7 +1816,7 @@ type
         var res := new OptOMltExpr;
         
         foreach var oe in Positive do
-          if oe as IOptExpr is IOptMltExpr(var ime) then
+          if oe is IOptMltExpr(var ime) then
           begin
             res.Positive.AddRange(ime.GetPositive);
             res.Negative.AddRange(ime.GetNegative);
@@ -1825,7 +1824,7 @@ type
             res.Positive.Add(oe);
         
         foreach var oe in Negative do
-          if oe as IOptExpr is IOptMltExpr(var ime) then
+          if oe is IOptMltExpr(var ime) then
           begin
             res.Negative.AddRange(ime.GetPositive);
             res.Positive.AddRange(ime.GetNegative);
@@ -1938,14 +1937,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Positive.Add(OptExprBase.Load(br, nv, sv, ov));
       
       loop br.ReadInt32 do
-        Negative.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Negative.Add(OptExprBase.Load(br, nv, sv, ov));
       
     end;
     
@@ -2004,7 +2003,7 @@ type
     begin
       TransformAllSubExprs(oe->oe.Openup);
       
-      if Positive[0] as IOptExpr is IOptPowExpr(var ope) then
+      if Positive[0] is IOptPowExpr(var ope) then
       begin
         var res := new OptNPowExpr;
         
@@ -2092,11 +2091,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptNExprBase(OptExprBase.Load(br, nvn, svn, ovn)));
+        Positive.Add(OptNExprBase(OptExprBase.Load(br, nv, sv, ov)));
       
     end;
     
@@ -2153,7 +2152,7 @@ type
     begin
       TransformAllSubExprs(oe->oe.Openup);
       
-      if Positive[0] as IOptExpr is IOptPowExpr(var ope) then
+      if Positive[0] is IOptPowExpr(var ope) then
       begin
         var res := new OptOPowExpr;
         
@@ -2187,14 +2186,14 @@ type
       end else
       if Positive.Count(oe->oe is IOptLiteralExpr) < 2 then
         Result := self else
-      if Positive[0] as IOptExpr is IOptLiteralExpr(var iol) then
+      if Positive[0] is IOptLiteralExpr(var iol) then
       begin
         var res := new OptOPowExpr;
         var rb := new OptNLiteralExpr(ObjToNumUnsafe(iol.GetRes));
         res.Positive.Add(rb);
         
         foreach var oe in Positive.Skip(1) do
-          if oe as IOptExpr is IOptLiteralExpr(var iol2) then
+          if oe is IOptLiteralExpr(var iol2) then
             rb.res := rb.res ** ObjToNumUnsafe(iol2.GetRes) else
             res.Positive.Add(oe);
         
@@ -2206,7 +2205,7 @@ type
         
         res.Positive.Add(self.Positive[0]);
         foreach var oe in Positive.Skip(1) do
-          if (oe as IOptExpr is IOptLiteralExpr(var iol)) and not real.IsInfinity(ObjToNumUnsafe(iol.GetRes)) then
+          if (oe is IOptLiteralExpr(var iol)) and not real.IsInfinity(ObjToNumUnsafe(iol.GetRes)) then
             n *= ObjToNumUnsafe(iol.GetRes) else
             res.Positive.Add(oe);
         
@@ -2236,11 +2235,11 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       loop br.ReadInt32 do
-        Positive.Add(OptExprBase.Load(br, nvn, svn, ovn));
+        Positive.Add(OptExprBase.Load(br, nv, sv, ov));
       
     end;
     
@@ -2327,14 +2326,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; name: string; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; name: string; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       self.name := name;
       
       par := new OptExprBase[br.ReadInt32];
       for var i := 0 to par.Length-1 do
-        par[i] := OptExprBase.Load(br, nvn, svn, ovn);
+        par[i] := OptExprBase.Load(br, nv, sv, ov);
       
     end;
     
@@ -2411,14 +2410,14 @@ type
       
     end;
     
-    public constructor(br: System.IO.BinaryReader; name: string; nvn: array of real; svn: array of string; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; name: string; nv: array of real; sv: array of string; ov: array of object);
     begin
       
       self.name := name;
       
       par := new OptExprBase[br.ReadInt32];
       for var i := 0 to par.Length-1 do
-        par[i] := OptExprBase.Load(br, nvn, svn, ovn);
+        par[i] := OptExprBase.Load(br, nv, sv, ov);
       
     end;
     
@@ -2480,10 +2479,10 @@ type
       bw.Write(id);
     end;
     
-    public constructor(br: System.IO.BinaryReader; nvn: array of real);
+    public constructor(br: System.IO.BinaryReader; nv: array of real);
     begin
       
-      self.souce := nvn;
+      self.souce := nv;
       self.id := br.ReadInt32;
       
     end;
@@ -2518,10 +2517,10 @@ type
       bw.Write(id);
     end;
     
-    public constructor(br: System.IO.BinaryReader; svn: array of string);
+    public constructor(br: System.IO.BinaryReader; sv: array of string);
     begin
       
-      self.souce := svn;
+      self.souce := sv;
       self.id := br.ReadInt32;
       
     end;
@@ -2556,10 +2555,10 @@ type
       bw.Write(id);
     end;
     
-    public constructor(br: System.IO.BinaryReader; ovn: array of object);
+    public constructor(br: System.IO.BinaryReader; ov: array of object);
     begin
       
-      self.souce := ovn;
+      self.souce := ov;
       self.id := br.ReadInt32;
       
     end;
@@ -2628,7 +2627,7 @@ type
       
       
       
-      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
+      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
       
     end;
     
@@ -2671,7 +2670,7 @@ type
       
       
       
-      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
+      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
       
     end;
     
@@ -3247,7 +3246,6 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3295,7 +3293,6 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(real), pr?.GetType);
     end;
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3339,7 +3336,6 @@ type
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3407,7 +3403,6 @@ type
       
     end;
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3466,7 +3461,6 @@ type
       
     end;
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3523,7 +3517,6 @@ type
     
     
     
-    //ToDo #1440
     function inhgc := inherited GetCalc;
     public function GetCalc: sequence of Action0; override;
     begin
@@ -3757,7 +3750,7 @@ type
         Result.o_vars_names
       );
       
-      Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
+      Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
       
     end;
     
@@ -3770,23 +3763,23 @@ OptConverter.GetOptExprWrapper(e, conv);
 
 {$region Load}
 
-function LoadFunc(br: System.IO.BinaryReader; t: byte; nvn: array of real; svn: array of string; ovn: array of object): IOptFuncExpr;
+function LoadFunc(br: System.IO.BinaryReader; t: byte; nv: array of real; sv: array of string; ov: array of object): IOptFuncExpr;
 begin
   case t of
     
-    1: Result := new OptFunc_Length(br, nvn, svn, ovn);
-    2: Result := new OptFunc_Num(br, nvn, svn, ovn);
-    3: Result := new OptFunc_Ord(br, nvn, svn, ovn);
-    4: Result := new OptFunc_DeflyNum(br, nvn, svn, ovn);
+    1: Result := new OptFunc_Length(br, nv, sv, ov);
+    2: Result := new OptFunc_Num(br, nv, sv, ov);
+    3: Result := new OptFunc_Ord(br, nv, sv, ov);
+    4: Result := new OptFunc_DeflyNum(br, nv, sv, ov);
     
-    5: Result := new OptFunc_Str(br, nvn, svn, ovn);
-    6: Result := new OptFunc_CutStr(br, nvn, svn, ovn);
+    5: Result := new OptFunc_Str(br, nv, sv, ov);
+    6: Result := new OptFunc_CutStr(br, nv, sv, ov);
     
     else raise new InvalidFuncTException(t);
   end;
 end;
 
-static function OptExprBase.Load(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object): OptExprBase;
+static function OptExprBase.Load(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object): OptExprBase;
 begin
   var t1 := br.ReadByte;
   var t2 := br.ReadByte;
@@ -3806,10 +3799,10 @@ begin
     2:
     case t2 of
       
-      1: Result := new OptNNPlusExpr(br, nvn, svn, ovn);
-      2: Result := new OptSSPlusExpr(br, nvn, svn, ovn);
-      3: Result := new OptSOPlusExpr(br, nvn, svn, ovn);
-      4: Result := new OptOPlusExpr(br, nvn, svn, ovn);
+      1: Result := new OptNNPlusExpr(br, nv, sv, ov);
+      2: Result := new OptSSPlusExpr(br, nv, sv, ov);
+      3: Result := new OptSOPlusExpr(br, nv, sv, ov);
+      4: Result := new OptOPlusExpr(br, nv, sv, ov);
       
       else raise new InvalidExprTException(t1,t2);
     end;
@@ -3817,10 +3810,10 @@ begin
     3:
     case t2 of
       
-      1: Result := new OptNNMltExpr(br, nvn, svn, ovn);
-      2: Result := new OptSNMltExpr(br, nvn, svn, ovn);
-      3: Result := new OptSOMltExpr(br, nvn, svn, ovn);
-      4: Result := new OptOMltExpr(br, nvn, svn, ovn);
+      1: Result := new OptNNMltExpr(br, nv, sv, ov);
+      2: Result := new OptSNMltExpr(br, nv, sv, ov);
+      3: Result := new OptSOMltExpr(br, nv, sv, ov);
+      4: Result := new OptOMltExpr(br, nv, sv, ov);
       
       else raise new InvalidExprTException(t1,t2);
     end;
@@ -3828,20 +3821,20 @@ begin
     4:
     case t2 of
       
-      1: Result := new OptNPowExpr(br, nvn, svn, ovn);
-      2: Result := new OptOPowExpr(br, nvn, svn, ovn);
+      1: Result := new OptNPowExpr(br, nv, sv, ov);
+      2: Result := new OptOPowExpr(br, nv, sv, ov);
       
       else raise new InvalidExprTException(t1,t2);
     end;
     
-    5: Result := LoadFunc(br, t2, nvn, svn, ovn) as OptExprBase;
+    5: Result := LoadFunc(br, t2, nv, sv, ov) as OptExprBase;
     
     6:
     case t2 of
       
-      1: Result := new OptNVarExpr(br, nvn);
-      2: Result := new OptSVarExpr(br, svn);
-      3: Result := new OptOVarExpr(br, ovn);
+      1: Result := new OptNVarExpr(br, nv);
+      2: Result := new OptSVarExpr(br, sv);
+      3: Result := new OptOVarExpr(br, ov);
       
       else raise new InvalidExprTException(t1,t2);
     end;
@@ -3890,7 +3883,7 @@ begin
   
   
   
-  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Select(d->d as System.Delegate).ToArray) as Action0;
+  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
   
 end;
 

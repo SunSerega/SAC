@@ -104,7 +104,7 @@ type
         if TryStrToInt(ans, id) then
         begin
           
-          if (id < -1) or (id >= SubLibs.Count + Scripts.Count) then
+          if (id < (root=nil?0:-1) ) or (id >= SubLibs.Count + Scripts.Count) then
           begin
             Erase;
             WritelnFormat(Translate('LibView|InvalidId'),id);

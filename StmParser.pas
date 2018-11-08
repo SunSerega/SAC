@@ -718,7 +718,7 @@ type
     public function Optimize(nvn, svn: List<string>): InputSValue; override;
     begin
       oe.Optimize(nvn, svn);
-      if oe.Main as IOptExpr is IOptLiteralExpr(var me) then
+      if oe.Main is IOptLiteralExpr(var me) then
         Result := new SInputSValue(StmBase.ObjToStr(me.GetRes)) else
         Result := self;
     end;
@@ -774,7 +774,7 @@ type
     public function Optimize(nvn, svn: List<string>): InputNValue; override;
     begin
       oe.Optimize(nvn, svn);
-      if oe.Main as IOptExpr is IOptLiteralExpr(var me) then
+      if oe.Main is IOptLiteralExpr(var me) then
         Result := new SInputNValue(StmBase.ObjToNum(me.GetRes)) else
         Result := self;
     end;
@@ -3038,7 +3038,7 @@ bw.Write(scr.sbs.Values.Numerate(0).First(t->t[1]=self)[0]);
 function StmBlock.GetAllFRefs: sequence of StmBlockRef;
 begin
   foreach var op in stms do
-    if op as object is IFileRefStm(var frs) then
+    if op is IFileRefStm(var frs) then
       yield sequence frs.GetRefs;
 end;
 

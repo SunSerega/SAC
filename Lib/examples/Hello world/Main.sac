@@ -1,3 +1,4 @@
+ (this program needs any text editor open and focused to output to)
 
 KeyD 160 //LShift
 KeyP Ord("H")
@@ -22,6 +23,7 @@ KeyP 49 //1(49)+LShift(160) = !
 KeyU 160
 
 Output "Done writing hello world"
+Susp
 
 
 
