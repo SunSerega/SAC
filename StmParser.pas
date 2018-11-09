@@ -3,10 +3,9 @@
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
 //ToDo использовать FinalFixVarExprs (превращает все не найденные переменные в null)
-//ToDo ToString для всех типов
 
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
-// - так же если следующий блок не может быть стартовой пизицией - можно перенести переменную-литерал в него
+// - так же если следующий блок не может быть стартовой позицией - можно перенести переменную-литерал в него
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -426,8 +425,13 @@ type
     
     public constructor(sb: StmBlock; text: string);
     
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
+    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    begin
+      
+      e.Optimize(nvn, svn);
+      
+      Result := self;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -442,6 +446,12 @@ type
       Result.v_name := br.ReadString;
       Result.e := OptExprWrapper.Load(br);
     end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
+    
+    public function ToString: string; override :=
+    (e.GetMain is IOptLiteralExpr)?$'{v_name}={e} //Const':$'{v_name}={e}';
     
   end;
   OperStmBase = abstract class(StmBase)
@@ -717,6 +727,9 @@ type
       bw.Write(res);
     end;
     
+    public function ToString: string; override :=
+    $'"{res}"';
+    
   end;
   DInputSValue = class(InputSValue)
     
@@ -749,6 +762,9 @@ type
       oe.Save(bw);
     end;
     
+    public function ToString: string; override :=
+    oe.ToString;
+    
   end;
   
   InputNValue = abstract class(InputValue)
@@ -772,6 +788,9 @@ type
       bw.Write(byte(1));
       bw.Write(res);
     end;
+    
+    public function ToString: string; override :=
+    res.ToString(StmBase.nfi);
     
   end;
   DInputNValue = class(InputNValue)
@@ -804,6 +823,9 @@ type
       bw.Write(byte(2));
       oe.Save(bw);
     end;
+    
+    public function ToString: string; override :=
+    e.ToString;
     
   end;
   
@@ -840,6 +862,9 @@ type
         bw.Write(-1) else
         bl.SaveId(bw);
     end;
+    
+    public function ToString: string; override :=
+    $'"{bl.fname+bl.lbl}"';
     
   end;
   DynamicStmBlockRef = class(StmBlockRef)
@@ -885,6 +910,9 @@ type
       bw.Write(byte(2));
       s.Save(bw);
     end;
+    
+    public function ToString: string; override :=
+    s.ToString;
     
   end;
   
@@ -950,6 +978,9 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
     
+    public function ToString: string; override :=
+    $'KeyDown {kk} //Const';
+    
   end;
   OperConstKeyUp = class(OperStmBase)
     
@@ -983,6 +1014,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
+    
+    public function ToString: string; override :=
+    $'KeyUp {kk} //Const';
     
   end;
   OperConstKeyPress = class(OperStmBase)
@@ -1020,6 +1054,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
+    
+    public function ToString: string; override :=
+    $'KeyPress {kk} //Const';
     
   end;
   
@@ -1082,6 +1119,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'KeyDown {kk}';
+    
   end;
   OperKeyUp = class(OperStmBase)
     
@@ -1141,6 +1181,9 @@ type
       kk.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'KeyUp {kk}';
     
   end;
   OperKeyPress = class(OperStmBase)
@@ -1202,6 +1245,9 @@ type
       kk.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'KeyPress {kk}';
     
   end;
   OperKey = class(OperStmBase)
@@ -1270,6 +1316,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'Key {kk} {dp}';
+    
   end;
   
   {$endregion Key}
@@ -1332,6 +1381,9 @@ type
       
     end;
     
+    public function ToString: string; override :=
+    $'MouseDown {kk} //Const';
+    
   end;
   OperConstMouseUp = class(OperStmBase)
     
@@ -1389,6 +1441,9 @@ type
       
     end;
     
+    public function ToString: string; override :=
+    $'MouseUp {kk} //Const';
+    
   end;
   OperConstMousePress = class(OperStmBase)
     
@@ -1445,6 +1500,9 @@ type
       end;
       
     end;
+    
+    public function ToString: string; override :=
+    $'MousePress {kk} //Const';
     
   end;
   
@@ -1518,6 +1576,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'MouseDown {kk}';
+    
   end;
   OperMouseUp = class(OperStmBase)
     
@@ -1589,6 +1650,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'MouseUp {kk}';
+    
   end;
   OperMousePress = class(OperStmBase)
     
@@ -1659,6 +1723,9 @@ type
       kk.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'MousePress {kk}';
     
   end;
   OperMouse = class(OperStmBase)
@@ -1737,6 +1804,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'Mouse {kk} {dp}';
+    
   end;
   
   {$endregion Key/Mouse}
@@ -1781,6 +1851,9 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
     
+    public function ToString: string; override :=
+    $'MousePos {x} {y} //Const';
+    
   end;
   OperConstGetKey = class(OperStmBase)
     
@@ -1821,6 +1894,9 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
     
+    public function ToString: string; override :=
+    $'GetKey {kk} {vname} //Const';
+    
   end;
   OperConstGetKeyTrigger = class(OperStmBase)
     
@@ -1860,6 +1936,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'GetKeyTrigger {kk} {vname} //Const';
     
   end;
   
@@ -1920,6 +1999,9 @@ type
       y.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'MousePos {x} {y}';
     
   end;
   OperGetKey = class(OperStmBase)
@@ -1983,6 +2065,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'GetKey {kk} {vname}';
+    
   end;
   OperGetKeyTrigger = class(OperStmBase)
     
@@ -2045,6 +2130,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'GetKeyTrigger {kk} {vname}';
+    
   end;
   OperGetMousePos = class(OperStmBase)
     
@@ -2090,6 +2178,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'GetMousePos {x} {y} //Const';
     
   end;
   
@@ -2149,6 +2240,9 @@ type
       CalledBlock.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'Jump {CalledBlock.ToString}';
     
   end;
   OperJumpIf = class(OperStmBase, IJumpCallOper, IFileRefStm)
@@ -2266,6 +2360,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'JumpIf {e1} {System.Enum.GetName(compr.GetType, compr)} {e2} {CalledBlock1} {CalledBlock2}';
+    
   end;
   
   OperConstCall = class(OperStmBase, ICallOper, IFileRefStm)
@@ -2307,6 +2404,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} //Const';
     
   end;
   
@@ -2363,6 +2463,9 @@ type
       CalledBlock.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'Call {CalledBlock}';
     
   end;
   OperCallIf = class(OperStmBase, ICallOper, IFileRefStm)
@@ -2481,6 +2584,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'CallIf {e1} {System.Enum.GetName(compr.GetType, compr)} {e2} {CalledBlock1} {CalledBlock2}';
+    
   end;
   
   {$endregion Jump/Call}
@@ -2512,6 +2618,9 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
     
+    public function ToString: string; override :=
+    $'Susp //Const';
+    
   end;
   OperReturn = class(OperStmBase, IContextJumpOper)
     
@@ -2532,6 +2641,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[0];
+    
+    public function ToString: string; override :=
+    $'Return //Const';
     
   end;
   OperHalt = class(OperStmBase, IContextJumpOper)
@@ -2556,6 +2668,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
+    
+    public function ToString: string; override :=
+    $'Halt //Const';
     
   end;
   
@@ -2593,6 +2708,9 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
     
+    public function ToString: string; override :=
+    $'Sleep {l} //Const';
+    
   end;
   OperConstOutput = class(OperStmBase)
     
@@ -2627,6 +2745,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Output "{otp}" //Const';
     
   end;
   
@@ -2683,6 +2804,9 @@ type
       self.Calc
     );
     
+    public function ToString: string; override :=
+    $'Sleep {l}';
+    
   end;
   OperRandom = class(OperStmBase)
     
@@ -2717,6 +2841,9 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Random {vname} //Const';
     
   end;
   OperOutput = class(OperStmBase)
@@ -2766,6 +2893,9 @@ type
       otp.GetCalc(),
       self.Calc
     );
+    
+    public function ToString: string; override :=
+    $'Output {otp}';
     
   end;
   
@@ -2822,6 +2952,9 @@ type
         res.fns[i] := br.ReadString;
       Result := res;
     end;
+    
+    public function ToString: string; override :=
+    '!FRef'+fns.Select(s->' '+s).JoinIntoString;
     
   end;
   
