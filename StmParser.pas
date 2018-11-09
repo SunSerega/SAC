@@ -1,7 +1,9 @@
 ﻿unit StmParser;
-//ToDo Добавить DeduseVarsTypes в ExprParser
+
 //ToDo Контекст ошибок
+//ToDo Добавить DeduseVarsTypes в ExprParser
 //ToDo использовать FinalFixVarExprs (превращает все не найденные переменные в null)
+//ToDo ToString для всех типов
 
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
 // - так же если следующий блок не может быть стартовой пизицией - можно перенести переменную-литерал в него
@@ -248,6 +250,12 @@ type
     
     public constructor(source: Script) :=
     inherited Create(source, $'!StartPos can only be placed after label or on begining of the file');
+    
+  end;
+  DrctFRefNotConstException = class(FileCompilingException)
+    
+    public constructor(par: string; opt: OptExprBase) :=
+    inherited Create(source, $'!FRef must Not contain runtime calculated expressions{#10}Input [> {par} <] was optimized to [> {opt} <], but it can''t be converted to constant');
     
   end;
   
@@ -666,6 +674,8 @@ type
         end;
         
       end;
+      
+      self.Optimize;
       
     end;
     
@@ -2774,7 +2784,15 @@ type
     
     public constructor(par: array of string);
     begin
-      self.fns := par;
+      self.fns := par.ConvertAll(
+        s->
+        begin
+          var res := OptExprWrapper.FromExpr(Expr.FromString(s)).GetMain;
+          res := res.Optimize as OptExprBase;
+          if not (res is IOptLiteralExpr) then raise new DrctFRefNotConstException(s, res);
+          Result := ObjToStr(res.GetRes());
+        end
+      );
     end;
     
     public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;

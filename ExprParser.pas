@@ -1,7 +1,6 @@
 ﻿unit ExprParser;
 
 //ToDo Контекст ошибок
-//ToDo ClampLists:  Реализовать
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
@@ -271,7 +270,7 @@ type
   
   {$endregion Exception's}
   
-  {$region General}
+  {$region ExprContextArea}
   
   ExprContextArea = abstract class
     
@@ -374,7 +373,7 @@ type
     
   end;
   
-  {$endregion General}
+  {$endregion ExprContextArea}
   
   {$region PreOpt}
   
@@ -485,6 +484,7 @@ type
     
     function Openup: IOptExpr;
     function Optimize: IOptExpr;
+    procedure ClampLists;
     
     function GetCalc: sequence of Action0;
     
@@ -531,6 +531,7 @@ type
     
     public function Openup: IOptExpr; virtual := self;
     public function Optimize: IOptExpr; virtual := self;
+    public procedure ClampLists; virtual := exit;
     
     public function GetCalc: sequence of Action0; virtual := new Action0[0];
     
@@ -757,6 +758,16 @@ type
       end;
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      Negative.Capacity := Negative.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+      foreach var oe in Negative do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
@@ -904,6 +915,14 @@ type
         Result := res;
       end;
       
+    end;
+    
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1060,6 +1079,14 @@ type
       
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
@@ -1199,6 +1226,16 @@ type
           Result := self;//Даже если есть несколько констант подряд - их нельзя складывать, потому что числа и строки по разному складываются
       end;
       
+    end;
+    
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      Negative.Capacity := Negative.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+      foreach var oe in Negative do oe.ClampLists;
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1374,6 +1411,16 @@ type
       end;
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      Negative.Capacity := Negative.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+      foreach var oe in Negative do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
@@ -1528,6 +1575,12 @@ type
       if (Positive is IOptLiteralExpr) and (Positive.res = 1.0) then
         Result := Base else
         Result := self;
+    end;
+    
+    public procedure ClampLists; override;
+    begin
+      Base.ClampLists;
+      Positive.ClampLists;
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1686,6 +1739,12 @@ type
           Result := self;
       end else
         Result := self;
+    end;
+    
+    public procedure ClampLists; override;
+    begin
+      Base.ClampLists;
+      Positive.ClampLists;
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1918,6 +1977,16 @@ type
       
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      Negative.Capacity := Negative.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+      foreach var oe in Negative do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
@@ -2076,6 +2145,14 @@ type
       end;
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
@@ -2220,6 +2297,14 @@ type
       
     end;
     
+    public procedure ClampLists; override;
+    begin
+      
+      Positive.Capacity := Positive.Count;
+      
+      foreach var oe in Positive do oe.ClampLists;
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
@@ -2317,6 +2402,9 @@ type
         Result := self;
     end;
     
+    public procedure ClampLists; override :=
+    foreach var oe in par do oe.ClampLists;
+    
     public function GetCalc: sequence of Action0; override :=
     par.SelectMany(p->p.GetCalc());
     
@@ -2400,6 +2488,9 @@ type
       end else
         Result := self;
     end;
+    
+    public procedure ClampLists; override :=
+    foreach var oe in par do oe.ClampLists;
     
     public function GetCalc: sequence of Action0; override :=
     par.SelectMany(p->p.GetCalc());
@@ -2616,7 +2707,7 @@ type
       Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
       Main := Main.Optimize.Openup.Optimize;
       
-      Result := OptExprBase(Main);
+      Result := Main as OptExprBase;
       
       
       
@@ -2629,6 +2720,8 @@ type
       self.o_vars := o_vars;
       
       
+      
+      Main.ClampLists;
       
       self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
       
