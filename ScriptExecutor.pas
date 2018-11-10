@@ -286,7 +286,7 @@ type
       scr.otp += procedure(s)->Output.Invoke(procedure->Output.Text += s+#10);
       scr.susp_called += ()->
       begin
-        Running.Checked := false;
+        Running.Invoke(procedure->Running.Checked := false);
         System.Threading.Thread.CurrentThread.Suspend;
       end;
       scr.stoped += Halt;

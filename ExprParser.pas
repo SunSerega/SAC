@@ -2,7 +2,7 @@
 
 //ToDo Контекст ошибок
 //ToDo костанты WW и WH
-//ToDo функции вроде Int, Round, Sqrt
+//ToDo функции вроде Int, Round, Ceil
 //ToDo добавить sealed везде где надо
 
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python

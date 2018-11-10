@@ -2,8 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo загружать все !FRef в Save, чтоб даже когда оптимизация выключена - можно было выполнить сериализацию нескольких файлов
-//ToDo List<string> заменить на HashSet<T>, потому что каждое имя переменной может быть только 1 раз. иначе получаем ошибки
 //ToDo добавить sealed везде где надо
 
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
@@ -611,7 +609,7 @@ type
     public LoadedFiles := new HashSet<string>;
     public sbs := new Dictionary<string, StmBlock>;
     
-    private procedure ReadFile(context: object; lbl: string);
+    private function ReadFile(context: object; lbl: string): boolean;
     
     private static function CombinePaths(p1, p2: string): string;
     begin
@@ -663,41 +661,6 @@ type
     end;
     
     public procedure Save(str: System.IO.Stream);
-    begin
-      
-      var sw := new System.IO.StreamWriter(str);
-      sw.Write('!PreComp=');
-      sw.Flush;
-      
-      var bw := new System.IO.BinaryWriter(str);
-      
-      var main_fname := read_start_lbl_name.Split('#')[0];
-      var main_path := main_fname.Split('\').SkipLast.JoinIntoString('\');
-      bw.Write(main_fname.Split('\').Last);
-      
-      var sbbs :=
-      sbs
-      .Select(kvp->(kvp.Key.Split(new char[]('#'),2),kvp.Value))
-      .GroupBy(
-        t->t[0][0],
-        t->(t[0][1],t[1])
-      ).ToList;
-      bw.Write(sbbs.Count);
-      foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in sbbs do
-      begin
-        bw.Write(GetRelativePath(main_path, kvp.Key));
-        var l := kvp.ToList;
-        bw.Write(l.Count);
-        foreach var t in l do
-        begin
-          bw.Write(t[0]);
-          t[1].Save(bw);
-        end;
-      end;
-      
-      //str.Flush;
-      str.Close;
-    end;
     
     public procedure Load(main_path: string; br: System.IO.BinaryReader);
     begin
@@ -3329,10 +3292,13 @@ end;
 
 {$region Script}
 
-procedure Script.ReadFile(context: object; lbl: string);
+function Script.ReadFile(context: object; lbl: string): boolean;
 begin
+  
   lbl := lbl.Split('#')[0];
-  if not LoadedFiles.Add(lbl) then exit;
+  if not LoadedFiles.Add(lbl) then
+    exit else
+    Result := true;
   
   var fi := new System.IO.FileInfo(lbl);
   if not fi.Exists then raise new RefFileNotFound(context, fi.FullName);
@@ -3780,6 +3746,63 @@ begin
     else raise new InvalidStmTException(t);
   end;
   
+end;
+
+procedure Script.Save(str: System.IO.Stream);
+begin
+  
+  if LoadedFiles <> nil then
+  begin
+    
+    var nopt: boolean;
+    repeat
+      nopt := true;
+      
+      var refs := sbs.Values.SelectMany(bl->bl.GetAllFRefs).Cast&<DynamicStmBlockRef>.Where(ref->ref <> nil).Select(ref->ref.s).ToList;
+      foreach var ref: InputSValue in refs do
+      begin
+        var inp := ref.Optimize(new HashSet<string>,new HashSet<string>);
+        if inp is SInputSValue then
+          if ReadFile(nil, inp.res) then
+            nopt := false;
+      end;
+      
+    until nopt;
+    
+  end;
+  
+  var sw := new System.IO.StreamWriter(str);
+  sw.Write('!PreComp=');
+  sw.Flush;
+  
+  var bw := new System.IO.BinaryWriter(str);
+  
+  var main_fname := read_start_lbl_name.Split('#')[0];
+  var main_path := main_fname.Split('\').SkipLast.JoinIntoString('\');
+  bw.Write(main_fname.Split('\').Last);
+  
+  var sbbs :=
+  sbs
+  .Select(kvp->(kvp.Key.Split(new char[]('#'),2),kvp.Value))
+  .GroupBy(
+    t->t[0][0],
+    t->(t[0][1],t[1])
+  ).ToList;
+  bw.Write(sbbs.Count);
+  foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in sbbs do
+  begin
+    bw.Write(GetRelativePath(main_path, kvp.Key));
+    var l := kvp.ToList;
+    bw.Write(l.Count);
+    foreach var t in l do
+    begin
+      bw.Write(t[0]);
+      t[1].Save(bw);
+    end;
+  end;
+  
+  //str.Flush;
+  str.Close;
 end;
 
 {$endregion Save/Load}
