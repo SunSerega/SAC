@@ -2,7 +2,8 @@
 
 //ToDo Контекст ошибок
 //ToDo костанты WW и WH
-//ToDo функции вроде Int, Round, Ceil
+//ToDo функции округления чисел (Int, Round, Ceil)
+//ToDo враперы не могут конвертировать свой тип при оптимизации
 
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
@@ -72,6 +73,12 @@ type
     
     public constructor(sender: object) :=
     inherited Create(sender, 'Binarry save proc not implemented for type {sender.GetType}');
+    
+  end;
+  ConflictingExprTypesException = class(InnerException)
+    
+    public constructor(t1,t2: System.Type) :=
+    inherited Create(nil, $'Can''t convert expr type from {t1} to {t2}', KV('t1',object(t1)), KV('t2',object(t2)));
     
   end;
   
@@ -472,6 +479,7 @@ type
   
   {$region Base}
   
+  OptExprBase=class;
   OptNExprBase=class;
   OptSExprBase=class;
   
@@ -484,6 +492,7 @@ type
     function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
     function UnFixVarExprs(nn, ns, no: array of string): IOptExpr;
     function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
+    function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr;
     
     function Openup: IOptExpr;
     function Optimize: IOptExpr;
@@ -527,10 +536,26 @@ type
     public function GetRes: object; abstract;
     public function GetResType: System.Type; abstract;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; virtual := new string[0];
-    function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual := self;
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; virtual := self;
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual := self;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; virtual := self;
+    
+    
+    
+    public function GetVarNames(nn, ns, no: array of string): sequence of string; virtual :=
+    new string[0];
+    
+    public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual :=
+    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so, nn,ns,no));
+    
+    public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; virtual :=
+    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
+    
+    public function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual :=
+    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so, nn,ns,no));
+    
+    public function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr; virtual :=
+    TransformAllSubExprs(se->se.ReplaceVar(vn,oe));
+    
+    
     
     public function Openup: IOptExpr; virtual := self;
     public function Optimize: IOptExpr; virtual := self;
@@ -660,7 +685,7 @@ type
       
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
       for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
@@ -675,15 +700,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
     Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -821,7 +837,7 @@ type
       
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptSExprBase;
       Result := self;
@@ -834,15 +850,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -972,7 +979,7 @@ type
       res := sb.ToString;
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
       Result := self;
@@ -985,15 +992,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -1150,7 +1148,7 @@ type
       end;
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
       for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
@@ -1165,18 +1163,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
     Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
-    
-    public function Openup: IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.Openup);
     
     public function Optimize: IOptExpr; override;
     begin
@@ -1308,7 +1294,7 @@ type
       
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
       for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
@@ -1325,15 +1311,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
     Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -1482,7 +1459,7 @@ type
       res := sb.ToString;
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       Base := f(Base) as OptSExprBase;
       Positive := f(Positive) as OptNExprBase;
@@ -1499,15 +1476,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Base.GetVarNames(nn,ns,no)+
     Positive.GetVarNames(nn,ns,no);
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -1641,7 +1609,7 @@ type
       res := sb.ToString;
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       Base := f(Base) as OptSExprBase;
       Positive := f(Positive) as OptExprBase;
@@ -1658,15 +1626,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Base.GetVarNames(nn,ns,no)+
     Positive.GetVarNames(nn,ns,no);
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -1845,7 +1804,7 @@ type
       end;
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
       for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
@@ -1862,15 +1821,6 @@ type
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
     Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -2052,7 +2002,7 @@ type
       
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
       Result := self;
@@ -2064,15 +2014,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -2209,7 +2150,7 @@ type
       
     end;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
       Result := self;
@@ -2221,15 +2162,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     public function Openup: IOptExpr; override;
     begin
@@ -2353,7 +2285,7 @@ type
     public name: string;
     public par: array of OptExprBase;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
       Result := self;
@@ -2365,15 +2297,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     protected procedure CheckParamsBase;
     begin
@@ -2440,7 +2363,7 @@ type
     public name: string;
     public par: array of OptExprBase;
     
-    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr;
+    private function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
       for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
       Result := self;
@@ -2452,15 +2375,6 @@ type
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
-    public function FixVarExprs(sn:array of real; ss: array of string; so: array of object; nn,ns,no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so,nn,ns,no));
-    
-    function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.UnFixVarExprs(nn,ns,no));
-    
-    function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override :=
-    TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so,nn,ns,no));
     
     protected procedure CheckParamsBase;
     begin
@@ -2542,6 +2456,9 @@ type
     public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
     
     public function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
+    
+    public function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr; override :=
+    vn=name?oe:self;
     
     public constructor(name: string) :=
     self.name := name;
@@ -2689,6 +2606,12 @@ type
     begin
       var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
       
+      if n_vars_names.Any(vn->svn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+      if s_vars_names.Any(vn->nvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+      
+      nvn := nvn.Concat(self.n_vars_names).ToHashSet;
+      svn := svn.Concat(self.s_vars_names).ToHashSet;
+      
       var lnvn := new List<string>;
       var lsvn := new List<string>;
       var lovn := new List<string>;
@@ -2734,6 +2657,12 @@ type
     begin
       var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
       
+      if n_vars_names.Any(vn->svn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+      if n_vars_names.Any(vn->ovn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(object));
+      
+      if s_vars_names.Any(vn->nvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+      if s_vars_names.Any(vn->ovn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(object));
+      
       var lnvn := new HashSet<string>;
       var lsvn := new HashSet<string>;
       var lovn := new HashSet<string>;
@@ -2774,9 +2703,62 @@ type
       
     end;
     
+    public function ReplaceVarBase(me: OptExprBase; vn: string; oe: OptExprBase): OptExprBase;
+    begin
+      var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
+      Main := Main.ReplaceVar(vn, oe);
+      
+      var lnvn := new List<string>;
+      var lsvn := new List<string>;
+      var lovn := new List<string>;
+      foreach var _vn in Main.GetVarNames(nil,nil,nil) do
+        if n_vars_names.Contains(_vn) then
+          lnvn.Add(_vn) else
+        if s_vars_names.Contains(_vn) then
+          lsvn.Add(_vn) else
+          lovn.Add(_vn);
+      
+      var n_vars := ArrFill(lnvn.Count, 0.0);
+      var s_vars := ArrFill(lsvn.Count, '');
+      var o_vars := ArrFill(lovn.Count, object(nil));
+      
+      var n_vars_names := lnvn.ToArray;
+      var s_vars_names := lsvn.ToArray;
+      var o_vars_names := lovn.ToArray;
+      
+      Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
+      Main := Main.Optimize.Openup.Optimize;
+      
+      Result := Main as OptExprBase;
+      
+      
+      
+      self.n_vars_names := n_vars_names;
+      self.s_vars_names := s_vars_names;
+      self.o_vars_names := o_vars_names;
+      
+      self.n_vars := n_vars;
+      self.s_vars := s_vars;
+      self.o_vars := o_vars;
+      
+      
+      
+      Main.ClampLists;
+      
+      self.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
+      
+    end;
+    
     public procedure Optimize(nvn, svn: HashSet<string>); abstract;
     
     public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); abstract;
+    
+    public procedure ReplaceVar(vn: string; oe: OptExprBase); abstract;
+    
+    public function DoesUseVar(vn: string) :=
+    n_vars_names.Contains(vn) or
+    s_vars_names.Contains(vn) or
+    o_vars_names.Contains(vn);
     
     protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
@@ -2851,6 +2833,9 @@ type
     public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
     self.Main := OptNExprBase(FinalOptBase(Main, nvn, svn, ovn));
     
+    public procedure ReplaceVar(vn: string; oe: OptExprBase); override :=
+    self.Main := OptNExprBase(ReplaceVarBase(Main, vn, oe));
+    
     public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
       
@@ -2887,6 +2872,9 @@ type
     public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
     self.Main := OptSExprBase(FinalOptBase(Main, nvn, svn, ovn));
     
+    public procedure ReplaceVar(vn: string; oe: OptExprBase); override :=
+    self.Main := OptSExprBase(ReplaceVarBase(Main, vn, oe));
+    
     public function CalcS(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
       
@@ -2922,6 +2910,9 @@ type
     
     public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
     self.Main := FinalOptBase(Main, nvn, svn, ovn);
+    
+    public procedure ReplaceVar(vn: string; oe: OptExprBase); override :=
+    self.Main := ReplaceVarBase(Main, vn, oe);
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin

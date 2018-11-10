@@ -2,7 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo реализовать DoesUseVar и ReplaceVar
 //ToDo Переносить переменные к их первому применению
 
 //ToDo Directives:  !NoOpt/!Opt
@@ -393,8 +392,8 @@ type
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; virtual :=
     Optimize(nvn, svn);
     
-    public function DoesUseVar(vn: string): boolean; virtual := false;
-    public procedure ReplaceVar(vn: string; oe: OptExprBase); virtual := exit;
+    public function FindVarUsages(vn: string): array of OptExprWrapper; virtual :=
+    new OptExprWrapper[0];
     
     
     
@@ -435,6 +434,7 @@ type
     
     
     public constructor(sb: StmBlock; text: string);
+    
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
@@ -482,6 +482,11 @@ type
       
       Result := self;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    e.DoesUseVar(vn)?
+    new OptExprWrapper[](e):
+    new OptExprWrapper[0];
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -721,6 +726,8 @@ type
     public function Optimize(nvn, svn: HashSet<string>): InputSValue; virtual := self;
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; virtual := self;
     
+    public function FindVarUsages(vn: string): OptExprWrapper; virtual := nil;
+    
     public static function Load(br: System.IO.BinaryReader): InputSValue;
     
   end;
@@ -767,6 +774,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): OptExprWrapper; override :=
+    oe.DoesUseVar(vn)?oe:nil;
+    
     public constructor(oe: OptSExprWrapper);
     begin
       self.oe := oe;
@@ -795,6 +805,8 @@ type
     
     public function Optimize(nvn, svn: HashSet<string>): InputNValue; virtual := self;
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; virtual := self;
+    
+    public function FindVarUsages(vn: string): OptExprWrapper; virtual := nil;
     
     public static function Load(br: System.IO.BinaryReader): InputNValue;
     
@@ -842,6 +854,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): OptExprWrapper; override :=
+    oe.DoesUseVar(vn)?oe:nil;
+    
     public constructor(oe: OptNExprWrapper);
     begin
       self.oe := oe;
@@ -873,6 +888,8 @@ type
     
     public function Optimize(bl: StmBlock; nvn, svn: HashSet<string>): StmBlockRef; virtual := self;
     public function FinalOptimize(bl: StmBlock; nvn, svn, ovn: HashSet<string>): StmBlockRef; virtual := self;
+    
+    public function FindVarUsages(vn: string): OptExprWrapper; virtual := nil;
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -942,6 +959,9 @@ type
         Result := new StaticStmBlockRef(self.GetBlock(bl)) else
         Result := self;
     end;
+    
+    public function FindVarUsages(vn: string): OptExprWrapper; override :=
+    s.FindVarUsages(vn);
     
     public function Optimize(bl: StmBlock) :=
     Optimize(bl, new HashSet<string>, new HashSet<string>);
@@ -1150,6 +1170,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1223,6 +1246,9 @@ type
       kk := kk.FinalOptimize(nvn, svn, ovn);
       Result := Simplify;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1298,6 +1324,9 @@ type
       kk := kk.FinalOptimize(nvn, svn, ovn);
       Result := Simplify;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1381,6 +1410,9 @@ type
         Result := self;
       end;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn), dp.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1655,6 +1687,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1739,6 +1774,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1822,6 +1860,9 @@ type
       kk := kk.FinalOptimize(nvn, svn, ovn);
       Result := Simplify;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1915,6 +1956,9 @@ type
         Result := self;
       end;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn), dp.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2124,6 +2168,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](x.FindVarUsages(vn), y.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2201,6 +2248,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2276,6 +2326,9 @@ type
       kk := kk.FinalOptimize(nvn, svn, ovn);
       Result := Simplify;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](kk.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2401,6 +2454,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](CalledBlock.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2513,6 +2569,9 @@ type
         Result := self;
       end;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](CalledBlock1.FindVarUsages(vn), CalledBlock2.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2651,6 +2710,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](CalledBlock.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2764,6 +2826,9 @@ type
         Result := self;
       end;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](CalledBlock1.FindVarUsages(vn), CalledBlock2.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3022,6 +3087,9 @@ type
       Result := Simplify;
     end;
     
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](l.FindVarUsages(vn));
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -3122,6 +3190,9 @@ type
       otp := otp.FinalOptimize(nvn, svn, ovn);
       Result := Simplify;
     end;
+    
+    public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
+    new OptExprWrapper[](otp.FindVarUsages(vn));
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3579,10 +3650,14 @@ begin
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
         
-        var usages := new List<StmBase>;
+        var usages := new List<(StmBase, OptExprWrapper)>;
         var auf := true;
         
         var prev := new HashSet<StmBase>;
+        var nstms := bl.EnumrNextStms.Take(1000).ToArray;
+        var c := bl.EnumrNextStms.SkipWhile(stm-> stm<>e).Skip(1).Count;
+        
+        var enmr :=
         bl.EnumrNextStms
         .SkipWhile(stm-> stm<>e).Skip(1)
         .TakeWhile(
@@ -3594,17 +3669,23 @@ begin
               exit;
             end;
             if not prev.Add(stm) then exit;
-            if stm.DoesUseVar(e.vname) then usages += stm;
+            usages.AddRange(
+              stm
+              .FindVarUsages(e.vname)
+              .Where(e-> e<>nil )
+              .Select(e->(stm, e))
+            );
             Result := not ( (stm is ExprStm(var e2)) and (e2.vname=e.vname) );
           end
-        );
+        ).GetEnumerator;
+        while enmr.MoveNext do;
         
         var main := e.e.GetMain;
         if (main is IOptLiteralExpr) or (usages.Count < 2) then
         begin
           
           foreach var use in usages do
-            use.ReplaceVar(e.vname, main);
+            use.Item2.ReplaceVar(e.vname, main);
           
           if auf then bl.stms.Remove(e);
           
