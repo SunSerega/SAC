@@ -283,7 +283,7 @@ type
     public function GetSubAreas: IList<ExprContextArea>; abstract;
     
   end;
-  SimpleExprContextArea = class(ExprContextArea)
+  SimpleExprContextArea = sealed class(ExprContextArea)
     
     public p1,p2: integer;
     
@@ -322,7 +322,7 @@ type
     end;
     
   end;
-  ComplexExprContextArea = class(ExprContextArea)
+  ComplexExprContextArea = sealed class(ExprContextArea)
     
     public sas: IList<ExprContextArea>;
     
@@ -392,7 +392,7 @@ type
     
   end;
   
-  NLiteralExpr = class(Expr)
+  NLiteralExpr = sealed class(Expr)
     
     val: real;
     
@@ -403,7 +403,7 @@ type
     val.ToString(nfi);
     
   end;
-  SLiteralExpr = class(Expr)
+  SLiteralExpr = sealed class(Expr)
     
     val: string;
     
@@ -421,26 +421,26 @@ type
     Negative := new List<Expr>;
     
   end;
-  PlusExpr = class(ComplexExpr)
+  PlusExpr = sealed class(ComplexExpr)
     
     public function ToString: string; override :=
     $'({Positive.JoinIntoString(''+'')}-{Negative.JoinIntoString(''-'')})';
     
   end;
-  MltExpr = class(ComplexExpr)
+  MltExpr = sealed class(ComplexExpr)
     
     public function ToString: string; override :=
     $'({Positive.JoinIntoString(''*'')}/{Negative.JoinIntoString(''/'')})';
     
   end;
-  PowExpr = class(ComplexExpr)
+  PowExpr = sealed class(ComplexExpr)
     
     public function ToString: string; override :=
     $'({Positive.First}^{Positive.Skip(1).JoinIntoString(''^'')})';
     
   end;
   
-  FuncExpr = class(Expr)
+  FuncExpr = sealed class(Expr)
     
     name: string;
     par: array of Expr;
@@ -455,7 +455,7 @@ type
     $'{name}({par.JoinIntoString('','')})';
     
   end;
-  VarExpr = class(Expr)
+  VarExpr = sealed class(Expr)
     
     name: string;
     
@@ -584,7 +584,7 @@ type
   IOptLiteralExpr = interface(IOptExpr)
     
   end;
-  OptNLiteralExpr = class(OptNExprBase, IOptLiteralExpr)
+  OptNLiteralExpr = sealed class(OptNExprBase, IOptLiteralExpr)
     
     public constructor(val: real) :=
     self.res := val;
@@ -600,7 +600,7 @@ type
     res.ToString(nfi);
     
   end;
-  OptSLiteralExpr = class(OptSExprBase, IOptLiteralExpr)
+  OptSLiteralExpr = sealed class(OptSExprBase, IOptLiteralExpr)
     
     public constructor(val: string) :=
     self.res := val;
@@ -618,7 +618,7 @@ type
     $'"{res.Substring(0,100)}..."[{res.Length}]';
     
   end;
-  OptNullLiteralExpr = class(OptOExprBase, IOptLiteralExpr)
+  OptNullLiteralExpr = sealed class(OptOExprBase, IOptLiteralExpr)
     
     public constructor :=
     self.res := nil;
@@ -644,7 +644,7 @@ type
     function GetNegative: sequence of OptExprBase;
     
   end;
-  OptNNPlusExpr = class(OptNExprBase, IOptPlusExpr)
+  OptNNPlusExpr = sealed class(OptNExprBase, IOptPlusExpr)
     
     public Positive := new List<OptNExprBase>;
     public Negative := new List<OptNExprBase>;
@@ -809,7 +809,7 @@ type
     $'({Positive.JoinIntoString(''+'')}{Negative.Select(oe->''-''+oe.ToString).JoinIntoString('''')})';
     
   end;
-  OptSSPlusExpr = class(OptSExprBase, IOptPlusExpr)
+  OptSSPlusExpr = sealed class(OptSExprBase, IOptPlusExpr)
     
     public Positive := new List<OptSExprBase>;
     
@@ -959,7 +959,7 @@ type
     $'({Positive.JoinIntoString(''+'')})';
     
   end;
-  OptSOPlusExpr = class(OptSExprBase, IOptPlusExpr)
+  OptSOPlusExpr = sealed class(OptSExprBase, IOptPlusExpr)
     
     public Positive := new List<OptExprBase>;
     
@@ -1121,7 +1121,7 @@ type
     $'({Positive.JoinIntoString(''+'')})';
     
   end;
-  OptOPlusExpr = class(OptOExprBase, IOptPlusExpr)
+  OptOPlusExpr = sealed class(OptOExprBase, IOptPlusExpr)
     
     public Positive := new List<OptExprBase>;
     public Negative := new List<OptExprBase>;
@@ -1292,7 +1292,7 @@ type
     function GetNegative: sequence of OptExprBase;
     
   end;
-  OptNNMltExpr = class(OptNExprBase, IOptMltExpr)
+  OptNNMltExpr = sealed class(OptNExprBase, IOptMltExpr)
     
     public Positive := new List<OptNExprBase>;
     public Negative := new List<OptNExprBase>;
@@ -1464,7 +1464,7 @@ type
     $'(1{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})';
     
   end;
-  OptSNMltExpr = class(OptSExprBase, IOptMltExpr)
+  OptSNMltExpr = sealed class(OptSExprBase, IOptMltExpr)
     
     public Base: OptSExprBase;
     public Positive: OptNExprBase;
@@ -1616,7 +1616,7 @@ type
     $'({Base}*{Positive})';
     
   end;
-  OptSOMltExpr = class(OptSExprBase, IOptMltExpr)
+  OptSOMltExpr = sealed class(OptSExprBase, IOptMltExpr)
     
     public Base: OptSExprBase;
     public Positive: OptExprBase;
@@ -1780,7 +1780,7 @@ type
     $'({Base}*{Positive})';
     
   end;
-  OptOMltExpr = class(OptOExprBase, IOptMltExpr)
+  OptOMltExpr = sealed class(OptOExprBase, IOptMltExpr)
     
     public Positive := new List<OptExprBase>;
     public Negative := new List<OptExprBase>;
@@ -2040,7 +2040,7 @@ type
     function GetPositive: sequence of OptExprBase;
     
   end;
-  OptNPowExpr = class(OptNExprBase, IOptPowExpr)
+  OptNPowExpr = sealed class(OptNExprBase, IOptPowExpr)
     
     public Positive := new List<OptNExprBase>;
     
@@ -2187,7 +2187,7 @@ type
     $'({Positive.First}{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
     
   end;
-  OptOPowExpr = class(OptNExprBase, IOptPowExpr)
+  OptOPowExpr = sealed class(OptNExprBase, IOptPowExpr)
     
     public Positive := new List<OptExprBase>;
     
@@ -2531,7 +2531,7 @@ type
   IOptVarExpr = interface(IOptExpr)
     
   end;
-  UnOptVarExpr = class(OptOExprBase, IOptVarExpr)
+  UnOptVarExpr = sealed class(OptOExprBase, IOptVarExpr)
     
     public name: string;
     
@@ -2551,7 +2551,7 @@ type
     'var#?';
     
   end;
-  OptNVarExpr = class(OptNExprBase, IOptVarExpr)
+  OptNVarExpr = sealed class(OptNExprBase, IOptVarExpr)
     
     public souce: array of real;
     public id: integer;
@@ -2589,7 +2589,7 @@ type
     $'num_var#{id}';
     
   end;
-  OptSVarExpr = class(OptSExprBase, IOptVarExpr)
+  OptSVarExpr = sealed class(OptSExprBase, IOptVarExpr)
     
     public souce: array of string;
     public id: integer;
@@ -2627,7 +2627,7 @@ type
     $'str_var#{id}';
     
   end;
-  OptOVarExpr = class(OptOExprBase, IOptVarExpr)
+  OptOVarExpr = sealed class(OptOExprBase, IOptVarExpr)
     
     public souce: array of object;
     public id: integer;
@@ -2838,7 +2838,7 @@ type
     public static function Load(br: System.IO.BinaryReader): OptExprWrapper;
     
   end;
-  OptNExprWrapper = class(OptExprWrapper)
+  OptNExprWrapper = sealed class(OptExprWrapper)
     
     public Main: OptNExprBase;
     
@@ -2874,7 +2874,7 @@ type
     Main.ToString;
     
   end;
-  OptSExprWrapper = class(OptExprWrapper)
+  OptSExprWrapper = sealed class(OptExprWrapper)
     
     public Main: OptSExprBase;
     
@@ -2910,7 +2910,7 @@ type
     Main.ToString;
     
   end;
-  OptOExprWrapper = class(OptExprWrapper)
+  OptOExprWrapper = sealed class(OptExprWrapper)
     
     public Main: OptExprBase;
     
@@ -3329,7 +3329,7 @@ end;
 {$region Funcs}
 type
   
-  OptFunc_Length = class(OptNFuncExpr)
+  OptFunc_Length = sealed class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
     CheckParamsBase;
@@ -3372,7 +3372,7 @@ type
     end;
     
   end;
-  OptFunc_Num = class(OptNFuncExpr)
+  OptFunc_Num = sealed class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
     if par.Length <> 1 then
@@ -3419,7 +3419,7 @@ type
     end;
     
   end;
-  OptFunc_Ord = class(OptNFuncExpr)
+  OptFunc_Ord = sealed class(OptNFuncExpr)
     
     public procedure CheckParams; override :=
     CheckParamsBase;
@@ -3462,7 +3462,7 @@ type
     end;
     
   end;
-  OptFunc_DeflyNum = class(OptNFuncExpr)
+  OptFunc_DeflyNum = sealed class(OptNFuncExpr)
     
     ifnot: Action0;
     
@@ -3531,7 +3531,7 @@ type
     
   end;
   
-  OptFunc_Str = class(OptSFuncExpr)
+  OptFunc_Str = sealed class(OptSFuncExpr)
     
     public procedure CheckParams; override :=
     if par.Length <> 1 then
@@ -3587,7 +3587,7 @@ type
     end;
     
   end;
-  OptFunc_CutStr = class(OptSFuncExpr)
+  OptFunc_CutStr = sealed class(OptSFuncExpr)
     
     public procedure CheckParams; override :=
     CheckParamsBase;

@@ -2,7 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo добавить sealed везде где надо
 
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
 // - так же если следующий блок не может быть стартовой позицией - можно перенести переменную-литерал в него
@@ -39,7 +38,7 @@ type
     public function GetSubAreas: IList<FileContextArea>; abstract;
     
   end;
-  SimpleFileContextArea = class(FileContextArea)
+  SimpleFileContextArea = sealed class(FileContextArea)
     
     public fname: string;
     public l1,l2: integer;
@@ -99,7 +98,7 @@ type
     end;
     
   end;
-  ComplexFileContextArea = class(FileContextArea)
+  ComplexFileContextArea = sealed class(FileContextArea)
     
     public sas: IList<FileContextArea>;
     
@@ -154,7 +153,7 @@ type
     
   end;
   
-  ContextedExpr = class
+  ContextedExpr = sealed class
     
     expr: OptExprBase;
     context: SimpleFileContextArea;
@@ -322,7 +321,7 @@ type
   
   {$region Single stm}
   
-  ExecutingContext = class
+  ExecutingContext = sealed class
     
     public scr: Script;
     
@@ -528,7 +527,7 @@ type
   
   {$region Stm containers}
   
-  StmBlock = class
+  StmBlock = sealed class
     
     public StartPos := false;
     public stms := new List<StmBase>;
@@ -595,7 +594,7 @@ type
     
   end;
   
-  Script = class
+  Script = sealed class
     
     private static nfi := new System.Globalization.NumberFormatInfo;
     
@@ -701,21 +700,12 @@ type
   
   {$region InputValue}
   
-  InputValue = abstract class
-    
-    public function GetCalc: Action<ExecutingContext>; virtual := nil;
-    
-    public function GetRes: object; abstract;
-    
-    public procedure Save(bw: System.IO.BinaryWriter); abstract;
-    
-  end;
-  
-  InputSValue = abstract class(InputValue)
+  InputSValue = abstract class
     
     public res: string;
     
-    public function GetRes: object; override := res;
+    public function GetCalc: Action<ExecutingContext>; virtual := nil;
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
     public function Optimize(nvn, svn: HashSet<string>): InputSValue; virtual := self;
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; virtual := self;
@@ -723,7 +713,7 @@ type
     public static function Load(br: System.IO.BinaryReader): InputSValue;
     
   end;
-  SInputSValue = class(InputSValue)
+  SInputSValue = sealed class(InputSValue)
     
     public constructor(res: string) :=
     self.res := res;
@@ -738,7 +728,7 @@ type
     $'"{res}"';
     
   end;
-  DInputSValue = class(InputSValue)
+  DInputSValue = sealed class(InputSValue)
     
     public oe: OptSExprWrapper;
     
@@ -785,11 +775,12 @@ type
     
   end;
   
-  InputNValue = abstract class(InputValue)
+  InputNValue = abstract class
     
     public res: real;
     
-    public function GetRes: object; override := res;
+    public function GetCalc: Action<ExecutingContext>; virtual := nil;
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
     public function Optimize(nvn, svn: HashSet<string>): InputNValue; virtual := self;
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; virtual := self;
@@ -797,7 +788,7 @@ type
     public static function Load(br: System.IO.BinaryReader): InputNValue;
     
   end;
-  SInputNValue = class(InputNValue)
+  SInputNValue = sealed class(InputNValue)
     
     public constructor(res: real) :=
     self.res := res;
@@ -812,7 +803,7 @@ type
     res.ToString(StmBase.nfi);
     
   end;
-  DInputNValue = class(InputNValue)
+  DInputNValue = sealed class(InputNValue)
     
     public oe: OptNExprWrapper;
     
@@ -877,7 +868,7 @@ type
     public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBlockRef;
     
   end;
-  StaticStmBlockRef = class(StmBlockRef)
+  StaticStmBlockRef = sealed class(StmBlockRef)
     
     public bl: StmBlock;
     
@@ -898,7 +889,7 @@ type
     $'"{bl.fname+bl.lbl}"';
     
   end;
-  DynamicStmBlockRef = class(StmBlockRef)
+  DynamicStmBlockRef = sealed class(StmBlockRef)
     
     public s: InputSValue;
     
@@ -984,7 +975,7 @@ type
   
   {$region Key}
   
-  OperConstKeyDown = class(OperStmBase)
+  OperConstKeyDown = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1021,7 +1012,7 @@ type
     $'KeyDown {kk} //Const';
     
   end;
-  OperConstKeyUp = class(OperStmBase)
+  OperConstKeyUp = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1058,7 +1049,7 @@ type
     $'KeyUp {kk} //Const';
     
   end;
-  OperConstKeyPress = class(OperStmBase)
+  OperConstKeyPress = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1099,7 +1090,7 @@ type
     
   end;
   
-  OperKeyDown = class(OperStmBase)
+  OperKeyDown = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1173,7 +1164,7 @@ type
     $'KeyDown {kk}';
     
   end;
-  OperKeyUp = class(OperStmBase)
+  OperKeyUp = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1247,7 +1238,7 @@ type
     $'KeyUp {kk}';
     
   end;
-  OperKeyPress = class(OperStmBase)
+  OperKeyPress = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1322,7 +1313,7 @@ type
     $'KeyPress {kk}';
     
   end;
-  OperKey = class(OperStmBase)
+  OperKey = sealed class(OperStmBase)
     
     public kk, dp: InputNValue;
     
@@ -1413,7 +1404,7 @@ type
   
   {$region Mouse}
   
-  OperConstMouseDown = class(OperStmBase)
+  OperConstMouseDown = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1473,7 +1464,7 @@ type
     $'MouseDown {kk} //Const';
     
   end;
-  OperConstMouseUp = class(OperStmBase)
+  OperConstMouseUp = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1533,7 +1524,7 @@ type
     $'MouseUp {kk} //Const';
     
   end;
-  OperConstMousePress = class(OperStmBase)
+  OperConstMousePress = sealed class(OperStmBase)
     
     public kk: byte;
     
@@ -1594,7 +1585,7 @@ type
     
   end;
   
-  OperMouseDown = class(OperStmBase)
+  OperMouseDown = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1678,7 +1669,7 @@ type
     $'MouseDown {kk}';
     
   end;
-  OperMouseUp = class(OperStmBase)
+  OperMouseUp = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1762,7 +1753,7 @@ type
     $'MouseUp {kk}';
     
   end;
-  OperMousePress = class(OperStmBase)
+  OperMousePress = sealed class(OperStmBase)
     
     public kk: InputNValue;
     
@@ -1846,7 +1837,7 @@ type
     $'MousePress {kk}';
     
   end;
-  OperMouse = class(OperStmBase)
+  OperMouse = sealed class(OperStmBase)
     
     public kk, dp: InputNValue;
     
@@ -1947,7 +1938,7 @@ type
   
   {$region Other simulators}
   
-  OperConstMousePos = class(OperStmBase)
+  OperConstMousePos = sealed class(OperStmBase)
     
     public x,y: integer;
     
@@ -1989,7 +1980,7 @@ type
     $'MousePos {x} {y} //Const';
     
   end;
-  OperConstGetKey = class(OperStmBase)
+  OperConstGetKey = sealed class(OperStmBase)
     
     public kk: byte;
     public vname: string;
@@ -2032,7 +2023,7 @@ type
     $'GetKey {kk} {vname} //Const';
     
   end;
-  OperConstGetKeyTrigger = class(OperStmBase)
+  OperConstGetKeyTrigger = sealed class(OperStmBase)
     
     public kk: byte;
     public vname: string;
@@ -2076,7 +2067,7 @@ type
     
   end;
   
-  OperMousePos = class(OperStmBase)
+  OperMousePos = sealed class(OperStmBase)
     
     public x,y: InputNValue;
     
@@ -2150,7 +2141,7 @@ type
     $'MousePos {x} {y}';
     
   end;
-  OperGetKey = class(OperStmBase)
+  OperGetKey = sealed class(OperStmBase)
     
     public kk: InputNValue
     public vname: string;
@@ -2226,7 +2217,7 @@ type
     $'GetKey {kk} {vname}';
     
   end;
-  OperGetKeyTrigger = class(OperStmBase)
+  OperGetKeyTrigger = sealed class(OperStmBase)
     
     public kk: InputNValue
     public vname: string;
@@ -2302,7 +2293,7 @@ type
     $'GetKeyTrigger {kk} {vname}';
     
   end;
-  OperGetMousePos = class(OperStmBase)
+  OperGetMousePos = sealed class(OperStmBase)
     
     public x,y: string;
     
@@ -2356,7 +2347,7 @@ type
   
   {$region Jump/Call}
   
-  OperJump = class(OperStmBase, IJumpCallOper, IFileRefStm)
+  OperJump = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
@@ -2424,7 +2415,7 @@ type
     $'Jump {CalledBlock.ToString}';
     
   end;
-  OperJumpIf = class(OperStmBase, IJumpCallOper, IFileRefStm)
+  OperJumpIf = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
@@ -2560,7 +2551,7 @@ type
     
   end;
   
-  OperConstCall = class(OperStmBase, ICallOper, IFileRefStm)
+  OperConstCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
     
     public CalledBlock: StmBlock;
     
@@ -2605,7 +2596,7 @@ type
     
   end;
   
-  OperCall = class(OperStmBase, ICallOper, IFileRefStm)
+  OperCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
@@ -2674,7 +2665,7 @@ type
     $'Call {CalledBlock}';
     
   end;
-  OperCallIf = class(OperStmBase, ICallOper, IFileRefStm)
+  OperCallIf = sealed class(OperStmBase, ICallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
     public compr: (equ=byte(1), less=byte(2), more=byte(3));
@@ -2815,7 +2806,7 @@ type
   
   {$region ExecutingContext chandgers}
   
-  OperSusp = class(OperStmBase)
+  OperSusp = sealed class(OperStmBase)
     
     private static procedure Calc(ec: ExecutingContext) :=
     if ec.scr.susp_called = nil then
@@ -2844,7 +2835,7 @@ type
     $'Susp //Const';
     
   end;
-  OperReturn = class(OperStmBase, IContextJumpOper)
+  OperReturn = sealed class(OperStmBase, IContextJumpOper)
     
     public constructor(bl: StmBlock);
     begin
@@ -2872,7 +2863,7 @@ type
     $'Return //Const';
     
   end;
-  OperHalt = class(OperStmBase, IContextJumpOper)
+  OperHalt = sealed class(OperStmBase, IContextJumpOper)
     
     private static procedure Calc(ec: ExecutingContext) :=
     Halt;
@@ -2904,7 +2895,7 @@ type
   
   {$region Misc}
   
-  OperConstSleep = class(OperStmBase)
+  OperConstSleep = sealed class(OperStmBase)
     
     public l: integer;
     
@@ -2938,7 +2929,7 @@ type
     $'Sleep {l} //Const';
     
   end;
-  OperConstOutput = class(OperStmBase)
+  OperConstOutput = sealed class(OperStmBase)
     
     public otp: string;
     
@@ -2977,7 +2968,7 @@ type
     
   end;
   
-  OperSleep = class(OperStmBase)
+  OperSleep = sealed class(OperStmBase)
     
     public l: InputNValue;
     
@@ -3045,7 +3036,7 @@ type
     $'Sleep {l}';
     
   end;
-  OperRandom = class(OperStmBase)
+  OperRandom = sealed class(OperStmBase)
     
     public vname: string;
     
@@ -3083,7 +3074,7 @@ type
     $'Random {vname} //Const';
     
   end;
-  OperOutput = class(OperStmBase)
+  OperOutput = sealed class(OperStmBase)
     
     public otp: InputSValue;
     
@@ -3153,7 +3144,7 @@ type
   
   {$region directive's}
   
-  DrctFRef = class(DrctStmBase, IFileRefStm)
+  DrctFRef = sealed class(DrctStmBase, IFileRefStm)
     
     public fns: array of string;
     
