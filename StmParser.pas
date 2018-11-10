@@ -2,9 +2,8 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-
-//ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
-// - так же если следующий блок не может быть стартовой позицией - можно перенести переменную-литерал в него
+//ToDo реализовать DoesUseVar и ReplaceVar
+//ToDo Переносить переменные к их первому применению
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -384,12 +383,20 @@ type
     public bl: StmBlock;
     public scr: Script;
     
+    
+    
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
+    
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; virtual := self;
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; virtual :=
     Optimize(nvn, svn);
+    
+    public function DoesUseVar(vn: string): boolean; virtual := false;
+    public procedure ReplaceVar(vn: string; oe: OptExprBase); virtual := exit;
+    
+    
     
     public static function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
     
@@ -399,13 +406,15 @@ type
     public static function ObjToNum(o: object) :=
     OptExprBase.ObjToNum(o);
     
-    public function NumToInt(n: real): integer;
+    public static function NumToInt(context: object; n: real): integer;
     begin
-      if real.IsNaN(n) or real.IsInfinity(n) then raise new CannotConvertToIntException(scr, n);
+      if real.IsNaN(n) or real.IsInfinity(n) then raise new CannotConvertToIntException(context, n);
       var i := BigInteger.Create(n);
-      if (i < integer.MinValue) or (i > integer.MaxValue) then raise new CannotConvertToIntException(scr, i);
+      if (i < integer.MinValue) or (i > integer.MaxValue) then raise new CannotConvertToIntException(context, i);
       Result := integer(i);
     end;
+    
+    
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -539,6 +548,8 @@ type
     public scr: Script;
     
     public function GetAllFRefs: sequence of StmBlockRef;
+    
+    public function EnumrNextStms: sequence of StmBase;
     
     public procedure Seal;
     begin
@@ -1099,7 +1110,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 0, 0);
     end;
@@ -1120,7 +1131,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
         Result := new OperConstKeyDown(ikk);
       end else
@@ -1173,7 +1184,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 2, 0);
     end;
@@ -1194,7 +1205,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
         Result := new OperConstKeyUp(ikk);
       end else
@@ -1247,7 +1258,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 0, 0);
       keybd_event(n, 0, 2, 0);
@@ -1269,7 +1280,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
         Result := new OperConstKeyPress(ikk);
       end else
@@ -1322,9 +1333,9 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-      var p := NumToInt(dp.res);
+      var p := NumToInt(nil, dp.res);
       if p and $1 = $1 then keybd_event(n,0,0,0);
       if p and $2 = $2 then keybd_event(n,0,2,0);
     end;
@@ -1343,7 +1354,7 @@ type
     begin
       dp := dp.Optimize(nvn, svn);
       if dp is SInputNValue then
-      case NumToInt(dp.res) and $3 of
+      case NumToInt(nil, dp.res) and $3 of
         0: Result := nil;
         1: Result := OperKeyDown.Create(kk).Optimize(nvn, svn);
         2: Result := OperKeyUp.Create(kk).Optimize(nvn, svn);
@@ -1359,7 +1370,7 @@ type
     begin
       dp := dp.FinalOptimize(nvn, svn, ovn);
       if dp is SInputNValue then
-      case NumToInt(dp.res) and $3 of
+      case NumToInt(nil, dp.res) and $3 of
         0: Result := nil;
         1: Result := OperKeyDown.Create(kk).FinalOptimize(nvn, svn, ovn);
         2: Result := OperKeyUp.Create(kk).FinalOptimize(nvn, svn, ovn);
@@ -1595,13 +1606,13 @@ type
     private procedure Calc(ec: ExecutingContext);
     begin
       
-      case NumToInt(kk.res) of
+      case NumToInt(nil, kk.res) of
         1: mouse_event($002, 0,0,0,0);
         2: mouse_event($008, 0,0,0,0);
         4: mouse_event($020, 0,0,0,0);
         5: mouse_event($080, 0,0,0,0);
         6: mouse_event($200, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(nil, kk.res));
       end;
       
     end;
@@ -1622,7 +1633,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         case ikk of
           1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
@@ -1679,13 +1690,13 @@ type
     private procedure Calc(ec: ExecutingContext);
     begin
       
-      case NumToInt(kk.res) of
+      case NumToInt(nil, kk.res) of
         1: mouse_event($004, 0,0,0,0);
         2: mouse_event($010, 0,0,0,0);
         4: mouse_event($040, 0,0,0,0);
         5: mouse_event($100, 0,0,0,0);
         6: mouse_event($400, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(nil, kk.res));
       end;
       
     end;
@@ -1706,7 +1717,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         case ikk of
           1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
@@ -1763,13 +1774,13 @@ type
     private procedure Calc(ec: ExecutingContext);
     begin
       
-      case NumToInt(kk.res) of
+      case NumToInt(nil, kk.res) of
         1: mouse_event($006, 0,0,0,0);
         2: mouse_event($018, 0,0,0,0);
         4: mouse_event($060, 0,0,0,0);
         5: mouse_event($180, 0,0,0,0);
         6: mouse_event($600, 0,0,0,0);
-        else raise new InvalidMouseKeyCodeException(ec.scr, NumToInt(kk.res));
+        else raise new InvalidMouseKeyCodeException(ec.scr, NumToInt(nil, kk.res));
       end;
       
     end;
@@ -1790,7 +1801,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var ikk := NumToInt(kk.res);
+        var ikk := NumToInt(nil, kk.res);
         case ikk of
           1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
@@ -1848,17 +1859,17 @@ type
     begin
       
       var p: cardinal;
-      case NumToInt(kk.res) of
+      case NumToInt(nil, kk.res) of
         1: p := $002;
         2: p := $008;
         4: p := $020;
         5: p := $080;
         6: p := $200;
-        else raise new InvalidMouseKeyCodeException(scr, NumToInt(kk.res));
+        else raise new InvalidMouseKeyCodeException(scr, NumToInt(nil, kk.res));
       end;
       
       mouse_event(
-        (NumToInt(dp.res) and $3) * p,
+        (NumToInt(nil, dp.res) and $3) * p,
         0,0,0,0
       );
     end;
@@ -1877,7 +1888,7 @@ type
     begin
       dp := dp.Optimize(nvn, svn);
       if dp is SInputNValue then
-      case NumToInt(dp.res) and $3 of
+      case NumToInt(nil, dp.res) and $3 of
         0: Result := nil;
         1: Result := OperMouseDown.Create(kk).Optimize(nvn, svn);
         2: Result := OperMouseUp.Create(kk).Optimize(nvn, svn);
@@ -1893,7 +1904,7 @@ type
     begin
       dp := dp.FinalOptimize(nvn, svn, ovn);
       if dp is SInputNValue then
-      case NumToInt(dp.res) and $3 of
+      case NumToInt(nil, dp.res) and $3 of
         0: Result := nil;
         1: Result := OperMouseDown.Create(kk).FinalOptimize(nvn, svn, ovn);
         2: Result := OperMouseUp.Create(kk).FinalOptimize(nvn, svn, ovn);
@@ -2077,8 +2088,8 @@ type
     private procedure Calc(ec: ExecutingContext);
     begin
       SetCursorPos(
-        NumToInt(x.res),
-        NumToInt(y.res)
+        NumToInt(nil, x.res),
+        NumToInt(nil, y.res)
       );
     end;
     
@@ -2095,7 +2106,7 @@ type
     public function Simplify: StmBase;
     begin
       if (x is SInputNValue) and (y is SInputNValue) then
-        Result := new OperConstMousePos(NumToInt(x.res), NumToInt(y.res)) else
+        Result := new OperConstMousePos(NumToInt(nil, x.res), NumToInt(nil, y.res)) else
         Result := self;
     end;
     
@@ -2151,7 +2162,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       var k := GetKeyState(n) and $80 = $80;
       ec.SetVar(vname, k?1.0:0.0);
@@ -2171,7 +2182,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var n := NumToInt(kk.res);
+        var n := NumToInt(nil, kk.res);
         if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
         Result := new OperConstGetKey(n, vname);
       end else
@@ -2227,7 +2238,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var n := NumToInt(kk.res);
+      var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       var k := GetKeyState(n) and $01 = $01;
       ec.SetVar(vname, k?1.0:0.0);
@@ -2247,7 +2258,7 @@ type
     begin
       if kk is SInputNValue then
       begin
-        var n := NumToInt(kk.res);
+        var n := NumToInt(nil, kk.res);
         if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
         Result := new OperConstGetKeyTrigger(n, vname);
       end else
@@ -2974,7 +2985,7 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      var i := NumToInt(l.res);
+      var i := NumToInt(nil, l.res);
       if i < 0 then raise new InvalidSleepLengthException(ec.scr, i);
       Sleep(i);
     end;
@@ -2992,7 +3003,7 @@ type
     begin
       if l is SInputNValue then
       begin
-        var il := NumToInt(l.res);
+        var il := NumToInt(nil, l.res);
         if il < 0 then raise new InvalidSleepLengthException(nil, il);
         Result := new OperConstSleep(il);
       end else
@@ -3405,6 +3416,15 @@ begin
       yield sequence frs.GetRefs;
 end;
 
+function StmBlock.EnumrNextStms: sequence of StmBase;
+begin
+  yield sequence stms;
+  if stms[stms.Count-1] is IJumpCallOper then
+    yield nil else
+  if next <> nil then
+    yield sequence next.EnumrNextStms;
+end;
+
 function ExecutingContext.ExecuteNext: boolean;
 begin
   if curr = nil then
@@ -3550,6 +3570,50 @@ begin
     foreach var kvp in sbs.ToList do
       if not done.Contains(kvp.Value) then
         sbs.Remove(kvp.Key);
+    
+    
+    
+    foreach var bl: StmBlock in sbs.Values do
+    begin
+      
+      foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
+      begin
+        
+        var usages := new List<StmBase>;
+        var auf := true;
+        
+        var prev := new HashSet<StmBase>;
+        bl.EnumrNextStms
+        .SkipWhile(stm-> stm<>e).Skip(1)
+        .TakeWhile(
+          stm->
+          begin
+            if stm=nil then
+            begin
+              auf := false;
+              exit;
+            end;
+            if not prev.Add(stm) then exit;
+            if stm.DoesUseVar(e.vname) then usages += stm;
+            Result := not ( (stm is ExprStm(var e2)) and (e2.vname=e.vname) );
+          end
+        );
+        
+        var main := e.e.GetMain;
+        if (main is IOptLiteralExpr) or (usages.Count < 2) then
+        begin
+          
+          foreach var use in usages do
+            use.ReplaceVar(e.vname, main);
+          
+          if auf then bl.stms.Remove(e);
+          
+          try_final_opt := true;
+        end;
+        
+      end;
+      
+    end;
     
   end;
   
