@@ -2,7 +2,9 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo использовать FinalFixVarExprs (превращает все не найденные переменные в null)
+//ToDo загружать все !FRef в Save, чтоб даже когда оптимизация выключена - можно было выполнить сериализацию нескольких файлов
+//ToDo List<string> заменить на HashSet<T>, потому что каждое имя переменной может быть только 1 раз. иначе получаем ошибки
+//ToDo добавить sealed везде где надо
 
 //ToDo подставлять значения переменных в выражения если (переменной присваивается литерал ИЛИ (переменная используется 1 раз И bl.next=nil))
 // - так же если следующий блок не может быть стартовой позицией - можно перенести переменную-литерал в него
@@ -215,12 +217,6 @@ type
     inherited Create(source, $'Insufficient operator params count, expeted {exp}, but found {par.Length}', KV('par', object(par)));
     
   end;
-  LabelNotFoundException = class(FileCompilingException)
-    
-    public constructor(source: Script; lbl_name: string) :=
-    inherited Create(source, $'Label "{lbl_name}" not found');
-    
-  end;
   InvalidSleepLengthException = class(FileCompilingException)
     
     public constructor(source: Script; l: BigInteger) :=
@@ -255,6 +251,12 @@ type
     
     public constructor(par: string; opt: OptExprBase) :=
     inherited Create(source, $'!FRef must Not contain runtime calculated expressions{#10}Input [> {par} <] was optimized to [> {opt} <], but it can''t be converted to constant');
+    
+  end;
+  DuplicateLabelNameException = class(FileCompilingException)
+    
+    public constructor(o: object; lbl: string) :=
+    inherited Create(source, $'Duplicate label for {lbl} found');
     
   end;
   
@@ -387,7 +389,10 @@ type
     
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; virtual := self;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; virtual := self;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; virtual :=
+    Optimize(nvn, svn);
     
     public static function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
     
@@ -412,11 +417,11 @@ type
   end;
   ExprStm = sealed class(StmBase)
     
-    public v_name: string;
+    public vname: string;
     public e: OptExprWrapper;
     
     private procedure Calc(ec: ExecutingContext) :=
-    ec.SetVar(v_name, e.Calc(
+    ec.SetVar(vname, e.Calc(
       ec.nvs,
       ec.svs
     ));
@@ -425,10 +430,49 @@ type
     
     public constructor(sb: StmBlock; text: string);
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       
       e.Optimize(nvn, svn);
+      var main := e.GetMain;
+      
+      if main is OptNExprBase then
+      begin
+        nvn.Add(vname);
+        svn.Remove(vname);
+      end else
+      if main is OptSExprBase then
+      begin
+        nvn.Remove(vname);
+        svn.Add(vname);
+      end else;
+      
+      Result := self;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      
+      e.FinalOptimize(nvn, svn, ovn);
+      var main := e.GetMain;
+      
+      if main is OptNExprBase then
+      begin
+        nvn.Add(vname);
+        svn.Remove(vname);
+        ovn.Remove(vname);
+      end else
+      if main is OptSExprBase then
+      begin
+        nvn.Remove(vname);
+        svn.Add(vname);
+        ovn.Remove(vname);
+      end else
+      begin
+        nvn.Remove(vname);
+        svn.Remove(vname);
+        ovn.Add(vname);
+      end;
       
       Result := self;
     end;
@@ -436,14 +480,14 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(0));
-      bw.Write(v_name);
+      bw.Write(vname);
       e.Save(bw);
     end;
     
     public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): ExprStm;
     begin
       Result := new ExprStm;
-      Result.v_name := br.ReadString;
+      Result.vname := br.ReadString;
       Result.e := OptExprWrapper.Load(br);
     end;
     
@@ -451,7 +495,7 @@ type
     new Action<ExecutingContext>[](Calc);
     
     public function ToString: string; override :=
-    (e.GetMain is IOptLiteralExpr)?$'{v_name}={e} //Const':$'{v_name}={e}';
+    (e.GetMain is IOptLiteralExpr)?$'{vname}={e} //Const':$'{vname}={e}';
     
   end;
   OperStmBase = abstract class(StmBase)
@@ -567,8 +611,7 @@ type
     public LoadedFiles := new HashSet<string>;
     public sbs := new Dictionary<string, StmBlock>;
     
-    private procedure ReadFile(context: object; lbl: string; fQu: List<StmBlock>);
-    private procedure ReadFileBatch(context: object; lbl: string);
+    private procedure ReadFile(context: object; lbl: string);
     
     private static function CombinePaths(p1, p2: string): string;
     begin
@@ -711,7 +754,8 @@ type
     
     public function GetRes: object; override := res;
     
-    public function Optimize(nvn, svn: List<string>): InputSValue; virtual := self;
+    public function Optimize(nvn, svn: HashSet<string>): InputSValue; virtual := self;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; virtual := self;
     
     public static function Load(br: System.IO.BinaryReader): InputSValue;
     
@@ -740,12 +784,23 @@ type
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Optimize(nvn, svn: List<string>): InputSValue; override;
+    public function Simplify: InputSValue;
     begin
-      oe.Optimize(nvn, svn);
       if oe.Main is IOptLiteralExpr(var me) then
         Result := new SInputSValue(StmBase.ObjToStr(me.GetRes)) else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): InputSValue; override;
+    begin
+      oe.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; override;
+    begin
+      oe.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public constructor(oe: OptSExprWrapper);
@@ -773,7 +828,8 @@ type
     
     public function GetRes: object; override := res;
     
-    public function Optimize(nvn, svn: List<string>): InputNValue; virtual := self;
+    public function Optimize(nvn, svn: HashSet<string>): InputNValue; virtual := self;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; virtual := self;
     
     public static function Load(br: System.IO.BinaryReader): InputNValue;
     
@@ -802,12 +858,23 @@ type
     
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Optimize(nvn, svn: List<string>): InputNValue; override;
+    public function Simplify: InputNValue;
     begin
-      oe.Optimize(nvn, svn);
       if oe.Main is IOptLiteralExpr(var me) then
         Result := new SInputNValue(StmBase.ObjToNum(me.GetRes)) else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): InputNValue; override;
+    begin
+      oe.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; override;
+    begin
+      oe.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public constructor(oe: OptNExprWrapper);
@@ -839,7 +906,8 @@ type
     
     public function GetBlock(curr: StmBlock): StmBlock; abstract;
     
-    public function Optimize(bl: StmBlock; nvn: List<string>; svn: List<string>): StmBlockRef; virtual := self;
+    public function Optimize(bl: StmBlock; nvn, svn: HashSet<string>): StmBlockRef; virtual := self;
+    public function FinalOptimize(bl: StmBlock; nvn, svn, ovn: HashSet<string>): StmBlockRef; virtual := self;
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -882,19 +950,19 @@ type
           res := curr.fname+res else
           res := Script.CombinePaths(System.IO.Path.GetDirectoryName(curr.fname), res);
         
-        if not curr.scr.sbs.TryGetValue(res, Result) then
-        begin
-          curr.scr.ReadFileBatch(nil, res);
-          if not curr.scr.sbs.TryGetValue(res, Result) then
-            raise new LabelNotFoundException(curr.scr, res);
-        end;
+        if not res.Contains('#') then res += '#';
+        
+        if not curr.scr.sbs.ContainsKey(res) then
+          curr.scr.ReadFile(nil, res);
+        
+        Result := curr.scr.sbs[res];
       end;
     end;
     
     public constructor(s: InputSValue) :=
     self.s := s;
     
-    public function Optimize(bl: StmBlock; nvn: List<string>; svn: List<string>): StmBlockRef; override;
+    public function Optimize(bl: StmBlock; nvn, svn: HashSet<string>): StmBlockRef; override;
     begin
       s := s.Optimize(nvn, svn);
       if s is SInputSValue then
@@ -902,8 +970,16 @@ type
         Result := self;
     end;
     
+    public function FinalOptimize(bl: StmBlock; nvn, svn, ovn: HashSet<string>): StmBlockRef; override;
+    begin
+      s := s.FinalOptimize(nvn, svn, ovn);
+      if s is SInputSValue then
+        Result := new StaticStmBlockRef(self.GetBlock(bl)) else
+        Result := self;
+    end;
+    
     public function Optimize(bl: StmBlock) :=
-    Optimize(bl, new List<string>, new List<string>);
+    Optimize(bl, new HashSet<string>, new HashSet<string>);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1086,9 +1162,8 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
@@ -1096,6 +1171,18 @@ type
         Result := new OperConstKeyDown(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1149,9 +1236,8 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
@@ -1159,6 +1245,18 @@ type
         Result := new OperConstKeyUp(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1213,9 +1311,8 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
@@ -1223,6 +1320,18 @@ type
         Result := new OperConstKeyPress(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1276,7 +1385,7 @@ type
       dp := new DInputNValue(par[2], sb);
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       dp := dp.Optimize(nvn, svn);
       if dp is SInputNValue then
@@ -1288,6 +1397,22 @@ type
       end else
       begin
         kk := kk.Optimize(nvn, svn);
+        Result := self;
+      end;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      dp := dp.FinalOptimize(nvn, svn, ovn);
+      if dp is SInputNValue then
+      case NumToInt(dp.res) and $3 of
+        0: Result := nil;
+        1: Result := OperKeyDown.Create(kk).FinalOptimize(nvn, svn, ovn);
+        2: Result := OperKeyUp.Create(kk).FinalOptimize(nvn, svn, ovn);
+        3: Result := OperKeyPress.Create(kk).FinalOptimize(nvn, svn, ovn);
+      end else
+      begin
+        kk := kk.FinalOptimize(nvn, svn, ovn);
         Result := self;
       end;
     end;
@@ -1539,20 +1664,30 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
-        
         case ikk of
           1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        
+        Result := new OperConstMouseDown(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1613,20 +1748,30 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
-        
         case ikk of
-          1,2,4..6: Result := new OperConstMouseUp(ikk);
+          1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        
+        Result := new OperConstMouseUp(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1687,20 +1832,30 @@ type
     public constructor(kk: InputNValue) :=
     self.kk := kk;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var ikk := NumToInt(kk.res);
-        
         case ikk of
-          1,2,4..6: Result := new OperConstMousePress(ikk);
+          1,2,4..6: Result := new OperConstMouseDown(ikk);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        
+        Result := new OperConstMousePress(ikk);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1764,7 +1919,7 @@ type
       dp := new DInputNValue(par[2], sb);
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       dp := dp.Optimize(nvn, svn);
       if dp is SInputNValue then
@@ -1776,6 +1931,22 @@ type
       end else
       begin
         kk := kk.Optimize(nvn, svn);
+        Result := self;
+      end;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      dp := dp.FinalOptimize(nvn, svn, ovn);
+      if dp is SInputNValue then
+      case NumToInt(dp.res) and $3 of
+        0: Result := nil;
+        1: Result := OperMouseDown.Create(kk).FinalOptimize(nvn, svn, ovn);
+        2: Result := OperMouseUp.Create(kk).FinalOptimize(nvn, svn, ovn);
+        3: Result := OperMousePress.Create(kk).FinalOptimize(nvn, svn, ovn);
+      end else
+      begin
+        kk := kk.FinalOptimize(nvn, svn, ovn);
         Result := self;
       end;
     end;
@@ -1967,13 +2138,25 @@ type
       y := new DInputNValue(par[2], sb);
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      x := x.Optimize(nvn, svn);
-      y := y.Optimize(nvn, svn);
       if (x is SInputNValue) and (y is SInputNValue) then
         Result := new OperConstMousePos(NumToInt(x.res), NumToInt(y.res)) else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      x := x.Optimize(nvn, svn);
+      y := y.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      x := x.FinalOptimize(nvn, svn, ovn);
+      y := y.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2030,9 +2213,8 @@ type
       vname := par[2];
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var n := NumToInt(kk.res);
@@ -2040,6 +2222,18 @@ type
         Result := new OperConstGetKey(n, vname);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2095,9 +2289,8 @@ type
       vname := par[2];
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      kk := kk.Optimize(nvn, svn);
       if kk is SInputNValue then
       begin
         var n := NumToInt(kk.res);
@@ -2105,6 +2298,18 @@ type
         Result := new OperConstGetKeyTrigger(n, vname);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      kk := kk.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2212,12 +2417,23 @@ type
     public constructor(CalledBlock: StmBlockRef) :=
     self.CalledBlock := CalledBlock;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
       if CalledBlock is StaticStmBlockRef(var sbf) then
         bl.next := sbf.bl else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.FinalOptimize(self.bl, nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2301,7 +2517,7 @@ type
         end;
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       e1.Optimize(nvn, svn);
       e2.Optimize(nvn, svn);
@@ -2313,6 +2529,22 @@ type
       begin
         CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
         CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
+        Result := self;
+      end;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      e1.FinalOptimize(nvn, svn, ovn);
+      e2.FinalOptimize(nvn, svn, ovn);
+      if
+        (e1.GetMain() is IOptLiteralExpr) and
+        (e2.GetMain() is IOptLiteralExpr)
+      then
+        Result := OperJump.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).FinalOptimize(nvn, svn, ovn) else
+      begin
+        CalledBlock1 := CalledBlock1.FinalOptimize(bl, nvn, svn, ovn);
+        CalledBlock2 := CalledBlock2.FinalOptimize(bl, nvn, svn, ovn);
         Result := self;
       end;
     end;
@@ -2435,12 +2667,23 @@ type
     public constructor(CalledBlock: StmBlockRef) :=
     self.CalledBlock := CalledBlock;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
       if CalledBlock is StaticStmBlockRef(var sbf) then
         Result := new OperConstCall(sbf.bl) else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      CalledBlock := CalledBlock.FinalOptimize(self.bl, nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2525,7 +2768,7 @@ type
         end;
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       e1.Optimize(nvn, svn);
       e2.Optimize(nvn, svn);
@@ -2537,6 +2780,22 @@ type
       begin
         CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
         CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
+        Result := self;
+      end;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      e1.FinalOptimize(nvn, svn, ovn);
+      e2.FinalOptimize(nvn, svn, ovn);
+      if
+        (e1.GetMain() is IOptLiteralExpr) and
+        (e2.GetMain() is IOptLiteralExpr)
+      then
+        Result := OperCall.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).FinalOptimize(nvn, svn, ovn) else
+      begin
+        CalledBlock1 := CalledBlock1.FinalOptimize(bl, nvn, svn, ovn);
+        CalledBlock2 := CalledBlock2.FinalOptimize(bl, nvn, svn, ovn);
         Result := self;
       end;
     end;
@@ -2637,7 +2896,11 @@ type
       bw.Write(byte(2));
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override := nil;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      bl.next := nil;
+      Result := nil;
+    end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[0];
@@ -2771,9 +3034,8 @@ type
       l := new DInputNValue(par[1], sb);
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      l := l.Optimize(nvn, svn);
       if l is SInputNValue then
       begin
         var il := NumToInt(l.res);
@@ -2781,6 +3043,18 @@ type
         Result := new OperConstSleep(il);
       end else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      l := l.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      l := l.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2865,12 +3139,23 @@ type
       otp := new DInputSValue(par[1],sb);
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Simplify: StmBase;
     begin
-      otp := otp.Optimize(nvn, svn);
       if otp is SInputSValue then
         Result := new OperConstOutput(otp.res) else
         Result := self;
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    begin
+      otp := otp.Optimize(nvn, svn);
+      Result := Simplify;
+    end;
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    begin
+      otp := otp.FinalOptimize(nvn, svn, ovn);
+      Result := Simplify;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2925,11 +3210,11 @@ type
       );
     end;
     
-    public function Optimize(nvn: List<string>; svn: List<string>): StmBase; override;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
       
       foreach var fn in fns do
-        scr.ReadFileBatch(nil, fn);
+        scr.ReadFile(nil, fn);
       
       Result := nil;
     end;
@@ -2962,14 +3247,14 @@ type
   
 implementation
 
-{$region constructor's}
+{$region Reading}
 
 {$region Single stm}
 
 constructor ExprStm.Create(sb: StmBlock; text: string);
 begin
   var ss := text.SmartSplit('=', 2);
-  self.v_name := ss[0];
+  self.vname := ss[0];
   self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]));
 end;
 
@@ -3044,8 +3329,9 @@ end;
 
 {$region Script}
 
-procedure Script.ReadFile(context: object; lbl: string; fQu: List<StmBlock>);
+procedure Script.ReadFile(context: object; lbl: string);
 begin
+  lbl := lbl.Split('#')[0];
   if not LoadedFiles.Add(lbl) then exit;
   
   var fi := new System.IO.FileInfo(lbl);
@@ -3106,6 +3392,7 @@ begin
           last := last.next;
         end;
         lname := ffname+s;
+        if sbs.ContainsKey(lname) then raise new DuplicateLabelNameException(context, s);
         
       end else
         if (s <> '') and not skp_ar then
@@ -3136,52 +3423,18 @@ begin
   sbs.Add(lname, last);
 end;
 
-procedure Script.ReadFileBatch(context: object; lbl: string);
-begin
-  //if LoadedFiles=nil then exit;//Если загрузка уже была завершена. Но поидее этого вызова не может произойти
-  var fQu := new List<StmBlock>;
-  
-  ReadFile(context, lbl, fQu);
-  var any_done := true;
-  
-  while any_done do
-  begin
-    any_done := false;
-    
-    var Qu := fQu.ToArray;
-    fQu.Clear;
-    foreach var sb in Qu do
-    begin
-      var dir := System.IO.Path.GetDirectoryName(sb.fname)+'\';
-      
-      foreach var ref in sb.GetAllFRefs do
-        if ref is StaticStmBlockRef then
-        begin
-          var s := StmBase.ObjToStr(ref.GetBlock(nil));
-          if s = '' then continue;
-          s := s.Split(new char[]('#'),2)[0];
-          
-          ReadFile(nil, CombinePaths(dir, s), fQu);
-        end;
-      
-    end;
-    
-  end;
-  
-end;
-
 constructor Script.Create(fname: string);
 begin
   
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
-  ReadFileBatch(nil, read_start_lbl_name);
+  ReadFile(nil, read_start_lbl_name);
   
   self.Optimize;
 end;
 
 {$endregion Script}
 
-{$endregion constructor's}
+{$endregion Reading}
 
 {$region Misc Impl}
 
@@ -3211,14 +3464,15 @@ end;
 
 {$region Script optimization}
 
-function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>): boolean;
+function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): boolean;
 begin
   Result := true;
   
   var curr := bl;
   
-  var nvn := new List<string>;
-  var svn := new List<string>;
+  var nvn := new HashSet<string>;
+  var svn := new HashSet<string>;
+  var ovn := new HashSet<string>;
   
   while curr <> nil do
   begin
@@ -3246,7 +3500,7 @@ begin
     
     foreach var stm in curr.stms do
     begin
-      var opt := stm.Optimize(nvn, svn);
+      var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
       if opt <> nil then
         stm_lst.Add(opt);
     end;
@@ -3257,7 +3511,7 @@ begin
       stm_lst.RemoveLast;
       ind_lst.Add(stm_lst.Count);
       
-      if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst) then
+      if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst, allow_final_opt) then
       begin
         Result := false;//bl.next не надо присваивать, его уже изменило в рекурсивном вызове GetBlockChain
         break;
@@ -3283,62 +3537,68 @@ end;
 procedure Script.Optimize;
 begin
   
-  var nopt: boolean;
-  repeat
-    nopt := true;
+  var try_final_opt := true;
+  var dyn_refs := new List<StmBlockRef>;
+  while try_final_opt do
+  begin
     
-    foreach var bl: StmBlock in sbs.Values do
+    var done := new HashSet<StmBlock>;
+    var waiting := new HashSet<StmBlock>(start_pos_def?sbs.Values.Where(bl->bl.StartPos):sbs.Values);
+    var add_to_waiting := start_pos_def;
+    
+    var new_dyn_refs := waiting.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
+    try_final_opt := (new_dyn_refs.Count <> 0) and not dyn_refs.SequenceEqual(new_dyn_refs);
+    dyn_refs := new_dyn_refs;
+    
+    var allow_final_opt := new List<StmBlock>;
+    if dyn_refs.Count=0 then
     begin
-      var stms := new List<StmBase>;
+      allow_final_opt.AddRange(waiting);
       
-      if GetBlockChain(bl, new List<StmBlock>, stms, new List<integer>) then
-        bl.next := nil;
-      
-      nopt := nopt and bl.stms.SequenceEqual(stms);
-      
-      bl.stms := stms;
+      foreach var bl in waiting do
+      begin
+        foreach var ref in bl.GetAllFRefs do
+          allow_final_opt.Remove(StaticStmBlockRef(ref).bl);
+        allow_final_opt.Remove(bl.next);
+      end;
       
     end;
     
-  until nopt;
-  
-  
-  
-  if sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
-  begin
-    LoadedFiles := nil;
-    
-    var ref_bl := new HashSet<StmBlock>;
-    foreach var bl: StmBlock in sbs.Values do
-      if bl.StartPos or not start_pos_def then
+    while waiting.Count <> 0 do
+    begin
+      var curr := waiting.Last;
+      waiting.Remove(curr);
+      if curr=nil then continue;
+      if not done.Add(curr) then continue;
+      
+      var stms := new List<StmBase>;
+      
+      if GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) then
+        curr.next := nil;
+      
+      curr.stms := stms;
+      
+      if add_to_waiting then
       begin
-        ref_bl += bl;
-        ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
-        ref_bl += bl.next;
+        var refs := curr.GetAllFRefs.ToArray;
+        add_to_waiting := refs.All(ref->ref is StaticStmBlockRef);
+        if not add_to_waiting then continue;
+        waiting += curr;
+        foreach var ref in refs.Select(ref->(ref as StaticStmBlockRef).bl) do
+          waiting += ref;
+        waiting += curr.next;
       end;
+    end;
     
-    var lc: integer;
-    
-    repeat
-      lc := ref_bl.Count;
-      ref_bl.Remove(nil);
-      
-      foreach var bl in ref_bl.ToList do
-        if bl.StartPos or not start_pos_def then
-        begin
-          ref_bl += bl;
-          ref_bl += bl.GetAllFRefs.Select(ref->(ref as StaticStmBlockRef).bl);
-          ref_bl += bl.next;
-        end;
-      
-    until lc=ref_bl.Count;
-    
-    foreach var kvp: KeyValuePair<string, StmBlock> in sbs.ToList do
-      if not ref_bl.Contains(kvp.Value) then
+    foreach var kvp in sbs.ToList do
+      if not done.Contains(kvp.Value) then
         sbs.Remove(kvp.Key);
     
   end;
-    
+  
+  if sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
+    LoadedFiles := nil;
+  
   foreach var bl: StmBlock in sbs.Values do
     bl.Seal;
   

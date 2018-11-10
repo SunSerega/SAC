@@ -32,9 +32,8 @@ begin
       d.Add(s.ToLower, Translate('T|'+s));
     end;
   
-  var lns := h.Split(#10);
-  System.Console.WindowWidth := lns.Select(s->s.Length).Max+1;
-  System.Console.WindowHeight := lns.Length+10;
+  System.Console.WindowWidth := d.Values.SelectMany(v->v.Split(#10).Select(l->l.Length)).Max+1;
+  System.Console.WindowHeight := d.Values.Select(v->v.Count(ch->ch=#10)).Max+11;
   
   Locale := nlcl;
 end;

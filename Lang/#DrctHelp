@@ -1,6 +1,6 @@
 %EnterName=Enter directive name for it's description\
 Enter empty string for list of directives
-H|FRef=Loads file, even if it isn't used by program
+H|FRef=Load's file, even if it isn't used by program
 T|FRef=!Fref "f1.sac"\
 Will add all code from file "f1.sac" to currently loaded script\
 \
@@ -8,6 +8,17 @@ Will add all code from file "f1.sac" to currently loaded script\
 Will add all code from all specified files\
 \
 This directive have unlimited amount of operands, so you can't add comments to it
+H|StartPos=Specifies statement block as valid start position of the script
+T|StartPos=!StartPos\
+Will specify statement block as valid start position of the script\
+\
+!StartPos can only be placed on the start of the block\
+(on begin of the file or after label)\
+\
+If there is no !StartPos directive in script - every block is valid start position\
+\
+Adding this directive not only helps compiler help you\
+It also enables a lot more optimizations
 ~RU
 %EnterName=Введите имя директивы, чтоб получить её описание\
 Введите пустую строку для списка директив
@@ -19,3 +30,14 @@ T|FRef=!Fref "f1.sac"\
 Добавить весь код из все указанные файлы\
 \
 Эта директива имеет неограниченное кол-во операндов, поэтому к ней нельзя добавить комментарии
+H|StartPos=Указывает что блок строк может быть стартовой позицией скрипта
+T|StartPos=!StartPos\
+Укажет что блок строк, в котором находится эта директива, является подходящим для старта скрипта с него\
+\
+!StartPos может стоять только в начале блока\
+(в начале файла или сразу после метки)\
+\
+Если в скрипте нет ни 1 директивы !StartPos - каждый блок может быть стартовой позицией\
+\
+Добавление этой директивы не только помогает компилятору помогать вам\
+Это так же даёт возможность производить на много больше оптимизаций

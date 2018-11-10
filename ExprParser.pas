@@ -1,6 +1,10 @@
 ﻿unit ExprParser;
 
 //ToDo Контекст ошибок
+//ToDo костанты WW и WH
+//ToDo функции вроде Int, Round, Sqrt
+//ToDo добавить sealed везде где надо
+
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
 //ToDo Optimize:    Много лишних вызовов Openup и Optimize (3;4 для каждого параметра). Это нужно, чтоб сначала OPlus=>NNPlus, а потомм уже раскрывать. Проверить производительность
@@ -2682,7 +2686,7 @@ type
     
     public function GetMain: OptExprBase; abstract;
     
-    protected function OptBase(me: OptExprBase; nvn, svn: List<string>): OptExprBase;
+    protected function OptBase(me: OptExprBase; nvn, svn: HashSet<string>): OptExprBase;
     begin
       var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
       
@@ -2727,18 +2731,19 @@ type
       
     end;
     
-    protected function FinalOptBase(me: OptExprBase; nvn, svn: List<string>): OptExprBase;
+    protected function FinalOptBase(me: OptExprBase; nvn, svn, ovn: HashSet<string>): OptExprBase;
     begin
       var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
       
-      var lnvn := new List<string>;
-      var lsvn := new List<string>;
-      var lovn := new List<string>;
+      var lnvn := new HashSet<string>;
+      var lsvn := new HashSet<string>;
+      var lovn := new HashSet<string>;
       foreach var vn in Main.GetVarNames(nil,nil,nil) do
         if nvn.Contains(vn) then
           lnvn.Add(vn) else
         if svn.Contains(vn) then
           lsvn.Add(vn) else
+        if ovn.Contains(vn) then
           lovn.Add(vn);
       
       var n_vars := ArrFill(lnvn.Count, 0.0);
@@ -2770,9 +2775,9 @@ type
       
     end;
     
-    public procedure Optimize(nvn, svn: List<string>); abstract;
+    public procedure Optimize(nvn, svn: HashSet<string>); abstract;
     
-    public procedure FinalOptimize(nvn, svn: List<string>); abstract;
+    public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); abstract;
     
     protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
@@ -2841,11 +2846,11 @@ type
     
     public function GetMain: OptExprBase; override := Main;
     
-    public procedure Optimize(nvn, svn: List<string>); override :=
+    public procedure Optimize(nvn, svn: HashSet<string>); override :=
     self.Main := OptNExprBase(OptBase(Main, nvn, svn));
     
-    public procedure FinalOptimize(nvn, svn: List<string>); override :=
-    self.Main := OptNExprBase(FinalOptBase(Main, nvn, svn));
+    public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
+    self.Main := OptNExprBase(FinalOptBase(Main, nvn, svn, ovn));
     
     public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
@@ -2877,11 +2882,11 @@ type
     
     public function GetMain: OptExprBase; override := Main;
     
-    public procedure Optimize(nvn, svn: List<string>); override :=
+    public procedure Optimize(nvn, svn: HashSet<string>); override :=
     self.Main := OptSExprBase(OptBase(Main, nvn, svn));
     
-    public procedure FinalOptimize(nvn, svn: List<string>); override :=
-    self.Main := OptSExprBase(FinalOptBase(Main, nvn, svn));
+    public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
+    self.Main := OptSExprBase(FinalOptBase(Main, nvn, svn, ovn));
     
     public function CalcS(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
@@ -2913,11 +2918,11 @@ type
     
     public function GetMain: OptExprBase; override := Main;
     
-    public procedure Optimize(nvn, svn: List<string>); override :=
+    public procedure Optimize(nvn, svn: HashSet<string>); override :=
     self.Main := OptBase(Main, nvn, svn);
     
-    public procedure FinalOptimize(nvn, svn: List<string>); override :=
-    self.Main := FinalOptBase(Main, nvn, svn);
+    public procedure FinalOptimize(nvn, svn, ovn: HashSet<string>); override :=
+    self.Main := FinalOptBase(Main, nvn, svn, ovn);
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin

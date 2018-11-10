@@ -13,7 +13,8 @@
 	4 - Constants\
 	5 - Expressions\
 	6 - Directives\
-	7 - Other Help.exe's
+	7 - Labels\
+	8 - Other Help.exe's
 
 
 1=\
@@ -104,6 +105,30 @@
 
 
 7=\
+	Files are split in blocks by Labels\
+	Every block executes linearly\
+	But with Jump and Call operators you can make non-linear algorithms:\
+	\
+	Output "before jump"\
+	Jump "#my_lbl1"\
+	Output "this will never be executed"\
+	#my_lbl1\
+	Output "after jump"\
+	Susp\
+	\
+	This will output:\
+	before jump\
+	after jump\
+	\
+	Also, there is always empty label at the start of the file:\
+	\
+	i\=i+1\
+	Output "iteration "+i\
+	Susp\
+	Jump "#" //(This will create infinite loop)
+
+
+8=\
 	Lists and descriptions of:\
 	- Functions:  FuncHelp.exe\
 	- Operators:  OperHelp.exe\

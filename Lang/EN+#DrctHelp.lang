@@ -6,7 +6,7 @@
 
 
 
-H|FRef							=Loads file, even if it isn't used by program
+H|FRef							=Load's file, even if it isn't used by program
 T|FRef							=\
 	!Fref "f1.sac"\
 	Will add all code from file "f1.sac" to currently loaded script\
@@ -15,4 +15,18 @@ T|FRef							=\
 	Will add all code from all specified files\
 	\
 	This directive have unlimited amount of operands, so you can't add comments to it
+
+
+H|StartPos						=Specifies statement block as valid start position of the script
+T|StartPos						=\
+	!StartPos\
+	Will specify statement block as valid start position of the script\
+	\
+	!StartPos can only be placed on the start of the block\
+	(on begin of the file or after label)\
+	\
+	If there is no !StartPos directive in script - every block is valid start position\
+	\
+	Adding this directive not only helps compiler help you\
+	It also enables a lot more optimizations
 
