@@ -3671,28 +3671,27 @@ begin
         
         var prev := new HashSet<StmBase>;
         
-        var enmr :=
-        bl.EnumrNextStms
-        .SkipWhile(stm-> stm<>e).Skip(1)
-        .TakeWhile(
-          stm->
+        foreach var stm in
+          bl.EnumrNextStms
+          .SkipWhile(stm-> stm<>e).Skip(1)
+        do
+        begin
+          if stm=nil then
           begin
-            if stm=nil then
-            begin
-              auf := false;
-              exit;
-            end;
-            if not prev.Add(stm) then exit;
-            usages.AddRange(
-              stm
-              .FindVarUsages(e.vname)
-              .Where(e-> e<>nil )
-              .Select(e->(stm, e))
-            );
-            Result := not ( (stm is ExprStm(var e2)) and (e2.vname=e.vname) );
-          end
-        ).GetEnumerator;
-        while enmr.MoveNext do;
+            auf := false;
+            break;
+          end;
+          if not prev.Add(stm) then break;
+          
+          usages.AddRange(
+            stm
+            .FindVarUsages(e.vname)
+            .Where(e-> e<>nil )
+            .Select(e->(stm, e))
+          );
+          
+          if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
+        end;
         
         var main := e.e.GetMain;
         if (main is IOptLiteralExpr) or (usages.Count < 2) then
@@ -3706,7 +3705,7 @@ begin
           try_final_opt := true;
         end else
         begin
-          var use := usages[0];
+          var use := usages[0];//ToDo надо переставлять точку, если применение в цикле (иначе переменная будет вычислятся при каждой итерации)
           var stms := use[0].bl.stms;
           
           if bl <> use[0].bl then
