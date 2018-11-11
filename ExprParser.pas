@@ -2706,7 +2706,6 @@ type
     public function ReplaceVarBase(me: OptExprBase; vn: string; oe: OptExprBase): OptExprBase;
     begin
       var Main := me.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
-      Main := Main.ReplaceVar(vn, oe);
       
       var lnvn := new List<string>;
       var lsvn := new List<string>;
@@ -2726,6 +2725,7 @@ type
       var s_vars_names := lsvn.ToArray;
       var o_vars_names := lovn.ToArray;
       
+      Main := Main.ReplaceVar(vn, oe);
       Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
       Main := Main.Optimize.Openup.Optimize;
       

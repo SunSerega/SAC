@@ -2,10 +2,15 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo Переносить переменные к их первому применению
+//ToDo Переменные можно подставлять не только если они литералы. Их можно подставлять если они простые, то есть 1 переменная и т.п.
+//ToDo FinalOptimize всегда должно возвращать новый экземпляр, а для этого надо чтоб выражения тоже это делали (когда FinalOptimize - алгоритм проходит и по следующим блокам, а они могут быть вызваны из нескольких мест)
+//ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
+
+//ToDo Проверить, не исправили ли issue компилятора
+// - #1488
 
 interface
 
@@ -872,7 +877,7 @@ type
     end;
     
     public function ToString: string; override :=
-    e.ToString;
+    oe.ToString;
     
   end;
   
@@ -3553,28 +3558,32 @@ begin
         stm_lst.Add(opt);
     end;
     
-    var last := stm_lst[stm_lst.Count-1];
-    if last is OperConstCall(var occ) then
+    
+    
+    if stm_lst.Count <> 0 then
     begin
-      stm_lst.RemoveLast;
-      ind_lst.Add(stm_lst.Count);
       
-      if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst, allow_final_opt) then
+      if stm_lst[stm_lst.Count-1] is OperConstCall(var occ) then
       begin
-        Result := false;//bl.next не надо присваивать, его уже изменило в рекурсивном вызове GetBlockChain
+        stm_lst.RemoveLast;
+        ind_lst.Add(stm_lst.Count);
+        
+        if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst, allow_final_opt) then
+        begin
+          Result := false;//bl.next не надо присваивать, его уже изменило в рекурсивном вызове GetBlockChain
+          break;
+        end;
+        
+      end else
+        ind_lst.Add(stm_lst.Count);
+      
+      if stm_lst[stm_lst.Count-1] is IJumpCallOper then
+      begin
+        bl.next := nil;
+        Result := false;
         break;
       end;
       
-    end else
-      ind_lst.Add(stm_lst.Count);
-    
-    
-    
-    if stm_lst[stm_lst.Count-1] is IJumpCallOper then
-    begin
-      bl.next := nil;
-      Result := false;
-      break;
     end;
     
     curr := curr.next;
@@ -3589,6 +3598,8 @@ begin
   var dyn_refs := new List<StmBlockRef>;
   while try_final_opt do
   begin
+    
+    {$region Init}
     
     var done := new HashSet<StmBlock>;
     var waiting := new HashSet<StmBlock>(start_pos_def?sbs.Values.Where(bl->bl.StartPos):sbs.Values);
@@ -3611,6 +3622,10 @@ begin
       end;
       
     end;
+    
+    {$endregion Init}
+    
+    {$region Block chaining}
     
     while waiting.Count <> 0 do
     begin
@@ -3642,11 +3657,12 @@ begin
       if not done.Contains(kvp.Value) then
         sbs.Remove(kvp.Key);
     
+    {$endregion Block chaining}
     
+    {$region Variable optimizations}
     
     foreach var bl: StmBlock in sbs.Values do
-    begin
-      
+    begin//ToDo #1488
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
         
@@ -3654,8 +3670,6 @@ begin
         var auf := true;
         
         var prev := new HashSet<StmBase>;
-        var nstms := bl.EnumrNextStms.Take(1000).ToArray;
-        var c := bl.EnumrNextStms.SkipWhile(stm-> stm<>e).Skip(1).Count;
         
         var enmr :=
         bl.EnumrNextStms
@@ -3685,16 +3699,45 @@ begin
         begin
           
           foreach var use in usages do
-            use.Item2.ReplaceVar(e.vname, main);
+            use[1].ReplaceVar(e.vname, main);
           
           if auf then bl.stms.Remove(e);
           
           try_final_opt := true;
+        end else
+        begin
+          var use := usages[0];
+          var stms := use[0].bl.stms;
+          
+          if bl <> use[0].bl then
+          begin
+            
+            bl.stms.Remove(e);
+            stms.Insert(stms.IndexOf(use[0]),e);
+            
+            try_final_opt := true;
+          end else
+          begin
+            var ind := stms.IndexOf(use[0]);
+            
+            if stms.IndexOf(e)+1 <> ind then
+            begin
+              
+              stms.Remove(e);
+              stms.Insert(ind-1,e);
+              
+              try_final_opt := true;
+            end;
+            
+          end;
+          
         end;
         
+        
       end;
-      
     end;
+    
+    {$endregion Variable optimizations}
     
   end;
   
