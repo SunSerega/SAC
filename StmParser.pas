@@ -2,7 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo Переменные можно подставлять не только если они литералы. Их можно подставлять если они простые, то есть 1 переменная и т.п.
 //ToDo FinalOptimize всегда должно возвращать новый экземпляр, а для этого надо чтоб выражения тоже это делали (когда FinalOptimize - алгоритм проходит и по следующим блокам, а они могут быть вызваны из нескольких мест)
 //ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
 
@@ -3694,7 +3693,7 @@ begin
         end;
         
         var main := e.e.GetMain;
-        if (main is IOptLiteralExpr) or (usages.Count < 2) then
+        if (main is IOptSimpleExpr) or (usages.Count < 2) then
         begin
           
           foreach var use in usages do

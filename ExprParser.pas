@@ -3,7 +3,7 @@
 //ToDo Контекст ошибок
 //ToDo костанты WW и WH
 //ToDo функции округления чисел (Int, Round, Ceil)
-//ToDo враперы не могут конвертировать свой тип при оптимизации
+//ToDo враперы должны возвращать свою копию если оптимизация удалась. +FinalOptimize должна копировать и все внутренние выражения, когда они хоть как то изменились
 
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
@@ -501,6 +501,7 @@ type
     function GetCalc: sequence of Action0;
     
   end;
+  IOptSimpleExpr=interface(IOptExpr) end;
   OptExprBase = abstract class(IOptExpr)
     
     protected static nfi := new System.Globalization.NumberFormatInfo;
@@ -605,7 +606,7 @@ type
   
   {$region Literal}
   
-  IOptLiteralExpr = interface(IOptExpr)
+  IOptLiteralExpr = interface(IOptSimpleExpr)
     
   end;
   OptNLiteralExpr = sealed class(OptNExprBase, IOptLiteralExpr)
@@ -2441,7 +2442,7 @@ type
   
   {$region Var}
   
-  IOptVarExpr = interface(IOptExpr)
+  IOptVarExpr = interface(IOptSimpleExpr)
     
   end;
   UnOptVarExpr = sealed class(OptOExprBase, IOptVarExpr)
