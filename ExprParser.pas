@@ -4,7 +4,8 @@
 //ToDo костанты WW и WH
 //ToDo функции округления чисел (Int, Round, Ceil)
 //ToDo GetVarNames бесполезно
-//ToDo переделать ToString для переменных
+//ToDo переделать ToString для переменных (надо массив имён, чтоб выводить нормальный текст вместо num_var#0,1,2, ...)
+//ToDo провести тест выражений
 
 //ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
@@ -708,9 +709,30 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptNExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      Negative := Negative.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptNExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptNNPlusExpr;
+        res.Positive := self.Positive;
+        res.Negative := self.Negative;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -860,8 +882,23 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptSExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptSExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptSSPlusExpr;
+        res.Positive := self.Positive;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1018,9 +1055,30 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      Negative := Negative.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptOPlusExpr;
+        res.Positive := self.Positive;
+        res.Negative := self.Negative;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1037,32 +1095,54 @@ type
       TransformAllSubExprs(oe->oe.Optimize);
       if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(self, Negative);
       
-      var ToDo := 0;//нужно ещё раскрывать тут вложенные IOptPlusExpr
-      
-      Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
-      
-      if (Positive.Count=1) and (Negative.Count=0) then
+      var res1: OptOPlusExpr;
+      if Positive.Concat(Negative).Any(oe->oe is IOptPlusExpr) then
       begin
-        Result := Positive[0];
+        res1 := new OptOPlusExpr;
+        
+        foreach var oe in Positive do
+          if oe is IOptPlusExpr(var ope) then
+          begin
+            res1.Positive.AddRange(ope.GetPositive);
+            res1.Negative.AddRange(ope.GetNegative);
+          end else
+            res1.Positive.Add(oe);
+        
+        foreach var oe in Negative do
+          if oe is IOptPlusExpr(var ope) then
+          begin
+            res1.Negative.AddRange(ope.GetPositive);
+            res1.Positive.AddRange(ope.GetNegative);
+          end else
+            res1.Negative.Add(oe);
+        
+      end else
+        res1 := self;
+      
+      res1.Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
+      
+      if (res1.Positive.Count=1) and (res1.Negative.Count=0) then
+      begin
+        Result := res1.Positive[0];
         exit;
       end;
       
-      if Positive.Any(oe->oe is OptSExprBase) then
+      if res1.Positive.Any(oe->oe is OptSExprBase) then
       begin
-        if Negative.Any then raise new CannotSubStringExprException(self, Negative);
+        if res1.Negative.Any then raise new CannotSubStringExprException(nil, nil);
         
         var res := new OptSSPlusExpr;
-        res.Positive := self.Positive.ConvertAll(AsStrExpr);
+        res.Positive := res1.Positive.ConvertAll(AsStrExpr);
         Result := res.Optimize;
       end else
-      if Positive.Concat(Negative).All(oe->(oe is OptNExprBase) or (oe is OptNullLiteralExpr)) then
+      if res1.Positive.Concat(res1.Negative).All(oe->(oe is OptNExprBase) or (oe is OptNullLiteralExpr)) then
       begin
         var res := new OptNNPlusExpr;
-        res.Positive := self.Positive.ConvertAll(oe->AsDefinitelyNumExpr(oe));
-        res.Negative := self.Negative.ConvertAll(oe->AsDefinitelyNumExpr(oe));
+        res.Positive := res1.Positive.ConvertAll(oe->AsDefinitelyNumExpr(oe));
+        res.Negative := res1.Negative.ConvertAll(oe->AsDefinitelyNumExpr(oe));
         Result := res.Optimize;
       end else
-        Result := self;//Даже если есть несколько констант подряд - их нельзя складывать, потому что числа и строки по разному складываются
+        Result := res1;//Даже если есть несколько констант подряд - их нельзя складывать, потому что числа и строки по разному складываются
       
     end;
     
@@ -1145,9 +1225,30 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptNExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptNExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      Negative := Negative.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptNExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptNNMltExpr;
+        res.Positive := self.Positive;
+        res.Negative := self.Negative;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1310,9 +1411,30 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      Base := f(Base) as OptSExprBase;
-      Positive := f(Positive) as OptNExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      var oe1 := f(Base) as OptSExprBase;
+      if oe1<>Base then
+      begin
+        need_copy := true;
+        Base := oe1;
+      end;
+      var oe2 := f(Positive) as OptNExprBase;
+      if oe2<>Positive then
+      begin
+        need_copy := true;
+        Positive := oe2;
+      end;
+      
+      if need_copy then
+      begin
+        var res := new OptSNMltExpr;
+        res.Base := self.Base;
+        res.Positive := self.Positive;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1504,9 +1626,30 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptExprBase;
-      for var i := 0 to Negative.Count-1 do Negative[i] := f(Negative[i]) as OptExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      Negative := Negative.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptOMltExpr;
+        res.Positive := self.Positive;
+        res.Negative := self.Negative;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1684,8 +1827,23 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to Positive.Count-1 do Positive[i] := f(Positive[i]) as OptNExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      Positive := Positive.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptNExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      if need_copy then
+      begin
+        var res := new OptNPowExpr;
+        res.Positive := self.Positive;
+        Result := res;
+      end else
+        Result := self;
+      
     end;
     
     
@@ -1822,13 +1980,24 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      par := par.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      Result := need_copy?self.Copy:self;
+      
     end;
     
     
     
     public function GetTps: array of System.Type; abstract;
+    
+    public function Copy: IOptFuncExpr; abstract;
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
@@ -1905,13 +2074,24 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      for var i := 0 to par.Length-1 do par[i] := f(par[i]) as OptExprBase;
-      Result := self;
+      var need_copy := false;
+      
+      par := par.ConvertAll(oe->
+      begin
+        Result := f(oe) as OptExprBase;
+        if oe<>Result then
+          need_copy := true;
+      end);
+      
+      Result := need_copy?self.Copy:self;
+      
     end;
     
     
     
     public function GetTps: array of System.Type; abstract;
+    
+    public function Copy: IOptFuncExpr; abstract;
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
@@ -2775,6 +2955,9 @@ type
       CheckParams;
     end;
     
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_Length(self.par);
+    
   end;
   OptFunc_Num = sealed class(OptNFuncExpr)
     
@@ -2842,6 +3025,9 @@ type
       CheckParams;
     end;
     
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_Num(self.par);
+    
   end;
   OptFunc_Ord = sealed class(OptNFuncExpr)
     
@@ -2884,6 +3070,9 @@ type
       self.name := 'Ord';
       CheckParams;
     end;
+    
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_Ord(self.par);
     
   end;
   OptFunc_DeflyNum = sealed class(OptNFuncExpr)
@@ -2957,6 +3146,9 @@ type
       CheckParams;
     end;
     
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_DeflyNum(self.par);
+    
   end;
   
   OptFunc_Str = sealed class(OptSFuncExpr)
@@ -3018,6 +3210,9 @@ type
       CheckParams;
     end;
     
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_Str(self.par);
+    
   end;
   OptFunc_CutStr = sealed class(OptSFuncExpr)
     
@@ -3073,6 +3268,9 @@ type
       self.name := 'CutStr';
       CheckParams;
     end;
+    
+    public function Copy: IOptFuncExpr; override :=
+    new OptFunc_CutStr(self.par);
     
   end;
   
