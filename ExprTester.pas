@@ -382,7 +382,7 @@ type
     
     function GetExpRes: object; override;
     begin
-      var ress := se.ConvertAll(e->e.GetExpRes);
+      //var ress := se.ConvertAll(e->e.GetExpRes);
     end;
     
     constructor(name: string; se: array of TestExpr) :=
@@ -493,7 +493,7 @@ begin
   //exit;
   
   var skiping: integer;
-  skiping := 1500000;
+  skiping := 3395763;
   var n := 0;
   
   foreach var te in TestExpr.GetAnyExprs(true, 3) do
@@ -509,18 +509,21 @@ begin
     var nvs := te.nvs;
     var svs := te.svs;
     var ovs := te.ovs;
-    foreach var kvp in ovs do//ToDo ну да, костыль, но уже как то... какая разница
+    
+    var cnvs := nvs.ToDictionary(kvp->kvp.Key, kvp->kvp.Value);
+    var csvs := svs.ToDictionary(kvp->kvp.Key, kvp->kvp.Value);
+    
+    foreach var kvp in ovs do
       if kvp.Value <> nil then
         if kvp.Value is real then
-          nvs.Add(kvp.Key, real(kvp.Value)) else
-          svs.Add(kvp.Key, string(kvp.Value));
+          cnvs.Add(kvp.Key, real(kvp.Value)) else
+          csvs.Add(kvp.Key, string(kvp.Value));
     
     var res1 := ExprRes(te.GetExpRes);
     
     var e := Expr.FromString(s);
-    var oe := OptExprWrapper.FromExpr(e);
-    oe.Optimize(nvs.Keys.ToList, svs.Keys.ToList);
-    var res2 := ExprRes(oe.Calc(nvs, svs));
+    var oe := OptExprWrapper.FromExpr(e).FinalOptimize(nvs.Keys.ToHashSet, svs.Keys.ToHashSet, ovs.Keys.ToHashSet);
+    var res2 := ExprRes(oe.Calc(cnvs, csvs));
     
     if ExprRes.CalcEqu(res1,res2) < 0.2 then
     begin
@@ -537,10 +540,9 @@ begin
       writeln($'Ожидалось:      {res1}');
       writeln($'Получили:       {res2}');
       write('-'*50);
-      oe := OptExprWrapper.FromExpr(e);
-      oe.Optimize(nvs.Keys.ToList, svs.Keys.ToList);
       res1 := ExprRes(te.GetExpRes);
-      res2 := ExprRes(oe.Calc(nvs, svs));
+      oe := OptExprWrapper.FromExpr(e).FinalOptimize(nvs.Keys.ToHashSet, svs.Keys.ToHashSet, ovs.Keys.ToHashSet);
+      res2 := ExprRes(oe.Calc(cnvs, csvs));
       var b := ExprRes.CalcEqu(res1,res2);
       readln;
     end;

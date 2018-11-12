@@ -1,12 +1,15 @@
 ﻿unit StmParser;
+//ToDo Добавить DeduseVarsTypes в ExprParser
+// - тормозит остальное что сейчас самое важное, поэтому в первую очередь
 
 //ToDo Контекст ошибок
-//ToDo Добавить DeduseVarsTypes в ExprParser
-//ToDo FinalOptimize всегда должно возвращать новый экземпляр, а для этого надо чтоб выражения тоже это делали (когда FinalOptimize - алгоритм проходит и по следующим блокам, а они могут быть вызваны из нескольких мест)
+//ToDo FinalOptimize всегда (когда получилось оптимизировать) должно возвращать новый экземпляр, а для этого надо чтоб выражения тоже это делали (FinalOptimize проходит и по следующим блокам, а они могут быть вызваны из нескольких мест)
 //ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
+
+//ToDo даже если несколько блоков вызывают какой то один - можно всё равно узнать какие переменные могут иметь какой тип. FinalOptimize не проведёшь, но Optimize вполне
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #1488
@@ -3234,7 +3237,13 @@ type
     
     public fns: array of string;
     
-    function GetRefs: sequence of StmBlockRef :=
+    private procedure Calc(ec: ExecutingContext := nil) :=
+    foreach var fn in fns do
+      scr.ReadFile(nil, fn);
+    
+    
+    
+    public function GetRefs: sequence of StmBlockRef :=
     fns.Select(fn->DynamicStmBlockRef.Create(new SInputSValue(fn)).Optimize(self.bl));
     
     public constructor(par: array of string);
@@ -3252,12 +3261,12 @@ type
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
-      
-      foreach var fn in fns do
-        scr.ReadFile(nil, fn);
-      
+      Calc;
       Result := nil;
     end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
