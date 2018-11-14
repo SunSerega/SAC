@@ -1,8 +1,6 @@
 ﻿unit StmParser;
 
 //ToDo Контекст ошибок
-//ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
-//ToDo подставлять переменные можно только в данном блоке. потому что следующий может быть вызван из нескольких мест
 
 //ToDo При загрузке абстрактный и физический файл могут наложится. надо их совмещать, но если будет дубль лэйбла - давать ошибку
 // - так же по особому обрабатывать лэйблы начинающиеся с %. Запретить вызов и про совмещении переименовывать
@@ -2136,6 +2134,22 @@ type
       self.scr := bl.scr;
     end;
     
+    public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
+    begin
+      Result := self;
+      
+      nvn.Add(vname);
+      svn.Remove(vname);
+      if ovn<>nil then ovn.Remove(vname);
+      
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, nil);
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, ovn);
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2180,6 +2194,22 @@ type
       self.bl := bl;
       self.scr := bl.scr;
     end;
+    
+    public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
+    begin
+      Result := self;
+      
+      nvn.Add(vname);
+      svn.Remove(vname);
+      if ovn<>nil then ovn.Remove(vname);
+      
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, nil);
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, ovn);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2318,7 +2348,7 @@ type
       self.scr := bl.scr;
     end;
     
-    public function Simplify(nkk: InputNValue): StmBase;
+    public function Simplify(nkk: InputNValue; nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       
       if nkk is SInputNValue then
@@ -2331,13 +2361,17 @@ type
         Result := self else
         Result := new OperGetKey(nkk, bl);
       
+      nvn.Add(vname);
+      svn.Remove(vname);
+      if ovn<>nil then ovn.Remove(vname);
+      
     end;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
-    Simplify(kk.Optimize(nvn,svn));
+    Simplify(kk.Optimize(nvn,svn), nvn, svn, nil);
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
-    Simplify(kk.FinalOptimize(nvn, svn, ovn));
+    Simplify(kk.FinalOptimize(nvn, svn, ovn), nvn, svn, ovn);
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -2402,7 +2436,7 @@ type
       self.scr := bl.scr;
     end;
     
-    public function Simplify(nkk: InputNValue): StmBase;
+    public function Simplify(nkk: InputNValue; nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       
       if nkk is SInputNValue then
@@ -2415,13 +2449,17 @@ type
         Result := self else
         Result := new OperGetKeyTrigger(nkk, bl);
       
+      nvn.Add(vname);
+      svn.Remove(vname);
+      if ovn<>nil then ovn.Remove(vname);
+      
     end;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
-    Simplify(kk.Optimize(nvn,svn));
+    Simplify(kk.Optimize(nvn,svn), nvn, svn, nil);
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
-    Simplify(kk.FinalOptimize(nvn, svn, ovn));
+    Simplify(kk.FinalOptimize(nvn, svn, ovn), nvn, svn, ovn);
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -2477,6 +2515,26 @@ type
       x := par[1];
       y := par[2];
     end;
+    
+    public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
+    begin
+      Result := self;
+      
+      nvn.Add(x);
+      svn.Remove(x);
+      if ovn<>nil then ovn.Remove(x);
+      
+      nvn.Add(y);
+      svn.Remove(y);
+      if ovn<>nil then ovn.Remove(y);
+      
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, nil);
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, ovn);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3262,6 +3320,22 @@ type
       
       vname := par[1];
     end;
+    
+    public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
+    begin
+      Result := self;
+      
+      nvn.Add(vname);
+      svn.Remove(vname);
+      if ovn<>nil then ovn.Remove(vname);
+      
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, nil);
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(nvn, svn, ovn);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin

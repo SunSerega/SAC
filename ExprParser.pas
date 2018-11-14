@@ -1132,32 +1132,8 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptOPlusExpr;
-      if res0.Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(nil, nil);
-      
-      var res1: OptOPlusExpr;
-      if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptPlusExpr) then
-      begin
-        res1 := new OptOPlusExpr;
-        
-        foreach var oe in res0.Positive do
-          if oe is IOptPlusExpr(var ope) then
-          begin
-            res1.Positive.AddRange(ope.GetPositive);
-            res1.Negative.AddRange(ope.GetNegative);
-          end else
-            res1.Positive.Add(oe);
-        
-        foreach var oe in res0.Negative do
-          if oe is IOptPlusExpr(var ope) then
-          begin
-            res1.Negative.AddRange(ope.GetPositive);
-            res1.Positive.AddRange(ope.GetNegative);
-          end else
-            res1.Negative.Add(oe);
-        
-      end else
-        res1 := res0;
+      var res1 := TransformAllSubExprs(oe->oe.Optimize) as OptOPlusExpr;
+      if res1.Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(nil, nil);
       
       res1.Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
       
@@ -1377,7 +1353,7 @@ type
         Result := res;
       end else
       if (plc < 2) and (nlc = 0) then
-        Result := self else
+        Result := res1 else
       begin
         var res := new OptNNMltExpr;
         var n := 1.0;

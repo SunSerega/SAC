@@ -4,12 +4,15 @@
 //uses ВБФ;
 
 begin
-  //var s := new Script('Lib\examples\Basic operators\main.sac');
+  var s := new Script('Lib\examples\Basic operators\main.sac');
   //var s := new Script('Lib\Temp\SAC Script.sac');
-  var s := new Script('Lib\Temp\main.sac');
-  writeln(s);
+  //var s := new Script('Lib\Temp\main.sac');
+  
   //SaveObj('test.bin',s);
-  readln;
+  
+  //writeln(s);
+  //readln;
+  
   s.otp += s->writeln(s);
   s.susp_called += procedure->writeln('%susp called');
   s.stoped += procedure->writeln('%stoped');
