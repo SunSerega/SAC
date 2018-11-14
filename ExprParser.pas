@@ -1,8 +1,8 @@
 ﻿unit ExprParser;
 
 //ToDo Контекст ошибок
-//ToDo костанты WW и WH
-//ToDo функции округления чисел (Int, Round, Ceil)
+//ToDo Костанты WW и WH
+//ToDo Функции округления чисел (Int, Round, Ceil)
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533

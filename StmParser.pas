@@ -3,7 +3,7 @@
 //ToDo Контекст ошибок
 
 //ToDo При загрузке абстрактный и физический файл могут наложится. надо их совмещать, но если будет дубль лэйбла - давать ошибку
-// - так же по особому обрабатывать лэйблы начинающиеся с %. Запретить вызов и про совмещении переименовывать
+// - Так же по особому обрабатывать лэйблы начинающиеся с %. При совмещении переименовывать
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -707,7 +707,7 @@ type
     public procedure Execute(entry_point: string);
     begin
       if not entry_point.Contains('#') then entry_point += '#';
-      if not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
+      if entry_point.Contains('#%') or not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
       if start_pos_def and not ec.curr.StartPos then raise new CanOnlyStartFromStartPosException(nil);
       while ec.ExecuteNext do;
