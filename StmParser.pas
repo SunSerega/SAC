@@ -1,8 +1,10 @@
 ﻿unit StmParser;
 
 //ToDo Контекст ошибок
-//ToDo FinalOptimize всегда (когда получилось оптимизировать) должно возвращать новый экземпляр, а для этого надо чтоб выражения тоже это делали (FinalOptimize проходит и по следующим блокам, а они могут быть вызваны из нескольких мест)
 //ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
+
+//ToDo При загрузке абстрактный и физический файл могут наложится. надо их совмещать, но если будет дубль лэйбла - давать ошибку
+// - так же по особому обрабатывать лэйблы начинающиеся с %. Запретить вызов и про совмещении переименовывать
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -440,12 +442,27 @@ type
     
     public constructor(sb: StmBlock; text: string);
     
+    public constructor(vname: string; e: OptExprWrapper; bl: StmBlock; scr: Script);
+    begin
+      self.vname := vname;
+      self.e := e;
+      self.bl := bl;
+      self.scr := scr;
+    end;
+    
+    public function Simplify(ne: OptExprWrapper): StmBase;
+    begin
+      
+      if e=ne then
+        Result := self else
+        Result := new ExprStm(vname, ne, bl, scr);
+      
+    end;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
-      
-      e.Optimize(nvn, svn);
-      var main := e.GetMain;
+      Result := Simplify(e.Optimize(nvn, svn));
+      var main := ExprStm(Result).e.GetMain;
       
       if main is OptNExprBase then
       begin
@@ -458,14 +475,12 @@ type
         svn.Add(vname);
       end else;
       
-      Result := self;
     end;
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
     begin
-      
-      e.FinalOptimize(nvn, svn, ovn);
-      var main := e.GetMain;
+      Result := Simplify(e.FinalOptimize(nvn, svn, ovn));
+      var main := ExprStm(Result).e.GetMain;
       
       if main is OptNExprBase then
       begin
@@ -485,7 +500,6 @@ type
         ovn.Add(vname);
       end;
       
-      Result := self;
     end;
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
@@ -613,6 +627,14 @@ type
       
     end;
     
+    public function GetBodyString: string :=
+    (StartPos?'!StartPos //Const'#10:'') +
+    stms.JoinIntoString(#10);
+    
+    public function ToString: string; override :=
+    GetBodyString +
+    (next=nil?#10'Return //Const':$'{#10}Jump {next.fname+next.lbl} //Const');
+    
   end;
   
   Script = sealed class
@@ -715,6 +737,29 @@ type
       
     end;
     
+    public function ToString: string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      foreach var kvp: System.Linq.IGrouping<string, StmBlock> in sbs.Values.GroupBy(bl->bl.fname) do
+      begin
+        sb += $' (file {kvp.Key})';
+        sb += #10;
+        
+        foreach var bl in kvp do
+        begin
+          sb += bl.lbl;
+          sb += #10;
+          sb += bl.ToString;
+          sb += #10;
+          sb += #10;
+        end;
+        
+      end;
+      
+      Result := sb.ToString;
+    end;
+    
   end;
 
   {$endregion Stm containers}
@@ -758,43 +803,41 @@ type
     public procedure Calc(ec: ExecutingContext) :=
     self.res := oe.CalcS(ec.nvs, ec.svs);
     
-    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Simplify: InputSValue;
-    begin
-      if oe.Main is IOptLiteralExpr(var me) then
-        Result := new SInputSValue(StmBase.ObjToStr(me.GetRes)) else
-        Result := self;
-    end;
     
-    public function Optimize(nvn, svn: HashSet<string>): InputSValue; override;
-    begin
-      oe.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
-    
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; override;
-    begin
-      oe.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
-    
-    public function FindVarUsages(vn: string): OptExprWrapper; override :=
-    oe.DoesUseVar(vn)?oe:nil;
+    public constructor(s: string) :=
+    oe := OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr) as OptSExprWrapper;
     
     public constructor(oe: OptSExprWrapper);
     begin
       self.oe := oe;
     end;
     
-    public constructor(s: string; bl: StmBlock) :=
-    oe := OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr) as OptSExprWrapper;
+    public function Simplify(noe: OptSExprWrapper): InputSValue;
+    begin
+      if noe.Main is OptSLiteralExpr(var sle) then
+        Result := new SInputSValue(sle.res) else
+      if oe=noe then
+        Result := self else
+        Result := new DInputSValue(noe);
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): InputSValue; override :=
+    Simplify(OptSExprWrapper(oe.Optimize(nvn, svn)));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputSValue; override :=
+    Simplify(OptSExprWrapper(oe.FinalOptimize(nvn, svn, ovn)));
+    
+    public function FindVarUsages(vn: string): OptExprWrapper; override :=
+    oe.DoesUseVar(vn)?oe:nil;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(2));
       oe.Save(bw);
     end;
+    
+    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
     public function ToString: string; override :=
     oe.ToString;
@@ -838,43 +881,41 @@ type
     public procedure Calc(ec: ExecutingContext) :=
     res := oe.CalcN(ec.nvs, ec.svs);
     
-    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
-    public function Simplify: InputNValue;
-    begin
-      if oe.Main is IOptLiteralExpr(var me) then
-        Result := new SInputNValue(StmBase.ObjToNum(me.GetRes)) else
-        Result := self;
-    end;
     
-    public function Optimize(nvn, svn: HashSet<string>): InputNValue; override;
-    begin
-      oe.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
-    
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; override;
-    begin
-      oe.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
-    
-    public function FindVarUsages(vn: string): OptExprWrapper; override :=
-    oe.DoesUseVar(vn)?oe:nil;
+    public constructor(s: string) :=
+    oe := OptExprWrapper.FromExpr(Expr.FromString(s), oe->OptExprBase.AsDefinitelyNumExpr(oe)) as OptNExprWrapper;
     
     public constructor(oe: OptNExprWrapper);
     begin
       self.oe := oe;
     end;
     
-    public constructor(s: string; bl: StmBlock) :=
-    oe := OptExprWrapper.FromExpr(Expr.FromString(s), oe->OptExprBase.AsDefinitelyNumExpr(oe)) as OptNExprWrapper;
+    public function Simplify(noe: OptNExprWrapper): InputNValue;
+    begin
+      if noe.Main is OptNLiteralExpr(var nle) then
+        Result := new SInputNValue(nle.res) else
+      if oe=noe then
+        Result := self else
+        Result := new DInputNValue(noe);
+    end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): InputNValue; override :=
+    Simplify(OptNExprWrapper(oe.Optimize(nvn, svn)));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): InputNValue; override :=
+    Simplify(OptNExprWrapper(oe.FinalOptimize(nvn, svn, ovn)));
+    
+    public function FindVarUsages(vn: string): OptExprWrapper; override :=
+    oe.DoesUseVar(vn)?oe:nil;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(2));
       oe.Save(bw);
     end;
+    
+    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
     public function ToString: string; override :=
     oe.ToString;
@@ -949,21 +990,23 @@ type
     public constructor(s: InputSValue) :=
     self.s := s;
     
-    public function Optimize(bl: StmBlock; nvn, svn: HashSet<string>): StmBlockRef; override;
+    public function Simplify(bl: StmBlock; ns: InputSValue): StmBlockRef;
     begin
-      s := s.Optimize(nvn, svn);
-      if s is SInputSValue then
-        Result := new StaticStmBlockRef(self.GetBlock(bl)) else
-        Result := self;
+      if ns is SInputSValue then
+      begin
+        self.s := ns;
+        Result := new StaticStmBlockRef(self.GetBlock(bl));
+      end else
+      if s=ns then
+        Result := self else
+        Result := new DynamicStmBlockRef(ns);
     end;
     
-    public function FinalOptimize(bl: StmBlock; nvn, svn, ovn: HashSet<string>): StmBlockRef; override;
-    begin
-      s := s.FinalOptimize(nvn, svn, ovn);
-      if s is SInputSValue then
-        Result := new StaticStmBlockRef(self.GetBlock(bl)) else
-        Result := self;
-    end;
+    public function Optimize(bl: StmBlock; nvn, svn: HashSet<string>): StmBlockRef; override :=
+    Simplify(bl, s.Optimize(nvn, svn));
+    
+    public function FinalOptimize(bl: StmBlock; nvn, svn, ovn: HashSet<string>): StmBlockRef; override :=
+    Simplify(bl, s.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): OptExprWrapper; override :=
     s.FindVarUsages(vn);
@@ -1023,8 +1066,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1060,8 +1107,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1100,8 +1151,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1146,34 +1201,36 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
-        Result := new OperConstKeyDown(ikk);
+        Result := new OperConstKeyDown(ikk, bl);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperKeyDown(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1223,34 +1280,36 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
-        Result := new OperConstKeyUp(ikk);
+        Result := new OperConstKeyUp(ikk, bl);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperKeyUp(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1301,34 +1360,36 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         if (ikk < 1) or (ikk > 254) then raise new InvalidKeyCodeException(scr, ikk);
-        Result := new OperConstKeyPress(ikk);
+        Result := new OperConstKeyPress(ikk, bl);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperKeyPress(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1380,41 +1441,39 @@ type
     begin
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
-      kk := new DInputNValue(par[1], sb);
-      dp := new DInputNValue(par[2], sb);
+      kk := new DInputNValue(par[1]);
+      dp := new DInputNValue(par[2]);
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public constructor(kk, dp: InputNValue; bl: StmBlock);
     begin
-      dp := dp.Optimize(nvn, svn);
-      if dp is SInputNValue then
-      case NumToInt(nil, dp.res) and $3 of
-        0: Result := nil;
-        1: Result := OperKeyDown.Create(kk).Optimize(nvn, svn);
-        2: Result := OperKeyUp.Create(kk).Optimize(nvn, svn);
-        3: Result := OperKeyPress.Create(kk).Optimize(nvn, svn);
-      end else
-      begin
-        kk := kk.Optimize(nvn, svn);
-        Result := self;
-      end;
+      self.kk := kk;
+      self.dp := dp;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    public function Simplify(nkk, ndp: InputNValue; optf: StmBase->StmBase): StmBase;
     begin
-      dp := dp.FinalOptimize(nvn, svn, ovn);
-      if dp is SInputNValue then
-      case NumToInt(nil, dp.res) and $3 of
+      
+      if ndp is SInputNValue then
+      case NumToInt(nil, ndp.res) and $3 of
         0: Result := nil;
-        1: Result := OperKeyDown.Create(kk).FinalOptimize(nvn, svn, ovn);
-        2: Result := OperKeyUp.Create(kk).FinalOptimize(nvn, svn, ovn);
-        3: Result := OperKeyPress.Create(kk).FinalOptimize(nvn, svn, ovn);
+        1: Result := optf(new OperKeyDown(nkk, bl));
+        2: Result := optf(new OperKeyUp(nkk, bl));
+        3: Result := optf(new OperKeyPress(nkk, bl));
       end else
-      begin
-        kk := kk.FinalOptimize(nvn, svn, ovn);
-        Result := self;
-      end;
+      if (kk=nkk) and (dp=ndp) then
+        Result := self else
+        Result := new OperKey(nkk, ndp, bl);
+      
     end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn,svn), dp.Optimize(nvn, svn), stm->stm.Optimize(nvn, svn));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn), dp.FinalOptimize(nvn, svn, ovn), stm->stm.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn), dp.FindVarUsages(vn));
@@ -1476,8 +1535,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1536,8 +1599,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1596,8 +1663,12 @@ type
     
     
     
-    public constructor(kk: byte) :=
-    self.kk := kk;
+    public constructor(kk: byte; bl: StmBlock);
+    begin
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1660,37 +1731,38 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         case ikk of
-          1,2,4..6: Result := new OperConstMouseDown(ikk);
+          1,2,4..6: Result := new OperConstMouseDown(ikk, bl);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        Result := new OperConstMouseDown(ikk);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperMouseDown(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1747,37 +1819,38 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         case ikk of
-          1,2,4..6: Result := new OperConstMouseDown(ikk);
+          1,2,4..6: Result := new OperConstMouseUp(ikk, bl);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        Result := new OperConstMouseUp(ikk);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperMouseUp(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1834,37 +1907,38 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
     end;
     
-    public constructor(kk: InputNValue) :=
-    self.kk := kk;
-    
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var ikk := NumToInt(nil, kk.res);
+        var ikk := NumToInt(nil, nkk.res);
         case ikk of
-          1,2,4..6: Result := new OperConstMouseDown(ikk);
+          1,2,4..6: Result := new OperConstMousePress(ikk, bl);
           else raise new InvalidMouseKeyCodeException(scr, ikk);
         end;
-        Result := new OperConstMousePress(ikk);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperMousePress(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -1926,41 +2000,39 @@ type
     begin
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
-      kk := new DInputNValue(par[1], sb);
-      dp := new DInputNValue(par[2], sb);
+      kk := new DInputNValue(par[1]);
+      dp := new DInputNValue(par[2]);
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public constructor(kk, dp: InputNValue; bl: StmBlock);
     begin
-      dp := dp.Optimize(nvn, svn);
-      if dp is SInputNValue then
-      case NumToInt(nil, dp.res) and $3 of
-        0: Result := nil;
-        1: Result := OperMouseDown.Create(kk).Optimize(nvn, svn);
-        2: Result := OperMouseUp.Create(kk).Optimize(nvn, svn);
-        3: Result := OperMousePress.Create(kk).Optimize(nvn, svn);
-      end else
-      begin
-        kk := kk.Optimize(nvn, svn);
-        Result := self;
-      end;
+      self.kk := kk;
+      self.dp := dp;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    public function Simplify(nkk, ndp: InputNValue; optf: StmBase->StmBase): StmBase;
     begin
-      dp := dp.FinalOptimize(nvn, svn, ovn);
-      if dp is SInputNValue then
-      case NumToInt(nil, dp.res) and $3 of
+      
+      if ndp is SInputNValue then
+      case NumToInt(nil, ndp.res) and $3 of
         0: Result := nil;
-        1: Result := OperMouseDown.Create(kk).FinalOptimize(nvn, svn, ovn);
-        2: Result := OperMouseUp.Create(kk).FinalOptimize(nvn, svn, ovn);
-        3: Result := OperMousePress.Create(kk).FinalOptimize(nvn, svn, ovn);
+        1: Result := optf(new OperMouseDown(nkk, bl));
+        2: Result := optf(new OperMouseUp(nkk, bl));
+        3: Result := optf(new OperMousePress(nkk, bl));
       end else
-      begin
-        kk := kk.FinalOptimize(nvn, svn, ovn);
-        Result := self;
-      end;
+      if (kk=nkk) and (dp=ndp) then
+        Result := self else
+        Result := new OperMouse(nkk, ndp, bl);
+      
     end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn,svn), dp.Optimize(nvn, svn), stm->stm.Optimize(nvn, svn));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn), dp.FinalOptimize(nvn, svn, ovn), stm->stm.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn), dp.FindVarUsages(vn));
@@ -2010,10 +2082,12 @@ type
     
     
     
-    public constructor(x,y: integer);
+    public constructor(x,y: integer; bl: StmBlock);
     begin
       self.x := x;
       self.y := y;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2053,10 +2127,12 @@ type
     
     
     
-    public constructor(kk: byte; vname: string);
+    public constructor(kk: byte; vname: string; bl: StmBlock);
     begin
       self.kk := kk;
       self.vname := vname;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2096,10 +2172,12 @@ type
     
     
     
-    public constructor(kk: byte; vname: string);
+    public constructor(kk: byte; vname: string; bl: StmBlock);
     begin
       self.kk := kk;
       self.vname := vname;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2148,30 +2226,32 @@ type
     begin
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
-      x := new DInputNValue(par[1], sb);
-      y := new DInputNValue(par[2], sb);
+      x := new DInputNValue(par[1]);
+      y := new DInputNValue(par[2]);
     end;
     
-    public function Simplify: StmBase;
+    public constructor(x,y: InputNValue; bl: StmBlock);
     begin
-      if (x is SInputNValue) and (y is SInputNValue) then
-        Result := new OperConstMousePos(NumToInt(nil, x.res), NumToInt(nil, y.res)) else
-        Result := self;
+      self.x := x;
+      self.y := y;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public function Simplify(nx,ny: InputNValue): StmBase;
     begin
-      x := x.Optimize(nvn, svn);
-      y := y.Optimize(nvn, svn);
-      Result := Simplify;
+      if (nx is SInputNValue) and (ny is SInputNValue) then
+        Result := new OperConstMousePos(NumToInt(nil, x.res), NumToInt(nil, y.res), bl) else
+      if (x=nx) and (y=ny) then
+        Result := self else
+        Result := new OperMousePos(nx,ny, bl);
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      x := x.FinalOptimize(nvn, svn, ovn);
-      y := y.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(x.Optimize(nvn,svn), y.Optimize(nvn, svn));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(x.FinalOptimize(nvn, svn, ovn), y.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](x.FindVarUsages(vn), y.FindVarUsages(vn));
@@ -2226,32 +2306,37 @@ type
     begin
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
       vname := par[2];
     end;
     
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var n := NumToInt(nil, kk.res);
+        var n := NumToInt(nil, nkk.res);
         if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-        Result := new OperConstGetKey(n, vname);
+        Result := new OperConstGetKey(n, vname, bl);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperGetKey(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -2305,32 +2390,37 @@ type
     begin
       if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
       
-      kk := new DInputNValue(par[1], sb);
+      kk := new DInputNValue(par[1]);
       vname := par[2];
     end;
     
-    public function Simplify: StmBase;
+    public constructor(kk: InputNValue; bl: StmBlock);
     begin
-      if kk is SInputNValue then
+      self.kk := kk;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nkk: InputNValue): StmBase;
+    begin
+      
+      if nkk is SInputNValue then
       begin
-        var n := NumToInt(nil, kk.res);
+        var n := NumToInt(nil, nkk.res);
         if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
-        Result := new OperConstGetKeyTrigger(n, vname);
+        Result := new OperConstGetKeyTrigger(n, vname, bl);
       end else
-        Result := self;
+      if kk=nkk then
+        Result := self else
+        Result := new OperGetKeyTrigger(nkk, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      kk := kk.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(kk.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
@@ -2415,6 +2505,7 @@ type
   {$endregion Other simulators}
   
   {$region Jump/Call}
+  comprT=(equ=byte(1), less=byte(2), more=byte(3));
   
   OperJump = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
     
@@ -2434,30 +2525,32 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
-      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
     
-    public constructor(CalledBlock: StmBlockRef) :=
-    self.CalledBlock := CalledBlock;
-    
-    public function Simplify: StmBase;
+    public constructor(CalledBlock: StmBlockRef; bl: StmBlock);
     begin
-      if CalledBlock is StaticStmBlockRef(var sbf) then
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nCalledBlock: StmBlockRef): StmBase;
+    begin
+      
+      if nCalledBlock is StaticStmBlockRef(var sbf) then
         bl.next := sbf.bl else
-        Result := self;
+      if CalledBlock=nCalledBlock then
+        Result := self else
+        Result := new OperJump(nCalledBlock, bl);
+      
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(CalledBlock.Optimize(bl, nvn,svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      CalledBlock := CalledBlock.FinalOptimize(self.bl, nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(CalledBlock.FinalOptimize(bl, nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](CalledBlock.FindVarUsages(vn));
@@ -2490,7 +2583,7 @@ type
   OperJumpIf = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
-    public compr: (equ=byte(1), less=byte(2), more=byte(3));
+    public compr: comprT;
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
     
@@ -2524,8 +2617,8 @@ type
       e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
       e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]));
       
-      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
-      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
+      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4]));
+      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5]));
     end;
     
     private function comp_obj(o1,o2: object): boolean;
@@ -2543,37 +2636,51 @@ type
         end;
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public constructor(e1,e2: OptExprWrapper; compr: comprT; CalledBlock1: StmBlockRef; CalledBlock2: StmBlockRef; bl: StmBlock);
     begin
-      e1.Optimize(nvn, svn);
-      e2.Optimize(nvn, svn);
-      if
-        (e1.GetMain() is IOptLiteralExpr) and
-        (e2.GetMain() is IOptLiteralExpr)
-      then
-        Result := OperJump.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).Optimize(nvn, svn) else
-      begin
-        CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
-        CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
-        Result := self;
-      end;
+      self.e1 := e1;
+      self.e2 := e2;
+      self.compr := compr;
+      self.CalledBlock1 := CalledBlock1;
+      self.CalledBlock2 := CalledBlock2;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    public function Simplify(ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
-      e1.FinalOptimize(nvn, svn, ovn);
-      e2.FinalOptimize(nvn, svn, ovn);
+      
       if
-        (e1.GetMain() is IOptLiteralExpr) and
-        (e2.GetMain() is IOptLiteralExpr)
+        (ne1.GetMain() is IOptLiteralExpr) and
+        (ne2.GetMain() is IOptLiteralExpr)
       then
-        Result := OperJump.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).FinalOptimize(nvn, svn, ovn) else
-      begin
-        CalledBlock1 := CalledBlock1.FinalOptimize(bl, nvn, svn, ovn);
-        CalledBlock2 := CalledBlock2.FinalOptimize(bl, nvn, svn, ovn);
-        Result := self;
-      end;
+        Result := optf(new OperJump(
+          comp_obj(ne1.GetMain.GetRes(), ne2.GetMain.GetRes())?
+            nCalledBlock1:nCalledBlock2,
+          bl
+        )) else
+      if
+        (e1=ne1) and (e2=ne2) and
+        (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
+      then
+        Result := self else
+        Result := new OperJumpIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, bl);
+      
     end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(
+      e1.Optimize(nvn, svn),e2.Optimize(nvn, svn),
+      CalledBlock1.Optimize(bl, nvn, svn),CalledBlock2.Optimize(bl, nvn, svn),
+      stm->stm.Optimize(nvn, svn)
+    );
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(
+      e1.FinalOptimize(nvn, svn, ovn),e2.FinalOptimize(nvn, svn, ovn),
+      CalledBlock1.FinalOptimize(bl, nvn, svn, ovn),CalledBlock2.FinalOptimize(bl, nvn, svn, ovn),
+      stm->stm.FinalOptimize(nvn, svn, ovn)
+    );
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](CalledBlock1.FindVarUsages(vn), CalledBlock2.FindVarUsages(vn));
@@ -2641,8 +2748,12 @@ type
     public function GetRefs: sequence of StmBlockRef :=
     new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
     
-    public constructor(CalledBlock: StmBlock) :=
-    self.CalledBlock := CalledBlock;
+    public constructor(CalledBlock, bl: StmBlock);
+    begin
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2690,30 +2801,32 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
-      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1], sb));
+      CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
     
-    public constructor(CalledBlock: StmBlockRef) :=
-    self.CalledBlock := CalledBlock;
-    
-    public function Simplify: StmBase;
+    public constructor(CalledBlock: StmBlockRef; bl: StmBlock);
     begin
-      if CalledBlock is StaticStmBlockRef(var sbf) then
-        Result := new OperConstCall(sbf.bl) else
-        Result := self;
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public function Simplify(nCalledBlock: StmBlockRef): StmBase;
     begin
-      CalledBlock := CalledBlock.Optimize(self.bl, nvn, svn);
-      Result := Simplify;
+      
+      if nCalledBlock is StaticStmBlockRef(var sbf) then
+        Result := new OperConstCall(sbf.bl, bl) else
+      if CalledBlock=nCalledBlock then
+        Result := self else
+        Result := new OperCall(nCalledBlock, bl);
+      
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      CalledBlock := CalledBlock.FinalOptimize(self.bl, nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(CalledBlock.Optimize(bl, nvn,svn));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(CalledBlock.FinalOptimize(bl, nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](CalledBlock.FindVarUsages(vn));
@@ -2746,7 +2859,7 @@ type
   OperCallIf = sealed class(OperStmBase, ICallOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
-    public compr: (equ=byte(1), less=byte(2), more=byte(3));
+    public compr: comprT;
     public CalledBlock1: StmBlockRef;
     public CalledBlock2: StmBlockRef;
     
@@ -2781,8 +2894,8 @@ type
       e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
       e2 := OptExprWrapper.FromExpr(Expr.FromString(par[3]));
       
-      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4], sb));
-      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5], sb));
+      CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4]));
+      CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5]));
     end;
     
     private function comp_obj(o1,o2: object): boolean;
@@ -2800,37 +2913,51 @@ type
         end;
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public constructor(e1,e2: OptExprWrapper; compr: comprT; CalledBlock1: StmBlockRef; CalledBlock2: StmBlockRef; bl: StmBlock);
     begin
-      e1.Optimize(nvn, svn);
-      e2.Optimize(nvn, svn);
-      if
-        (e1.GetMain() is IOptLiteralExpr) and
-        (e2.GetMain() is IOptLiteralExpr)
-      then
-        Result := OperCall.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).Optimize(nvn, svn) else
-      begin
-        CalledBlock1 := CalledBlock1.Optimize(bl, nvn, svn);
-        CalledBlock2 := CalledBlock2.Optimize(bl, nvn, svn);
-        Result := self;
-      end;
+      self.e1 := e1;
+      self.e2 := e2;
+      self.compr := compr;
+      self.CalledBlock1 := CalledBlock1;
+      self.CalledBlock2 := CalledBlock2;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
+    public function Simplify(ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
-      e1.FinalOptimize(nvn, svn, ovn);
-      e2.FinalOptimize(nvn, svn, ovn);
+      
       if
-        (e1.GetMain() is IOptLiteralExpr) and
-        (e2.GetMain() is IOptLiteralExpr)
+        (ne1.GetMain() is IOptLiteralExpr) and
+        (ne2.GetMain() is IOptLiteralExpr)
       then
-        Result := OperCall.Create(comp_obj(e1.GetMain.GetRes(), e2.GetMain.GetRes())?CalledBlock1:CalledBlock2).FinalOptimize(nvn, svn, ovn) else
-      begin
-        CalledBlock1 := CalledBlock1.FinalOptimize(bl, nvn, svn, ovn);
-        CalledBlock2 := CalledBlock2.FinalOptimize(bl, nvn, svn, ovn);
-        Result := self;
-      end;
+        Result := optf(new OperCall(
+          comp_obj(ne1.GetMain.GetRes(), ne2.GetMain.GetRes())?
+            nCalledBlock1:nCalledBlock2,
+          bl
+        )) else
+      if
+        (e1=ne1) and (e2=ne2) and
+        (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
+      then
+        Result := self else
+        Result := new OperCallIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, bl);
+      
     end;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(
+      e1.Optimize(nvn, svn),e2.Optimize(nvn, svn),
+      CalledBlock1.Optimize(bl, nvn, svn),CalledBlock2.Optimize(bl, nvn, svn),
+      stm->stm.Optimize(nvn, svn)
+    );
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(
+      e1.FinalOptimize(nvn, svn, ovn),e2.FinalOptimize(nvn, svn, ovn),
+      CalledBlock1.FinalOptimize(bl, nvn, svn, ovn),CalledBlock2.FinalOptimize(bl, nvn, svn, ovn),
+      stm->stm.FinalOptimize(nvn, svn, ovn)
+    );
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](CalledBlock1.FindVarUsages(vn), CalledBlock2.FindVarUsages(vn));
@@ -2896,11 +3023,7 @@ type
     
     
     
-    public constructor(bl: StmBlock);
-    begin
-      self.bl := bl;
-      self.scr := bl.scr;
-    end;
+    public constructor := exit;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2918,11 +3041,7 @@ type
   end;
   OperReturn = sealed class(OperStmBase, IContextJumpOper)
     
-    public constructor(bl: StmBlock);
-    begin
-      self.bl := bl;
-      self.scr := bl.scr;
-    end;
+    public constructor := exit;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2951,11 +3070,7 @@ type
     
     
     
-    public constructor(bl: StmBlock);
-    begin
-      self.bl := bl;
-      self.scr := bl.scr;
-    end;
+    public constructor := exit;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2985,8 +3100,12 @@ type
     
     
     
-    public constructor(l: integer) :=
-    self.l := l;
+    public constructor(l: integer; bl: StmBlock);
+    begin
+      self.l := l;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3023,8 +3142,12 @@ type
     
     
     
-    public constructor(otp: string) :=
-    self.otp := otp;
+    public constructor(otp: string; bl: StmBlock);
+    begin
+      self.otp := otp;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3066,31 +3189,34 @@ type
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
       
-      l := new DInputNValue(par[1], sb);
+      l := new DInputNValue(par[1]);
     end;
     
-    public function Simplify: StmBase;
+    public constructor(l: InputNValue; bl: StmBlock);
     begin
-      if l is SInputNValue then
+      self.l := l;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Simplify(nl: InputNValue): StmBase;
+    begin
+      if nl is SInputNValue then
       begin
-        var il := NumToInt(nil, l.res);
+        var il := NumToInt(nil, nl.res);
         if il < 0 then raise new InvalidSleepLengthException(nil, il);
-        Result := new OperConstSleep(il);
+        Result := new OperConstSleep(il, bl);
       end else
-        Result := self;
+      if nl=l then
+        Result := self else
+        Result := new OperSleep(nl, bl);
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
-    begin
-      l := l.Optimize(nvn, svn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(l.Optimize(nvn, svn));
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      l := l.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(l.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](l.FindVarUsages(vn));
@@ -3174,27 +3300,30 @@ type
     public constructor(sb: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
-      otp := new DInputSValue(par[1],sb);
+      otp := new DInputSValue(par[1]);
     end;
     
-    public function Simplify: StmBase;
+    public constructor(otp: InputSValue; bl: StmBlock);
     begin
-      if otp is SInputSValue then
-        Result := new OperConstOutput(otp.res) else
-        Result := self;
+      self.otp := otp;
+      self.bl := bl;
+      self.scr := bl.scr;
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+    public function Simplify(notp: InputSValue): StmBase;
     begin
-      otp := otp.Optimize(nvn, svn);
-      Result := Simplify;
+      if notp is SInputSValue then
+        Result := new OperConstOutput(notp.res, bl) else
+      if otp=notp then
+        Result := self else
+        Result := new OperOutput(notp, bl);
     end;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override;
-    begin
-      otp := otp.FinalOptimize(nvn, svn, ovn);
-      Result := Simplify;
-    end;
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override :=
+    Simplify(otp.Optimize(nvn, svn));
+    
+    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
+    Simplify(otp.FinalOptimize(nvn, svn, ovn));
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](otp.FindVarUsages(vn));
@@ -3347,9 +3476,9 @@ begin
     'jump': Result := new OperJump(sb, par);
     'jumpif': Result := new OperJumpIf(sb, par);
     
-    'susp': Result := new OperSusp(sb);
-    'return': Result := new OperReturn(sb);
-    'halt': Result := new OperHalt(sb);
+    'susp': Result := new OperSusp;
+    'return': Result := new OperReturn;
+    'halt': Result := new OperHalt;
     
     'sleep': Result := new OperSleep(sb, par);
     'random': Result := new OperRandom(sb, par);
@@ -3561,7 +3690,13 @@ begin
     begin
       var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
       if opt <> nil then
-        stm_lst.Add(opt);
+        stm_lst.Add(opt) else
+        if stm is IContextJumpOper then
+        begin
+          bl.next := stm.bl.next;
+          //Result := true;
+          break;
+        end;
     end;
     
     
@@ -3576,7 +3711,7 @@ begin
         
         if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst, allow_final_opt) then
         begin
-          Result := false;//bl.next не надо присваивать, его уже изменило в рекурсивном вызове GetBlockChain
+          Result := false;//bl.next уже изменило в рекурсивном вызове GetBlockChain
           break;
         end;
         
@@ -3642,8 +3777,7 @@ begin
       
       var stms := new List<StmBase>;
       
-      if GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) then
-        curr.next := nil;
+      GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr));
       
       curr.stms := stms;
       

@@ -1,13 +1,10 @@
 ﻿unit ExprParser;
+//ToDo провести тест выражений
 
 //ToDo Контекст ошибок
 //ToDo костанты WW и WH
 //ToDo функции округления чисел (Int, Round, Ceil)
 //ToDo GetVarNames бесполезно
-//ToDo переделать ToString для переменных (надо массив имён, чтоб выводить нормальный текст вместо num_var#0,1,2, ...)
-//ToDo провести тест выражений
-
-//ToDo Optimize:    1^n=1 и т.п. НОООООО: 1^NaN=NaN . function IOptExpr.CanBeNaN: boolean; ? https://stackoverflow.com/questions/25506281/what-are-all-the-possible-calculations-that-could-cause-a-nan-in-python
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
@@ -499,6 +496,7 @@ type
     procedure ClampLists;
     
     function GetCalc: sequence of Action0;
+    function ToString(nvn, svn, ovn: array of string): string;
     
   end;
   OptExprBase = abstract class(IOptExpr)
@@ -580,14 +578,17 @@ type
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, true));
     end;
     
-    
-    
-    public function GetCalc: sequence of Action0; virtual := new Action0[0];
-    
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
     
     public static function Load(br: System.IO.BinaryReader; nv: array of real; sv: array of string; ov: array of object): OptExprBase;
+    
+    
+    
+    public function GetCalc: sequence of Action0; virtual := new Action0[0];
+    
+    public function ToString(nvn, svn, ovn: array of string): string; virtual :=
+    $'{self.GetType}(.ToString not found)';
     
     
     
@@ -621,6 +622,7 @@ type
     public function GetResType: System.Type; override := typeof(object);
     
   end;
+  
   IOptSimpleExpr=interface(IOptExpr) end;
   
   {$endregion Base}
@@ -642,7 +644,7 @@ type
       bw.Write(res);
     end;
     
-    public function ToString: string; override :=
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
     res.ToString(nfi);
     
   end;
@@ -658,7 +660,7 @@ type
       bw.Write(res);
     end;
     
-    public function ToString: string; override :=
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
     (res.Length < 100)?
     $'"{res}"':
     $'"{res.Substring(0,100)}..."[{res.Length}]';
@@ -675,7 +677,7 @@ type
       bw.Write(byte(3));
     end;
     
-    public function ToString: string; override :=
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
     'null';
     
   end;
@@ -863,8 +865,30 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'({Positive.JoinIntoString(''+'')}{Negative.Select(oe->''-''+oe.ToString).JoinIntoString('''')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      if Positive.Count<>0 then
+      begin
+        sb += Positive[0].ToString(nvn, svn, ovn);
+        for var i := 1 to Positive.Count-1 do
+        begin
+          sb += '+';
+          sb += Positive[i].ToString(nvn, svn, ovn);
+        end;
+      end;
+      
+      for var i := 0 to Negative.Count-1 do
+      begin
+        sb += '-';
+        sb += Negative[i].ToString(nvn, svn, ovn);
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   OptSSPlusExpr = sealed class(OptSExprBase, IOptPlusExpr)
@@ -1019,8 +1043,24 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'({Positive.JoinIntoString(''+'')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      if Positive.Count<>0 then
+      begin
+        sb += Positive[0].ToString(nvn, svn, ovn);
+        for var i := 1 to Positive.Count-1 do
+        begin
+          sb += '+';
+          sb += Positive[i].ToString(nvn, svn, ovn);
+        end;
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   OptOPlusExpr = sealed class(OptOExprBase, IOptPlusExpr)
@@ -1189,8 +1229,30 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'({Positive.JoinIntoString(''+'')}{Negative.Select(oe->''-''+oe.ToString).JoinIntoString('''')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      if Positive.Count<>0 then
+      begin
+        sb += Positive[0].ToString(nvn, svn, ovn);
+        for var i := 1 to Positive.Count-1 do
+        begin
+          sb += '+';
+          sb += Positive[i].ToString(nvn, svn, ovn);
+        end;
+      end;
+      
+      for var i := 0 to Negative.Count-1 do
+      begin
+        sb += '-';
+        sb += Negative[i].ToString(nvn, svn, ovn);
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -1384,10 +1446,31 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    Positive.Any?
-    $'({Positive.JoinIntoString(''*'')}{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})':
-    $'(1{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      if Positive.Count<>0 then
+      begin
+        sb += Positive[0].ToString(nvn, svn, ovn);
+        for var i := 1 to Positive.Count-1 do
+        begin
+          sb += '*';
+          sb += Positive[i].ToString(nvn, svn, ovn);
+        end;
+      end else
+        sb += '1';
+      
+      for var i := 0 to Negative.Count-1 do
+      begin
+        sb += '/';
+        sb += Negative[i].ToString(nvn, svn, ovn);
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   OptSNMltExpr = sealed class(OptSExprBase, IOptMltExpr)
@@ -1547,8 +1630,18 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'({Base}*{Positive})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '(';
+      sb += Base.ToString(nvn, svn, ovn);
+      sb += '*';
+      sb += Positive.ToString(nvn, svn, ovn);
+      sb += ')';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   OptOMltExpr = sealed class(OptOExprBase, IOptMltExpr)
@@ -1796,10 +1889,31 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    Positive.Any?
-    $'({Positive.JoinIntoString(''*'')}{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})':
-    $'(1{Negative.Select(oe->''/''+oe.ToString).JoinIntoString('''')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      if Positive.Count<>0 then
+      begin
+        sb += Positive[0].ToString(nvn, svn, ovn);
+        for var i := 1 to Positive.Count-1 do
+        begin
+          sb += '*';
+          sb += Positive[i].ToString(nvn, svn, ovn);
+        end;
+      end else
+        sb += '1';
+      
+      for var i := 0 to Negative.Count-1 do
+      begin
+        sb += '/';
+        sb += Negative[i].ToString(nvn, svn, ovn);
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -1959,8 +2073,21 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'({Positive.First}{Positive.Skip(1).Select(oe->''^''+oe.ToString).JoinIntoString('''')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      sb += '(';
+      
+      sb += Positive[0].ToString(nvn, svn, ovn);
+      for var i := 1 to Positive.Count-1 do
+      begin
+        sb += '^';
+        sb += Positive[i].ToString(nvn, svn, ovn);
+      end;
+      
+      sb += ')';
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -2063,8 +2190,22 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'{name}({par.JoinIntoString('','')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += name;
+      sb += '(';
+      sb += par[0].ToString(nvn, svn, ovn);
+      for var i := 1 to par.Length-1 do
+      begin
+        sb += ',';
+        sb += par[i].ToString(nvn, svn, ovn);
+      end;
+      sb += ')';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   OptSFuncExpr = abstract class(OptSExprBase, IOptFuncExpr)
@@ -2156,8 +2297,22 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'{name}({par.JoinIntoString('','')})';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += name;
+      sb += '(';
+      sb += par[0].ToString(nvn, svn, ovn);
+      for var i := 1 to par.Length-1 do
+      begin
+        sb += ',';
+        sb += par[i].ToString(nvn, svn, ovn);
+      end;
+      sb += ')';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -2229,8 +2384,16 @@ type
     public constructor(name: string) :=
     self.name := name;
     
-    public function ToString: string; override :=
-    'var#?';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '(%UnFixed+';
+      sb += name;
+      sb += ')';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   OptNVarExpr = sealed class(OptNExprBase, IOptVarExpr)
@@ -2267,8 +2430,16 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'num_var#{id}';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '(';
+      sb += nvn[id];
+      sb += '+%Num)';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   OptSVarExpr = sealed class(OptSExprBase, IOptVarExpr)
@@ -2305,8 +2476,16 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'str_var#{id}';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '(';
+      sb += svn[id];
+      sb += '+%Str)';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   OptOVarExpr = sealed class(OptOExprBase, IOptVarExpr)
@@ -2343,8 +2522,16 @@ type
       
     end;
     
-    public function ToString: string; override :=
-    $'obj_var#{id}';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '(';
+      sb += ovn[id];
+      sb += ')';
+      
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -2437,6 +2624,9 @@ type
     
     public static function Load(br: System.IO.BinaryReader): OptExprWrapper;
     
+    public function ToString: string; override :=
+    GetMain.ToString(n_vars_names, s_vars_names, o_vars_names);
+    
   end;
   OptNExprWrapper = sealed class(OptExprWrapper)
     
@@ -2463,9 +2653,6 @@ type
       inherited Create;
       self.Main := Main;
     end;
-    
-    public function ToString: string; override :=
-    Main.ToString;
     
   end;
   OptSExprWrapper = sealed class(OptExprWrapper)
@@ -2494,9 +2681,6 @@ type
       self.Main := Main;
     end;
     
-    public function ToString: string; override :=
-    Main.ToString;
-    
   end;
   OptOExprWrapper = sealed class(OptExprWrapper)
     
@@ -2520,9 +2704,6 @@ type
       inherited Create;
       self.Main := Main;
     end;
-    
-    public function ToString: string; override :=
-    Main.ToString;
     
   end;
   
