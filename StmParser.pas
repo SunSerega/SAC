@@ -257,7 +257,19 @@ type
   DuplicateLabelNameException = class(FileCompilingException)
     
     public constructor(o: object; lbl: string) :=
-    inherited Create(source, $'Duplicate label for {lbl} found');
+    inherited Create(o, $'Duplicate label for {lbl} found');
+    
+  end;
+  EntryPointNotFoundException = class(FileCompilingException)
+    
+    public constructor(o: object) :=
+    inherited Create(o, $'Entry point "{o}" not found');
+    
+  end;
+  CanOnlyStartFromStartPosException = class(FileCompilingException)
+    
+    public constructor(o: object) :=
+    inherited Create(o, $'Start pos is defined, can''t start from other labels');
     
   end;
   
@@ -695,7 +707,9 @@ type
     public procedure Execute(entry_point: string);
     begin
       if not entry_point.Contains('#') then entry_point += '#';
+      if not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
+      if start_pos_def and not ec.curr.StartPos then raise new CanOnlyStartFromStartPosException(nil);
       while ec.ExecuteNext do;
       if stoped <> nil then
         stoped;

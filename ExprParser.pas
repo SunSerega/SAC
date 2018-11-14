@@ -1,10 +1,8 @@
 ﻿unit ExprParser;
-//ToDo провести тест выражений
 
 //ToDo Контекст ошибок
 //ToDo костанты WW и WH
 //ToDo функции округления чисел (Int, Round, Ceil)
-//ToDo GetVarNames бесполезно
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
@@ -485,7 +483,6 @@ type
     function GetRes: Object;
     function GetResType: System.Type;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string;
     function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
     function UnFixVarExprs(nn, ns, no: array of string): IOptExpr;
     function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
@@ -547,9 +544,6 @@ type
     end;
     
     
-    
-    public function GetVarNames(nn, ns, no: array of string): sequence of string; virtual :=
-    new string[0];
     
     public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual :=
     TransformAllSubExprs(oe->oe.FixVarExprs(sn,ss,so, nn,ns,no));
@@ -742,10 +736,6 @@ type
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := Negative.Cast&<OptExprBase>;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
-    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     public function Optimize: IOptExpr; override;
     begin
       var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNNPlusExpr;
@@ -929,9 +919,6 @@ type
     
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := new OptExprBase[0];
-    
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
     
     public function Optimize: IOptExpr; override;
     begin
@@ -1126,10 +1113,6 @@ type
     public function GetPositive: sequence of OptExprBase := Positive;
     public function GetNegative: sequence of OptExprBase := Negative;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
-    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     public function Optimize: IOptExpr; override;
     begin
       var res1 := TransformAllSubExprs(oe->oe.Optimize) as OptOPlusExpr;
@@ -1295,10 +1278,6 @@ type
     
     function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     function GetNegative: sequence of OptExprBase := Negative.Select(oe->oe as OptExprBase);
-    
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
-    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
     
     public function Optimize: IOptExpr; override;
     begin
@@ -1491,10 +1470,6 @@ type
     
     function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
     function GetNegative: sequence of OptExprBase := new OptExprBase[0];
-    
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Base.GetVarNames(nn,ns,no)+
-    Positive.GetVarNames(nn,ns,no);
     
     public function Optimize: IOptExpr; override;
     begin
@@ -1716,10 +1691,6 @@ type
     function GetPositive: sequence of OptExprBase := Positive;
     function GetNegative: sequence of OptExprBase := Negative;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no))+
-    Negative.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     public function Optimize: IOptExpr; override;
     begin
       var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptOMltExpr;
@@ -1928,9 +1899,6 @@ type
     
     public function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    Positive.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     public function Optimize: IOptExpr; override;
     begin
       var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNPowExpr;
@@ -2090,9 +2058,6 @@ type
     
     public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     protected procedure CheckParamsBase;
     begin
       var tps := GetTps;
@@ -2198,9 +2163,6 @@ type
     
     public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
-    function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
-    
     protected procedure CheckParamsBase;
     begin
       var tps := GetTps;
@@ -2293,9 +2255,6 @@ type
     
     
     
-    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    new string[](name);
-    
     public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
     
     public function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
@@ -2367,9 +2326,6 @@ type
     
     
     
-    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    new string[](nn[id]);
-    
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     AsDefinitelyNumExpr(new UnOptVarExpr(nn[id]));
     
@@ -2413,9 +2369,6 @@ type
     
     
     
-    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    new string[](ns[id]);
-    
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     AsStrExpr(new UnOptVarExpr(ns[id]));
     
@@ -2458,9 +2411,6 @@ type
     public id: integer;
     
     
-    
-    public function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
-    new string[](no[id]);
     
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     new UnOptVarExpr(no[id]);
@@ -3645,6 +3595,7 @@ type
   OptConverter = static class
     
     static FuncTypes := new Dictionary<string, Func<array of OptExprBase,IOptFuncExpr>>;
+    static var_names: List<string>;
     
     static constructor;
     begin
@@ -3740,6 +3691,8 @@ type
           if res.name.Length=0 then
             raise new InvalidVarException(e.name, 'Var name can''t be empty');
           
+          var_names += res.name;
+          
         end;
       end;
       
@@ -3761,6 +3714,7 @@ type
     
     static function GetOptExprWrapper(e: Expr; conv: OptExprBase->OptExprBase): OptExprWrapper;
     begin
+      var_names := new List<string>;
       
       var Main := GetOptExpr(e);
       if conv <> nil then Main := conv(Main as OptExprBase);
@@ -3773,7 +3727,8 @@ type
       
       Result.n_vars_names := new string[0];
       Result.s_vars_names := new string[0];
-      Result.o_vars_names := Main.GetVarNames(nil,nil,nil).ToArray;
+      Result.o_vars_names := var_names.ToArray;
+      var_names := nil;
       
       Result.n_vars := new real[0];
       Result.s_vars := new string[0];
