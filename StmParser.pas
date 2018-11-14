@@ -2,6 +2,7 @@
 
 //ToDo Контекст ошибок
 //ToDo Операторы ОБЯЗАНЫ при оптимизации добавлять имена своих переменных, чтоб FinalOptimize не удаляла эти переменные (да и чтоб просто Optimize работала эффективнее)
+//ToDo подставлять переменные можно только в данном блоке. потому что следующий может быть вызван из нескольких мест
 
 //ToDo При загрузке абстрактный и физический файл могут наложится. надо их совмещать, но если будет дубль лэйбла - давать ошибку
 // - так же по особому обрабатывать лэйблы начинающиеся с %. Запретить вызов и про совмещении переименовывать
@@ -3809,19 +3810,11 @@ begin
         var usages := new List<(StmBase, OptExprWrapper)>;
         var auf := true;
         
-        var prev := new HashSet<StmBase>;
-        
         foreach var stm in
-          bl.EnumrNextStms
+          bl.stms
           .SkipWhile(stm-> stm<>e).Skip(1)
         do
         begin
-          if stm=nil then
-          begin
-            auf := false;
-            break;
-          end;
-          if not prev.Add(stm) then break;
           
           usages.AddRange(
             stm
@@ -3833,6 +3826,29 @@ begin
           if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
         end;
         
+        var nue := false;
+        if bl.next <> nil then
+        begin
+          var prev := new HashSet<StmBase>;
+          
+          foreach var stm in
+            bl.next
+            .EnumrNextStms
+          do
+          begin
+            
+            if (stm=nil) or stm.FindVarUsages(e.vname).Where(e-> e<>nil ).Any then
+            begin
+              nue := true;
+              break;
+            end;
+            
+            if not prev.Add(stm) then break;
+            if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
+          end;
+          
+        end;
+        
         var main := e.e.GetMain;
         if (main is IOptSimpleExpr) or (usages.Count < 2) then
         begin
@@ -3840,34 +3856,22 @@ begin
           foreach var use in usages do
             use[1].ReplaceVar(e.vname, main);
           
-          if auf then bl.stms.Remove(e);
+          if auf and not nue then bl.stms.Remove(e);
           
-          try_final_opt := true;
+          if (usages.Count<>0) or not nue then try_final_opt := true;
         end else
         begin
-          var use := usages[0];//ToDo надо переставлять точку, если применение в цикле (иначе переменная будет вычислятся при каждой итерации)
+          var use := usages[0];
           var stms := use[0].bl.stms;
           
-          if bl <> use[0].bl then
+          var ind := stms.IndexOf(use[0]);
+          if stms.IndexOf(e)+1 <> ind then
           begin
             
-            bl.stms.Remove(e);
-            stms.Insert(stms.IndexOf(use[0]),e);
+            stms.Remove(e);
+            stms.Insert(ind-1,e);
             
             try_final_opt := true;
-          end else
-          begin
-            var ind := stms.IndexOf(use[0]);
-            
-            if stms.IndexOf(e)+1 <> ind then
-            begin
-              
-              stms.Remove(e);
-              stms.Insert(ind-1,e);
-              
-              try_final_opt := true;
-            end;
-            
           end;
           
         end;

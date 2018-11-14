@@ -713,13 +713,13 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptNExprBase;
         if oe<>Result then
           need_copy := true;
       end);
-      Negative := Negative.ConvertAll(oe->
+      var nNegative := Negative.ConvertAll(oe->
       begin
         Result := f(oe) as OptNExprBase;
         if oe<>Result then
@@ -729,8 +729,8 @@ type
       if need_copy then
       begin
         var res := new OptNNPlusExpr;
-        res.Positive := self.Positive;
-        res.Negative := self.Negative;
+        res.Positive := nPositive;
+        res.Negative := nNegative;
         Result := res;
       end else
         Result := self;
@@ -748,14 +748,14 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNNPlusExpr;
       
       var res1: OptNNPlusExpr;
-      if Positive.Concat(Negative).Any(oe->oe is IOptPlusExpr) then
+      if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptPlusExpr) then
       begin
         res1 := new OptNNPlusExpr;
         
-        foreach var oe in Positive do
+        foreach var oe in res0.Positive do
           if oe is OptNNPlusExpr(var onnp) then
           begin
             res1.Positive.AddRange(onnp.Positive);
@@ -763,7 +763,7 @@ type
           end else
             res1.Positive.Add(oe);
         
-        foreach var oe in Negative do
+        foreach var oe in res0.Negative do
           if oe is OptNNPlusExpr(var onnp) then
           begin
             res1.Negative.AddRange(onnp.Positive);
@@ -772,7 +772,7 @@ type
             res1.Negative.Add(oe);
         
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 0.0));
       res1.Negative.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 0.0));
@@ -908,7 +908,7 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptSExprBase;
         if oe<>Result then
@@ -918,7 +918,7 @@ type
       if need_copy then
       begin
         var res := new OptSSPlusExpr;
-        res.Positive := self.Positive;
+        res.Positive := nPositive;
         Result := res;
       end else
         Result := self;
@@ -935,20 +935,20 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSSPlusExpr;
       
       var res1: OptSSPlusExpr;
-      if Positive.Any(oe->oe is IOptPlusExpr) then
+      if res0.Positive.Any(oe->oe is IOptPlusExpr) then
       begin
         res1 := new OptSSPlusExpr;
         
-        foreach var oe in Positive do
+        foreach var oe in res0.Positive do
           if (oe is OptSExprBase) and (oe is IOptPlusExpr(var ope)) then
             res1.Positive.AddRange(ope.GetPositive.Select(oe->AsStrExpr(oe))) else
             res1.Positive.Add(oe);
         
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = ''));
       
@@ -1097,13 +1097,13 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
           need_copy := true;
       end);
-      Negative := Negative.ConvertAll(oe->
+      var nNegative := Negative.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
@@ -1113,8 +1113,8 @@ type
       if need_copy then
       begin
         var res := new OptOPlusExpr;
-        res.Positive := self.Positive;
-        res.Negative := self.Negative;
+        res.Positive := nPositive;
+        res.Negative := nNegative;
         Result := res;
       end else
         Result := self;
@@ -1132,15 +1132,15 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
-      if Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(self, Negative);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptOPlusExpr;
+      if res0.Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(nil, nil);
       
       var res1: OptOPlusExpr;
-      if Positive.Concat(Negative).Any(oe->oe is IOptPlusExpr) then
+      if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptPlusExpr) then
       begin
         res1 := new OptOPlusExpr;
         
-        foreach var oe in Positive do
+        foreach var oe in res0.Positive do
           if oe is IOptPlusExpr(var ope) then
           begin
             res1.Positive.AddRange(ope.GetPositive);
@@ -1148,7 +1148,7 @@ type
           end else
             res1.Positive.Add(oe);
         
-        foreach var oe in Negative do
+        foreach var oe in res0.Negative do
           if oe is IOptPlusExpr(var ope) then
           begin
             res1.Negative.AddRange(ope.GetPositive);
@@ -1157,7 +1157,7 @@ type
             res1.Negative.Add(oe);
         
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
       
@@ -1289,13 +1289,13 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptNExprBase;
         if oe<>Result then
           need_copy := true;
       end);
-      Negative := Negative.ConvertAll(oe->
+      var nNegative := Negative.ConvertAll(oe->
       begin
         Result := f(oe) as OptNExprBase;
         if oe<>Result then
@@ -1305,8 +1305,8 @@ type
       if need_copy then
       begin
         var res := new OptNNMltExpr;
-        res.Positive := self.Positive;
-        res.Negative := self.Negative;
+        res.Positive := nPositive;
+        res.Negative := nNegative;
         Result := res;
       end else
         Result := self;
@@ -1326,14 +1326,14 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNNMltExpr;
       
       var res1 := new OptNNMltExpr;
-      if Positive.Concat(Negative).Any(oe->oe is IOptMltExpr) then
+      if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptMltExpr) then
       begin
         res1 := new OptNNMltExpr;
         
-        foreach var oe in Positive do
+        foreach var oe in res0.Positive do
           if oe is IOptMltExpr(var ome) then
           begin
             res1.Positive.AddRange(ome.GetPositive.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
@@ -1341,7 +1341,7 @@ type
           end else
             res1.Positive.Add(oe);
         
-        foreach var oe in Negative do
+        foreach var oe in res0.Negative do
           if oe is IOptMltExpr(var ome) then
           begin
             res1.Negative.AddRange(ome.GetPositive.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
@@ -1350,7 +1350,7 @@ type
             res1.Negative.Add(oe);
         
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 1.0));
       res1.Negative.RemoveAll(oe->(oe is IOptLiteralExpr) and (oe.res = 1.0));
@@ -1494,29 +1494,18 @@ type
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; override;
     begin
-      var need_copy := false;
       
-      var oe1 := f(Base) as OptSExprBase;
-      if oe1<>Base then
-      begin
-        need_copy := true;
-        Base := oe1;
-      end;
-      var oe2 := f(Positive) as OptNExprBase;
-      if oe2<>Positive then
-      begin
-        need_copy := true;
-        Positive := oe2;
-      end;
+      var nBase := f(Base) as OptSExprBase;
+      var nPositive := f(Positive) as OptNExprBase;
       
-      if need_copy then
+      if (Base=nBase) and (Positive=nPositive) then
+        Result := self else
       begin
         var res := new OptSNMltExpr;
-        res.Base := self.Base;
-        res.Positive := self.Positive;
+        res.Base := nBase;
+        res.Positive := nPositive;
         Result := res;
-      end else
-        Result := self;
+      end;
       
     end;
     
@@ -1533,11 +1522,10 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSNMltExpr;
       
       var res1: OptSNMltExpr;
-      
-      if Base is IOptMltExpr(var ome) then
+      if res0.Base is IOptMltExpr(var ome) then
       begin
         res1 := new OptSNMltExpr;
         var p := new OptNNMltExpr;
@@ -1560,16 +1548,16 @@ type
             p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))));
             //--------
         
-        if self.Positive is OptNNMltExpr(var onme) then
+        if res0.Positive is OptNNMltExpr(var onme) then
         begin
           p.Positive.AddRange(onme.Positive);
           p.Negative.AddRange(onme.Negative);
         end else
-          p.Positive.Add(self.Positive);
+          p.Positive.Add(res0.Positive);
         
         res1.Positive := p;
       end else
-        res1 := self;
+        res1 := res0;
       
       if
         (res1.Base is IOptLiteralExpr) and
@@ -1721,13 +1709,13 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
           need_copy := true;
       end);
-      Negative := Negative.ConvertAll(oe->
+      var nNegative := Negative.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
@@ -1737,8 +1725,8 @@ type
       if need_copy then
       begin
         var res := new OptOMltExpr;
-        res.Positive := self.Positive;
-        res.Negative := self.Negative;
+        res.Positive := nPositive;
+        res.Negative := nNegative;
         Result := res;
       end else
         Result := self;
@@ -1758,14 +1746,14 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptOMltExpr;
       
       var res1: OptOMltExpr;
-      if Positive.Concat(Negative).Any(oe->oe is IOptMltExpr) then
+      if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptMltExpr) then
       begin
         res1 := new OptOMltExpr;
         
-        foreach var oe in Positive do
+        foreach var oe in res0.Positive do
           if oe is IOptMltExpr(var ome) then
           begin
             res1.Positive.AddRange(ome.GetPositive);
@@ -1773,7 +1761,7 @@ type
           end else
             res1.Positive.Add(oe);
         
-        foreach var oe in Negative do
+        foreach var oe in res0.Negative do
           if oe is IOptMltExpr(var ome) then
           begin
             res1.Negative.AddRange(ome.GetPositive);
@@ -1782,7 +1770,7 @@ type
             res1.Negative.Add(oe);
         
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->(oe is OptNLiteralExpr) and (real(oe.GetRes) = 1.0));
       res1.Negative.RemoveAll(oe->(oe is OptNLiteralExpr) and (real(oe.GetRes) = 1.0));
@@ -1943,7 +1931,7 @@ type
     begin
       var need_copy := false;
       
-      Positive := Positive.ConvertAll(oe->
+      var nPositive := Positive.ConvertAll(oe->
       begin
         Result := f(oe) as OptNExprBase;
         if oe<>Result then
@@ -1953,7 +1941,7 @@ type
       if need_copy then
       begin
         var res := new OptNPowExpr;
-        res.Positive := self.Positive;
+        res.Positive := nPositive;
         Result := res;
       end else
         Result := self;
@@ -1969,19 +1957,19 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNPowExpr;
       
       var res1: OptNPowExpr;
-      if Positive[0] is IOptPowExpr(var ope) then
+      if res0.Positive[0] is IOptPowExpr(var ope) then
       begin
         res1 := new OptNPowExpr;
         
         foreach var oe in ope.GetPositive do
           res1.Positive.Add(AsDefinitelyNumExpr(oe).Optimize as OptNExprBase);
         
-        res1.Positive.AddRange(self.Positive.Skip(1));
+        res1.Positive.AddRange(res0.Positive.Skip(1));
       end else
-        res1 := self;
+        res1 := res0;
       
       res1.Positive.RemoveAll(oe->(oe <> Positive[0]) and (oe is OptNLiteralExpr) and (oe.res = 1.0));
       
@@ -2109,14 +2097,14 @@ type
     begin
       var need_copy := false;
       
-      par := par.ConvertAll(oe->
+      var npar := par.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
           need_copy := true;
       end);
       
-      Result := need_copy?self.Copy:self;
+      Result := need_copy?self.Copy(npar):self;
       
     end;
     
@@ -2124,7 +2112,7 @@ type
     
     public function GetTps: array of System.Type; abstract;
     
-    public function Copy: IOptFuncExpr; abstract;
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
@@ -2143,17 +2131,17 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNFuncExpr;
       CheckParams;
-      if par.All(oe->oe is IOptLiteralExpr) then
+      if res0.par.All(oe->oe is IOptLiteralExpr) then
       begin
         
-        foreach var p in GetCalc() do
+        foreach var p in res0.GetCalc() do
           p();
         
-        Result := new OptNLiteralExpr(self.res);
+        Result := new OptNLiteralExpr(res0.res);
       end else
-        Result := self;
+        Result := res0;
     end;
     
     public procedure ClampLists; override :=
@@ -2217,14 +2205,14 @@ type
     begin
       var need_copy := false;
       
-      par := par.ConvertAll(oe->
+      var npar := par.ConvertAll(oe->
       begin
         Result := f(oe) as OptExprBase;
         if oe<>Result then
           need_copy := true;
       end);
       
-      Result := need_copy?self.Copy:self;
+      Result := need_copy?self.Copy(npar):self;
       
     end;
     
@@ -2232,7 +2220,7 @@ type
     
     public function GetTps: array of System.Type; abstract;
     
-    public function Copy: IOptFuncExpr; abstract;
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
     function GetVarNames(nn, ns, no: array of string): sequence of string; override :=
     par.SelectMany(oe->oe.GetVarNames(nn,ns,no));
@@ -2251,16 +2239,16 @@ type
     
     public function Optimize: IOptExpr; override;
     begin
-      TransformAllSubExprs(oe->oe.Optimize);
+      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSFuncExpr;
       CheckParams;
-      if par.All(oe->oe is IOptLiteralExpr) then
+      if res0.par.All(oe->oe is IOptLiteralExpr) then
       begin
-        foreach var p in GetCalc() do
+        foreach var p in res0.GetCalc() do
           p();
         
-        Result := new OptSLiteralExpr(self.res);
+        Result := new OptSLiteralExpr(res0.res);
       end else
-        Result := self;
+        Result := res0;
     end;
     
     public procedure ClampLists; override :=
@@ -2398,7 +2386,7 @@ type
   end;
   OptNVarExpr = sealed class(OptNExprBase, IOptVarExpr)
     
-    public souce: array of real;
+    public source: array of real;
     public id: integer;
     
     
@@ -2410,7 +2398,7 @@ type
     AsDefinitelyNumExpr(new UnOptVarExpr(nn[id]));
     
     public procedure Calc :=
-    res := souce[id];
+    res := source[id];
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2425,7 +2413,7 @@ type
     public constructor(br: System.IO.BinaryReader; nv: array of real);
     begin
       
-      self.souce := nv;
+      self.source := nv;
       self.id := br.ReadInt32;
       
     end;
@@ -2444,7 +2432,7 @@ type
   end;
   OptSVarExpr = sealed class(OptSExprBase, IOptVarExpr)
     
-    public souce: array of string;
+    public source: array of string;
     public id: integer;
     
     
@@ -2456,7 +2444,7 @@ type
     AsStrExpr(new UnOptVarExpr(ns[id]));
     
     public procedure Calc :=
-    res := souce[id];
+    res := source[id];
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2471,7 +2459,7 @@ type
     public constructor(br: System.IO.BinaryReader; sv: array of string);
     begin
       
-      self.souce := sv;
+      self.source := sv;
       self.id := br.ReadInt32;
       
     end;
@@ -2490,7 +2478,7 @@ type
   end;
   OptOVarExpr = sealed class(OptOExprBase, IOptVarExpr)
     
-    public souce: array of object;
+    public source: array of object;
     public id: integer;
     
     
@@ -2502,7 +2490,7 @@ type
     new UnOptVarExpr(no[id]);
     
     public procedure Calc :=
-    res := souce[id];
+    res := source[id];
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2517,21 +2505,13 @@ type
     public constructor(br: System.IO.BinaryReader; ov: array of object);
     begin
       
-      self.souce := ov;
+      self.source := ov;
       self.id := br.ReadInt32;
       
     end;
     
-    public function ToString(nvn, svn, ovn: array of string): string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      sb += '(';
-      sb += ovn[id];
-      sb += ')';
-      
-      Result := sb.ToString;
-    end;
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
+    ovn[id];
     
   end;
   
@@ -2554,6 +2534,7 @@ type
     
     
     public function GetMain: OptExprBase; abstract;
+    public procedure SetMain(Main: OptExprBase); abstract;
     
     public function Optimize(nvn, svn: HashSet<string>): OptExprWrapper;
     
@@ -2627,6 +2608,8 @@ type
     public function ToString: string; override :=
     GetMain.ToString(n_vars_names, s_vars_names, o_vars_names);
     
+    public property DebugStr: string read ToString;
+    
   end;
   OptNExprWrapper = sealed class(OptExprWrapper)
     
@@ -2635,6 +2618,7 @@ type
     
     
     public function GetMain: OptExprBase; override := Main;
+    public procedure SetMain(Main: OptExprBase); override := self.Main := OptNExprBase(Main);
     
     public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
@@ -2662,6 +2646,7 @@ type
     
     
     public function GetMain: OptExprBase; override := Main;
+    public procedure SetMain(Main: OptExprBase); override := self.Main := OptSExprBase(Main);
     
     public function CalcS(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
@@ -2689,6 +2674,7 @@ type
     
     
     public function GetMain: OptExprBase; override := Main;
+    public procedure SetMain(Main: OptExprBase); override := self.Main := Main;
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin
@@ -3136,8 +3122,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_Length(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Length(par);
     
   end;
   OptFunc_Num = sealed class(OptNFuncExpr)
@@ -3206,8 +3192,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_Num(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Num(par);
     
   end;
   OptFunc_Ord = sealed class(OptNFuncExpr)
@@ -3252,8 +3238,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_Ord(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Ord(par);
     
   end;
   OptFunc_DeflyNum = sealed class(OptNFuncExpr)
@@ -3327,8 +3313,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_DeflyNum(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_DeflyNum(par);
     
   end;
   
@@ -3391,8 +3377,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_Str(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Str(par);
     
   end;
   OptFunc_CutStr = sealed class(OptSFuncExpr)
@@ -3450,8 +3436,8 @@ type
       CheckParams;
     end;
     
-    public function Copy: IOptFuncExpr; override :=
-    new OptFunc_CutStr(self.par);
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_CutStr(par);
     
   end;
   
@@ -3470,20 +3456,20 @@ begin
   if nn.Contains(name) then
   begin
     var res := new OptNVarExpr;
-    res.souce := sn;
+    res.source := sn;
     res.id := nn.IndexOf(name);
     Result := res;
   end else
   if ns.Contains(name) then
   begin
     var res := new OptSVarExpr;
-    res.souce := ss;
+    res.source := ss;
     res.id := ns.IndexOf(name);
     Result := res;
   end else
   begin
     var res := new OptOVarExpr;
-    res.souce := so;
+    res.source := so;
     res.id := no.IndexOf(name);
     Result := res;
   end;
@@ -3494,21 +3480,21 @@ begin
   if nn.Contains(name) then
   begin
     var res := new OptNVarExpr;
-    res.souce := sn;
+    res.source := sn;
     res.id := nn.IndexOf(name);
     Result := res;
   end else
   if ns.Contains(name) then
   begin
     var res := new OptSVarExpr;
-    res.souce := ss;
+    res.source := ss;
     res.id := ns.IndexOf(name);
     Result := res;
   end else
   if no.Contains(name) then
   begin
     var res := new OptOVarExpr;
-    res.souce := so;
+    res.source := so;
     res.id := no.IndexOf(name);
     Result := res;
   end else
@@ -3654,13 +3640,8 @@ begin
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  if Main=self.GetMain then
-    Result := self else
-  if Main is OptNExprBase then
-    Result := new OptNExprWrapper(Main as OptNExprBase) else
-  if Main is OptSExprBase then
-    Result := new OptSExprWrapper(Main as OptSExprBase) else
-    Result := new OptOExprWrapper(Main as OptOExprBase);
+  Result := self;//ReplaceVar вызывается только для блока откуда берётся, поэтому копировать не надо
+  SetMain(Main as OptExprBase);
   
   
   
