@@ -29,13 +29,17 @@ T|Num						=\
 	n\=Num("abc") (error, can't convert to Num)
 
 
-H|Ord						=Gets id of symbol
-T|Ord						=\
-	KeyP Ord("G")\
+H|KeyCode					=Gets key code by it's name
+T|KeyCode					=\
+	KeyP KeyCode("G")\
 	Will press letter "G" on keyboard\
-	Only works for eng. letters\
+	Only works for eng. and rus. letters, and some names, like:\
 	\
-	Also can be used with Chr for Unicode encoding/decoding
+	[,L,R][Shift,Ctrl,Alt] (all 9 combinations works)\
+	SpaceBar,Coma\
+	\
+	Note, when you press Left Shift on keyboard - it activates both Shift and LShift\
+	But KeyD KeyCode("LShift") would press only LShift
 
 
 %1=
