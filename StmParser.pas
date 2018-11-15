@@ -1,9 +1,8 @@
 ﻿unit StmParser;
 
 //ToDo Контекст ошибок
-
-//ToDo При загрузке абстрактный и физический файл могут наложится. надо их совмещать, но если будет дубль лэйбла - давать ошибку
-// - Так же по особому обрабатывать лэйблы начинающиеся с %. При совмещении переименовывать
+//ToDo Удалять Call null
+//ToDo Сериализовывать внутренние блоки по-особому. И удалить присвоение им кастомных имён, они всё равно могут пересечься, можно просто оставить их пустыми.
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -270,6 +269,12 @@ type
     
     public constructor(o: object) :=
     inherited Create(o, $'Start pos is defined, can''t start from other labels');
+    
+  end;
+  LabelNotFoundException = class(FileCompilingException)
+    
+    public constructor(o: object; lbl: string) :=
+    inherited Create(o, $'Label not found: {lbl}');
     
   end;
   
@@ -642,10 +647,23 @@ type
     (StartPos?'!StartPos //Const'#10:'') +
     stms.JoinIntoString(#10);
     
-    public function ToString: string; override :=
-    GetBodyString +
-    (next=nil?#10'Return //Const':$'{#10}Jump {next.fname+next.lbl} //Const');
-    
+    public function ToString: string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      var curr := self;
+      repeat
+        sb += curr.GetBodyString;
+        curr := curr.next;
+        if curr=nil then break;
+      until not curr.lbl.StartsWith('#%');
+      sb += #10;
+      if next=nil then
+        sb += 'Return //Const' else
+        sb += $'Jump {next.fname+next.lbl} //Const';
+      
+      Result := sb.ToString;
+    end;
   end;
   
   Script = sealed class
@@ -707,7 +725,7 @@ type
     public procedure Execute(entry_point: string);
     begin
       if not entry_point.Contains('#') then entry_point += '#';
-      if entry_point.Contains('#%') or not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
+      if not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
       if start_pos_def and not ec.curr.StartPos then raise new CanOnlyStartFromStartPosException(nil);
       while ec.ExecuteNext do;
@@ -739,10 +757,20 @@ type
         begin
           lsbs[i].fname := fname;
           lsbs[i].lbl := '#'+br.ReadString;
-          self.sbs.Add(fname + lsbs[i].lbl, lsbs[i]);
           lsbs[i].Load(br, lsbs);
           lsbs[i].Seal;
         end;
+        
+        for var i := 0 to lsbs.Length-1 do
+          if not lsbs[i].lbl.StartsWith('#%') then
+          begin
+            
+            var key := fname + lsbs[i].lbl;
+            if not self.sbs.ContainsKey(key) then
+              self.sbs.Add(key, lsbs[i]) else
+              raise new DuplicateLabelNameException(nil, key);
+            
+          end;
         
       end;
       
@@ -994,7 +1022,13 @@ type
         if not res.Contains('#') then res += '#';
         
         if not curr.scr.sbs.ContainsKey(res) then
+        begin
           curr.scr.ReadFile(nil, res);
+          
+          if not curr.scr.sbs.ContainsKey(res) then
+            raise new LabelNotFoundException(nil, res);
+          
+        end;
         
         Result := curr.scr.sbs[res];
       end;
@@ -3645,7 +3679,7 @@ begin
       begin
         
         if s.Contains('%') then raise new InvalidLabelCharactersException(last, s, '%');
-        sbs.Add(lname, last);
+        if not lname.Contains('#%') then sbs.Add(lname, last);
         last.fname := ffname;
         last.lbl := lname.Remove(0,lname.IndexOf('#'));
         if skp_ar then
@@ -3671,7 +3705,7 @@ begin
           
           if stm is ICallOper then
           begin
-            sbs.Add(lname, last);
+            if not lname.Contains('#%') then sbs.Add(lname, last);
             last.fname := ffname;
             last.lbl := lname.Remove(0,lname.IndexOf('#'));
             last.Seal;
@@ -3688,7 +3722,7 @@ begin
   last.fname := ffname;
   last.lbl := lname.Remove(0,lname.IndexOf('#'));
   last.Seal;
-  sbs.Add(lname, last);
+  if not lname.Contains('#%') then sbs.Add(lname, last);
 end;
 
 constructor Script.Create(fname: string);
@@ -3697,7 +3731,7 @@ begin
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
   ReadFile(nil, read_start_lbl_name);
   
-  self.Optimize;
+  loop 10 do self.Optimize;
 end;
 
 {$endregion Script}

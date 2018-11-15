@@ -1,5 +1,30 @@
 <details>
 <summary>
+About
+</summary>
+
+SAC (Script Auto Clicker) is script language, with clicker commands.
+You can write simple scripts:
+```
+
+KeyP 65 //(Presses key A)
+Sleep 1000/50 //(waits 1/50 of a second)
+
+Jump "#" //(Jumps to the start)
+
+```
+but also you can do very complex scripts.
+
+SAC has:
+- Powerfull optimizer;
+- Multifile scripts;
+- Dynamic lib's;
+- Operators that allows for non-linear scripts (like Call[If]).
+
+</details>
+
+<details>
+<summary>
 How to install/uninstall
 </summary>
 
