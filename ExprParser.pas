@@ -247,6 +247,12 @@ type
     inherited Create(sender, $'Cut [{i1}..{i2}] can''t be applied to "{s}" (len={s.Length})', KV('s'+'',object(s)), KV('i1',object(i1)), KV('i2',object(i2)));
     
   end;
+  UndefinedKeyNameException = class(ExprCompilingException)
+    
+    public constructor(sender: object; s: string) :=
+    inherited Create(sender, $'Key name [> {s} <] not defined');//ToDo test for s too big
+    
+  end;
   
   {$endregion Compiling}
   
@@ -3122,7 +3128,37 @@ type
     new OptFunc_Num(par);
     
   end;
-  OptFunc_Ord = sealed class(OptNFuncExpr)
+  OptFunc_KeyCode = sealed class(OptNFuncExpr)
+    
+    private static lang_spec_keys := new Dictionary<char, byte>;
+    private static named_keys := new Dictionary<string, byte>;
+    
+    static procedure LoadKeys(fname: string);
+    begin
+      var sr := new System.IO.StreamReader(GetResourceStream(fname));
+      
+      while not sr.EndOfStream do
+      begin
+        var s := sr.ReadLine;
+        if s='' then continue;
+        var ss := s.Split('=');
+        if ss[0].Length=1 then
+          lang_spec_keys.Add(ss[0][1].ToLower, byte.Parse(ss[1])) else
+          named_keys.Add(ss[0].ToLower, byte.Parse(ss[1]));
+      end;
+      
+    end;
+    
+    static constructor;
+    begin
+      
+      LoadKeys('RU.kkd');   {$resource 'Key Name-Code Data\RU.kkd'}
+      
+      LoadKeys('Names.kkd');{$resource 'Key Name-Code Data\Names.kkd'}
+      
+    end;
+    
+    
     
     public procedure CheckParams; override :=
     CheckParamsBase;
@@ -3135,8 +3171,15 @@ type
     public procedure Calc;
     begin
       var pr := par[0].GetRes;
-      if (pr is string(var s)) and (s.Length = 1) then
-        self.res := word(s[1]) else
+      if pr is string(var s) then
+        if s.Length = 1 then
+          case s[1] of
+            'A'..'Z': self.res := word(s[1]);
+            '0'..'9': self.res := word(s[1]);
+            'a'..'z': self.res := word(s[1])-32;
+                 else self.res := lang_spec_keys[s[1].ToLower];
+          end else
+          self.res := named_keys[s.ToLower] else
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     
@@ -3155,17 +3198,17 @@ type
     end;
     
     public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object) :=
-    inherited Create(br, 'Ord', nvn, svn, ovn);
+    inherited Create(br, 'KeyCode', nvn, svn, ovn);
     
     public constructor(par: array of OptExprBase);
     begin
       self.par := par;
-      self.name := 'Ord';
+      self.name := 'KeyCode';
       CheckParams;
     end;
     
     public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
-    new OptFunc_Ord(par);
+    new OptFunc_KeyCode(par);
     
   end;
   OptFunc_DeflyNum = sealed class(OptNFuncExpr)
@@ -3602,7 +3645,7 @@ type
       
       FuncTypes.Add('length', par->new OptFunc_Length(par));
       FuncTypes.Add('num', par->new OptFunc_Num(par));
-      FuncTypes.Add('ord', par->new OptFunc_Ord(par));
+      FuncTypes.Add('keycode', par->new OptFunc_KeyCode(par));
       FuncTypes.Add('deflynum', par->new OptFunc_DeflyNum(par));
       
       FuncTypes.Add('str', par->new OptFunc_Str(par));
@@ -3763,7 +3806,7 @@ begin
     
     1: Result := new OptFunc_Length(br, nv, sv, ov);
     2: Result := new OptFunc_Num(br, nv, sv, ov);
-    3: Result := new OptFunc_Ord(br, nv, sv, ov);
+    3: Result := new OptFunc_KeyCode(br, nv, sv, ov);
     4: Result := new OptFunc_DeflyNum(br, nv, sv, ov);
     
     5: Result := new OptFunc_Str(br, nv, sv, ov);

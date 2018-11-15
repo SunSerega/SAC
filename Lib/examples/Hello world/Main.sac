@@ -1,31 +1,25 @@
 
-KeyD 160 //LShift
-KeyP Ord("H")
-KeyU 160
+KeyD KeyCode("LShift")
+KeyP KeyCode("H")
+KeyU KeyCode("LShift")
 
-KeyP Ord("E")
-KeyP Ord("L")
-KeyP Ord("L")
-KeyP Ord("O")
+KeyP KeyCode("E")
+KeyP KeyCode("L")
+KeyP KeyCode("L")
+KeyP KeyCode("O")
 
-KeyP 188 //","
-KeyP 32  //Space
+KeyP KeyCode("Coma")
+KeyP KeyCode("SpaceBar")
 
-KeyP Ord("W")
-KeyP Ord("O")
-KeyP Ord("R")
-KeyP Ord("L")
-KeyP Ord("D")
+KeyP KeyCode("W")
+KeyP KeyCode("O")
+KeyP KeyCode("R")
+KeyP KeyCode("L")
+KeyP KeyCode("D")
 
-KeyD 160
-KeyP 49 //1(49)+LShift(160) = !
-KeyU 160
+KeyD KeyCode("LShift")
+KeyP KeyCode("1") 		//1+LShift = !
+KeyU KeyCode("LShift")
 
 Output "Done writing hello world"
-
-
-
-
-
-
-
+Susp

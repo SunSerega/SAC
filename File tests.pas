@@ -5,8 +5,9 @@
 
 begin
   //var s := new Script('Lib\examples\Basic operators\main.sac');
+  var s := new Script('Lib\examples\Hello world\main.sac');
   //var s := new Script('Lib\Temp\SAC Script.sac');
-  var s := new Script('Lib\Temp\main.sac');
+  //var s := new Script('Lib\Temp\main.sac');
   
   //SaveObj('test.bin',s);
   

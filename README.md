@@ -16,7 +16,7 @@ Jump "#" //(Jumps to the start)
 but also you can do very complex scripts.
 
 SAC has:
-- Powerfull optimizer;
+- Powerful optimizer;
 - Multifile scripts;
 - Dynamic lib's;
 - Operators that allows for non-linear scripts (like Call[If]).
