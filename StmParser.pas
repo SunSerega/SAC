@@ -3828,7 +3828,8 @@ begin
   end;
   
   var last := new StmBlock(self);
-  var lname := ffname+'#';
+  last.lbl := '#';
+  last.fname := ffname;
   
   var skp_ar := false;
   
@@ -3840,9 +3841,7 @@ begin
       if s.StartsWith('#') then
       begin
         
-        if lname <> '' then sbs.Add(lname, last);
-        last.fname := ffname;
-        last.lbl := lname.Remove(0,lname.IndexOf('#'));
+        if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
         if skp_ar then
         begin
           last.Seal;
@@ -3854,8 +3853,9 @@ begin
           last.next := new StmBlock(self);
           last := last.next;
         end;
-        lname := ffname+s;
-        if sbs.ContainsKey(lname) then raise new DuplicateLabelNameException(context, s);
+        last.lbl := s;
+        last.fname := ffname;
+        if sbs.ContainsKey(last.fname+last.lbl) then raise new DuplicateLabelNameException(context, s);
         
       end else
         if (s <> '') and not skp_ar then
@@ -3866,23 +3866,20 @@ begin
           
           if stm is ICallOper then
           begin
-            if lname <> '' then sbs.Add(lname, last);
-            last.fname := ffname;
-            last.lbl := lname.Remove(0,lname.IndexOf('#'));
+            if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
             last.Seal;
             last.next := new StmBlock(self);
             last := last.next;
-            lname := '';
+            last.lbl := '';
+            last.fname := ffname;
           end else
           if stm is IContextJumpOper then
             skp_ar := true;
         end;
     end;
   
-  last.fname := ffname;
-  last.lbl := lname.Remove(0,lname.IndexOf('#'));
   last.Seal;
-  if lname <> '' then sbs.Add(lname, last);
+  if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
 end;
 
 constructor Script.Create(fname: string; ep: ExecParams);
