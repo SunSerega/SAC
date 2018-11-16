@@ -1,0 +1,19 @@
+﻿
+#ExpOptCode
+ (file D:\1Cергей\Мои программы\кликеры\SAC\TestSuite\TestExec\Exmp\Basic operators\Main.sac)
+\#
+!StartPos //Const
+Output "1405 hi" //Const
+Output "lbl1 executed" //Const
+Output "hi" //Const
+Output "8" //Const
+Susp //Const
+Return //Const
+
+#ExpOtp
+1405 hi
+lbl1 executed
+hi
+8
+%susp_called
+%stoped

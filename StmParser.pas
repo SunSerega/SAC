@@ -11,6 +11,7 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #1488
+// - #1502
 
 interface
 
@@ -666,12 +667,25 @@ type
     end;
   end;
   
+  ExecParams = record
+    
+    public debug := false;
+    public SupprIO := false;
+    
+  end;
+  SuppressedIOData = sealed class
+    
+    public mX,mY: integer;
+    public ks := new byte[256];
+    
+  end;
   Script = sealed class
     
     private static nfi := new System.Globalization.NumberFormatInfo;
     
     public read_start_lbl_name: string;
     public start_pos_def := false;
+    public SupprIO: SuppressedIOData := nil;
     
     public otp: procedure(s: string);
     public susp_called: procedure;
@@ -715,7 +729,11 @@ type
       Result := sb.ToString;
     end;
     
-    public constructor(fname: string);
+    public constructor(fname: string; ep: ExecParams);
+    
+    //ToDo #1502
+//    public constructor(fname: string) :=
+//    Create(fname, new ExecParams);
     
     public procedure Optimize;
     
@@ -1111,6 +1129,9 @@ type
     private procedure Calc(ec: ExecutingContext) :=
     keybd_event(kk, 0, 0, 0);
     
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := $80 or ($01 and not ec.scr.SupprIO.ks[kk]);
+    
     
     
     public constructor(kk: byte; bl: StmBlock);
@@ -1136,7 +1157,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'KeyDown {kk} //Const';
@@ -1151,6 +1172,9 @@ type
     
     private procedure Calc(ec: ExecutingContext) :=
     keybd_event(kk, 0, 2, 0);
+    
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := not ($80 or not ec.scr.SupprIO.ks[kk]);
     
     
     
@@ -1177,7 +1201,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'KeyUp {kk} //Const';
@@ -1195,6 +1219,9 @@ type
       keybd_event(kk, 0, 0, 0);
       keybd_event(kk, 0, 2, 0);
     end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := $01 and not ec.scr.SupprIO.ks[kk];
     
     
     
@@ -1221,7 +1248,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'KeyPress {kk} //Const';
@@ -1240,6 +1267,13 @@ type
       var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 0, 0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      ec.scr.SupprIO.ks[n] := $80 or ($01 and not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -1300,7 +1334,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1319,6 +1353,13 @@ type
       var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 2, 0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      ec.scr.SupprIO.ks[n] := not ($80 or not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -1379,7 +1420,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1399,6 +1440,13 @@ type
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       keybd_event(n, 0, 0, 0);
       keybd_event(n, 0, 2, 0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      ec.scr.SupprIO.ks[n] := $01 and not ec.scr.SupprIO.ks[n];
     end;
     
     
@@ -1459,7 +1507,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1480,6 +1528,15 @@ type
       var p := NumToInt(nil, dp.res);
       if p and $1 = $1 then keybd_event(n,0,0,0);
       if p and $2 = $2 then keybd_event(n,0,2,0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var p := NumToInt(nil, dp.res);
+      if p and $1 = $1 then ec.scr.SupprIO.ks[n] := $80 or ($01 and not ec.scr.SupprIO.ks[n]);
+      if p and $2 = $2 then ec.scr.SupprIO.ks[n] := not ($80 or not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -1546,7 +1603,7 @@ type
     new Action<ExecutingContext>[](
       kk.GetCalc(),
       dp.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1580,6 +1637,9 @@ type
     private procedure Calc6(ec: ExecutingContext) :=
     mouse_event($200, 0,0,0,0);
     
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := $80 or ($01 and not ec.scr.SupprIO.ks[kk]);
+    
     
     
     public constructor(kk: byte; bl: StmBlock);
@@ -1607,14 +1667,16 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
-      case kk of
-        1: Result := new Action<ExecutingContext>[](Calc1);
-        2: Result := new Action<ExecutingContext>[](Calc2);
-        4: Result := new Action<ExecutingContext>[](Calc4);
-        5: Result := new Action<ExecutingContext>[](Calc5);
-        6: Result := new Action<ExecutingContext>[](Calc6);
-        else raise new InvalidMouseKeyCodeException(scr, kk);
-      end;
+      if scr.SupprIO=nil then
+        case kk of
+          1: Result := new Action<ExecutingContext>[](Calc1);
+          2: Result := new Action<ExecutingContext>[](Calc2);
+          4: Result := new Action<ExecutingContext>[](Calc4);
+          5: Result := new Action<ExecutingContext>[](Calc5);
+          6: Result := new Action<ExecutingContext>[](Calc6);
+          else raise new InvalidMouseKeyCodeException(scr, kk);
+        end else
+          Result := new Action<ExecutingContext>[](CalcSuppr);
       
     end;
     
@@ -1644,6 +1706,9 @@ type
     private procedure Calc6(ec: ExecutingContext) :=
     mouse_event($400, 0,0,0,0);
     
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := not ($80 or not ec.scr.SupprIO.ks[kk]);
+    
     
     
     public constructor(kk: byte; bl: StmBlock);
@@ -1671,14 +1736,16 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
-      case kk of
-        1: Result := new Action<ExecutingContext>[](Calc1);
-        2: Result := new Action<ExecutingContext>[](Calc2);
-        4: Result := new Action<ExecutingContext>[](Calc4);
-        5: Result := new Action<ExecutingContext>[](Calc5);
-        6: Result := new Action<ExecutingContext>[](Calc6);
-        else raise new InvalidMouseKeyCodeException(scr, kk);
-      end;
+      if scr.SupprIO=nil then
+        case kk of
+          1: Result := new Action<ExecutingContext>[](Calc1);
+          2: Result := new Action<ExecutingContext>[](Calc2);
+          4: Result := new Action<ExecutingContext>[](Calc4);
+          5: Result := new Action<ExecutingContext>[](Calc5);
+          6: Result := new Action<ExecutingContext>[](Calc6);
+          else raise new InvalidMouseKeyCodeException(scr, kk);
+        end else
+          Result := new Action<ExecutingContext>[](CalcSuppr);
       
     end;
     
@@ -1708,6 +1775,9 @@ type
     private procedure Calc6(ec: ExecutingContext) :=
     mouse_event($600, 0,0,0,0);
     
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.scr.SupprIO.ks[kk] := $01 and not ec.scr.SupprIO.ks[kk];
+    
     
     
     public constructor(kk: byte; bl: StmBlock);
@@ -1735,14 +1805,16 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override;
     begin
       
-      case kk of
-        1: Result := new Action<ExecutingContext>[](Calc1);
-        2: Result := new Action<ExecutingContext>[](Calc2);
-        4: Result := new Action<ExecutingContext>[](Calc4);
-        5: Result := new Action<ExecutingContext>[](Calc5);
-        6: Result := new Action<ExecutingContext>[](Calc6);
-        else raise new InvalidMouseKeyCodeException(scr, kk);
-      end;
+      if scr.SupprIO=nil then
+        case kk of
+          1: Result := new Action<ExecutingContext>[](Calc1);
+          2: Result := new Action<ExecutingContext>[](Calc2);
+          4: Result := new Action<ExecutingContext>[](Calc4);
+          5: Result := new Action<ExecutingContext>[](Calc5);
+          6: Result := new Action<ExecutingContext>[](Calc6);
+          else raise new InvalidMouseKeyCodeException(scr, kk);
+        end else
+          Result := new Action<ExecutingContext>[](CalcSuppr);
       
     end;
     
@@ -1770,6 +1842,16 @@ type
         else raise new InvalidMouseKeyCodeException(scr, NumToInt(nil, kk.res));
       end;
       
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      case n of
+        1,2,4..6: ;
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      ec.scr.SupprIO.ks[n] := $80 or ($01 and not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -1832,7 +1914,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1858,6 +1940,16 @@ type
         else raise new InvalidMouseKeyCodeException(scr, NumToInt(nil, kk.res));
       end;
       
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      case n of
+        1,2,4..6: ;
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      ec.scr.SupprIO.ks[n] := not ($80 or not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -1920,7 +2012,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -1946,6 +2038,16 @@ type
         else raise new InvalidMouseKeyCodeException(ec.scr, NumToInt(nil, kk.res));
       end;
       
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      case n of
+        1,2,4..6: ;
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      ec.scr.SupprIO.ks[n] := $01 and not ec.scr.SupprIO.ks[n];
     end;
     
     
@@ -2008,7 +2110,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -2039,6 +2141,18 @@ type
         (NumToInt(nil, dp.res) and $3) * p,
         0,0,0,0
       );
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil,kk.res);
+      case n of
+        1,2,4..6: ;
+        else raise new InvalidMouseKeyCodeException(scr, n);
+      end;
+      var p := NumToInt(nil, dp.res);
+      if p and $1 = $1 then ec.scr.SupprIO.ks[n] := $80 or ($01 and not ec.scr.SupprIO.ks[n]);
+      if p and $2 = $2 then ec.scr.SupprIO.ks[n] := not ($80 or not ec.scr.SupprIO.ks[n]);
     end;
     
     
@@ -2105,7 +2219,7 @@ type
     new Action<ExecutingContext>[](
       kk.GetCalc(),
       dp.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -2126,6 +2240,12 @@ type
     
     private procedure Calc(ec: ExecutingContext) :=
     SetCursorPos(x,y);
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      ec.scr.SupprIO.mX := x;
+      ec.scr.SupprIO.mX := y;
+    end;
     
     
     
@@ -2155,7 +2275,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'MousePos {x} {y} //Const';
@@ -2171,6 +2291,9 @@ type
     
     private procedure Calc(ec: ExecutingContext) :=
     ec.SetVar(vname, (GetKeyState(kk) and $80 <> 0)?1.0:0.0);
+    
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.SetVar(vname, (ec.scr.SupprIO.ks[kk] and $80 <> 0)?1.0:0.0);
     
     
     
@@ -2216,7 +2339,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'GetKey {kk} {vname} //Const';
@@ -2232,6 +2355,9 @@ type
     
     private procedure Calc(ec: ExecutingContext) :=
     ec.SetVar(vname, (GetKeyState(kk) and $01 <> 0)?1.0:0.0);
+    
+    private procedure CalcSuppr(ec: ExecutingContext) :=
+    ec.SetVar(vname, (ec.scr.SupprIO.ks[kk] and $01 <> 0)?1.0:0.0);
     
     
     
@@ -2277,7 +2403,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'GetKeyTrigger {kk} {vname} //Const';
@@ -2297,6 +2423,12 @@ type
         NumToInt(nil, x.res),
         NumToInt(nil, y.res)
       );
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      ec.scr.SupprIO.mX := NumToInt(nil, x.res);
+      ec.scr.SupprIO.mX := NumToInt(nil, y.res);
     end;
     
     
@@ -2356,7 +2488,7 @@ type
     new Action<ExecutingContext>[](
       x.GetCalc(),
       y.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -2376,6 +2508,14 @@ type
       var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       var k := GetKeyState(n) and $80 = $80;
+      ec.SetVar(vname, k?1.0:0.0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil, kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var k := ec.scr.SupprIO.ks[n] and $80 = $80;
       ec.SetVar(vname, k?1.0:0.0);
     end;
     
@@ -2444,7 +2584,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -2464,6 +2604,14 @@ type
       var n := NumToInt(nil, kk.res);
       if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
       var k := GetKeyState(n) and $01 = $01;
+      ec.SetVar(vname, k?1.0:0.0);
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      var n := NumToInt(nil, kk.res);
+      if (n < 1) or (n > 254) then raise new InvalidKeyCodeException(scr, n);
+      var k := ec.scr.SupprIO.ks[n] and $01 = $01;
       ec.SetVar(vname, k?1.0:0.0);
     end;
     
@@ -2532,7 +2680,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](
       kk.GetCalc(),
-      self.Calc
+      scr.SupprIO=nil?Calc:CalcSuppr
     );
     
     public function ToString: string; override :=
@@ -2552,6 +2700,12 @@ type
       GetCursorPos(@p);
       ec.SetVar(x, real(p.X));
       ec.SetVar(y, real(p.Y));
+    end;
+    
+    private procedure CalcSuppr(ec: ExecutingContext);
+    begin
+      ec.SetVar(x, ec.scr.SupprIO.mX);
+      ec.SetVar(y, ec.scr.SupprIO.mY);
     end;
     
     
@@ -2602,7 +2756,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'GetMousePos {x} {y} //Const';
@@ -3725,13 +3879,15 @@ begin
   if not lname.Contains('#%') then sbs.Add(lname, last);
 end;
 
-constructor Script.Create(fname: string);
+constructor Script.Create(fname: string; ep: ExecParams);
 begin
+  if ep.SupprIO then
+    self.SupprIO := new SuppressedIOData;
   
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
   ReadFile(nil, read_start_lbl_name);
   
-  loop 10 do self.Optimize;
+  self.Optimize;
 end;
 
 {$endregion Script}

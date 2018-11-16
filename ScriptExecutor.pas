@@ -21,12 +21,6 @@ uses SettingsData;
 //uses ВБФ;
 
 type
-  ExecParams = record
-    
-    debug := false;
-    
-  end;
-  
   ScriptExecutionForm=class(Form)
     
     scr: Script;
@@ -45,7 +39,7 @@ type
       
       {$region Script}
       
-      scr := new Script(entry_point);
+      scr := new Script(entry_point, ep);
       scr_thr := new System.Threading.Thread(
         ()->
         try

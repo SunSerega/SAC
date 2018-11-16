@@ -1,0 +1,29 @@
+﻿
+#ExpOptCode
+ (file D:\1Cергей\Мои программы\кликеры\SAC\TestSuite\TestExec\Exmp\Hello world\Main.sac)
+\#
+KeyDown 160 //Const
+KeyPress 72 //Const
+KeyUp 160 //Const
+KeyPress 69 //Const
+KeyPress 76 //Const
+KeyPress 76 //Const
+KeyPress 79 //Const
+KeyPress 188 //Const
+KeyPress 32 //Const
+KeyPress 87 //Const
+KeyPress 79 //Const
+KeyPress 82 //Const
+KeyPress 76 //Const
+KeyPress 68 //Const
+KeyDown 160 //Const
+KeyPress 49 //Const
+KeyUp 160 //Const
+Output "Done writing hello world" //Const
+Susp //Const
+Return //Const
+
+#ExpOtp
+Done writing hello world
+%susp_called
+%stoped

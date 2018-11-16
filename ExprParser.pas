@@ -9,7 +9,6 @@
 // - #791
 // - #1417
 // - #1418
-// - #1498
 
 interface
 
@@ -3635,10 +3634,11 @@ end;
 {$region OptConverter}
 
 type
-  OptConverter = static class
+  OptConverter = sealed class
     
     static FuncTypes := new Dictionary<string, Func<array of OptExprBase,IOptFuncExpr>>;
-    static var_names: List<string>;
+    
+    var_names := new List<string>;
     
     static constructor;
     begin
@@ -3653,13 +3653,13 @@ type
       
     end;
     
-    static function GetOptLiteralExpr(e: NLiteralExpr) :=
+    function GetOptLiteralExpr(e: NLiteralExpr) :=
     new OptNLiteralExpr(e.val);
     
-    static function GetOptLiteralExpr(e: SLiteralExpr) :=
+    function GetOptLiteralExpr(e: SLiteralExpr) :=
     new OptSLiteralExpr(e.val);
     
-    static function GetOptPlusExpr(e: PlusExpr): IOptPlusExpr;
+    function GetOptPlusExpr(e: PlusExpr): IOptPlusExpr;
     begin
       var res := new OptOPlusExpr;
       res.Positive := e.Positive.ConvertAll(se->GetOptExpr(se) as OptExprBase);
@@ -3667,7 +3667,7 @@ type
       Result := res;
     end;
     
-    static function GetOptMltExpr(e: MltExpr): IOptMltExpr;
+    function GetOptMltExpr(e: MltExpr): IOptMltExpr;
     begin
       var res := new OptOMltExpr;
       res.Positive := e.Positive.ConvertAll(se->GetOptExpr(se) as OptExprBase);
@@ -3676,20 +3676,16 @@ type
       Result := res;
     end;
     
-    //ToDo #1498
-    static procedure temp_raise_exp1 :=
-    raise new CannotPowStringException(nil);
-    
-    static function GetOptPowExpr(e: PowExpr): IOptPowExpr;
+    function GetOptPowExpr(e: PowExpr): IOptPowExpr;
     begin
       if e.Negative.Any then raise new UnexpectedNegativePow(e);
       
       var res := new OptNPowExpr;
-      res.Positive := e.Positive.ConvertAll(se->OptExprBase.AsDefinitelyNumExpr(GetOptExpr(se) as OptExprBase, temp_raise_exp1));
+      res.Positive := e.Positive.ConvertAll(se->OptExprBase.AsDefinitelyNumExpr(GetOptExpr(se) as OptExprBase, ()->raise new CannotPowStringException(nil)));
       Result := res;
     end;
     
-    static function GetOptFuncExpr(e: FuncExpr): IOptFuncExpr;
+    function GetOptFuncExpr(e: FuncExpr): IOptFuncExpr;
     begin
       var ln := e.name.ToLower;
       if FuncTypes.ContainsKey(ln) then
@@ -3701,7 +3697,7 @@ type
         raise new UnknownFunctionNameException(e, e.name);
     end;
     
-    static function GetOptVarExpr(e: VarExpr): IOptExpr;
+    function GetOptVarExpr(e: VarExpr): IOptExpr;
     begin
       
       case e.name.ToLower of
@@ -3741,7 +3737,7 @@ type
       
     end;
     
-    static function GetOptExpr(e: Expr): IOptExpr;
+    function GetOptExpr(e: Expr): IOptExpr;
     begin
       match e with
         NLiteralExpr(var nl): Result := GetOptLiteralExpr(nl);
@@ -3755,9 +3751,8 @@ type
       end;
     end;
     
-    static function GetOptExprWrapper(e: Expr; conv: OptExprBase->OptExprBase): OptExprWrapper;
+    function GetOptExprWrapper(e: Expr; conv: OptExprBase->OptExprBase): OptExprWrapper;
     begin
-      var_names := new List<string>;
       
       var Main := GetOptExpr(e);
       if conv <> nil then Main := conv(Main as OptExprBase);
@@ -3771,11 +3766,10 @@ type
       Result.n_vars_names := new string[0];
       Result.s_vars_names := new string[0];
       Result.o_vars_names := var_names.ToArray;
-      var_names := nil;
       
       Result.n_vars := new real[0];
       Result.s_vars := new string[0];
-      Result.o_vars := ArrFill(Result.o_vars_names.Length, object(nil));
+      Result.o_vars := ArrFill(var_names.Count, object(nil));
       
       Main := Main.FixVarExprs(
         Result.n_vars,
@@ -3794,7 +3788,7 @@ type
   end;
 
 static function OptExprWrapper.FromExpr(e: Expr; conv: OptExprBase->OptExprBase) :=
-OptConverter.GetOptExprWrapper(e, conv);
+OptConverter.Create.GetOptExprWrapper(e, conv);
 
 {$endregion OptConverter}
 

@@ -1,0 +1,16 @@
+!StartPos
+Output 1+5*3^4+" hi"
+
+Call "#lbl1"
+
+Output null+"hi"
+n=5+null
+Output n+3 comment 1
+ comment 2
+
+Susp
+Return
+Output "after return"
+
+#lbl1
+Output "lbl1 executed"

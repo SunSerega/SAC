@@ -1,0 +1,25 @@
+
+KeyD KeyCode("LShift")
+KeyP KeyCode("H")
+KeyU KeyCode("LShift")
+
+KeyP KeyCode("E")
+KeyP KeyCode("L")
+KeyP KeyCode("L")
+KeyP KeyCode("O")
+
+KeyP KeyCode("Coma")
+KeyP KeyCode("SpaceBar")
+
+KeyP KeyCode("W")
+KeyP KeyCode("O")
+KeyP KeyCode("R")
+KeyP KeyCode("L")
+KeyP KeyCode("D")
+
+KeyD KeyCode("LShift")
+KeyP KeyCode("1") 		//1+LShift = !
+KeyU KeyCode("LShift")
+
+Output "Done writing hello world"
+Susp
