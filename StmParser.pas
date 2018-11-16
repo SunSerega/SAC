@@ -2,7 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Удалять Call null
-//ToDo Сериализовывать внутренние блоки по-особому. И удалить присвоение им кастомных имён, они всё равно могут пересечься, можно просто оставить их пустыми.
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -616,6 +615,11 @@ type
       
       if next=nil then
         bw.Write(-1) else
+      if next.lbl = '' then
+      begin
+        bw.Write(-2);
+        next.Save(bw);
+      end else
         next.SaveId(bw)
       
     end;
@@ -638,10 +642,17 @@ type
       
       var n := br.ReadInt32;
       if n <> -1 then
+        if n = -2 then
+        begin
+          self.next := new StmBlock(self.scr);
+          self.next.Load(br, sbs);
+          self.next.fname := self.fname;
+        end else
         if cardinal(n) < sbs.Length then
           self.next := sbs[n] else
-          raise new InvalidStmBlIdException(n, c);
+          raise new InvalidStmBlIdException(n, sbs.Length);
       
+      self.Seal;
     end;
     
     public function GetBodyString: string :=
@@ -657,7 +668,7 @@ type
         sb += curr.GetBodyString;
         curr := curr.next;
         if curr=nil then break;
-      until not curr.lbl.StartsWith('#%');
+      until curr.lbl <> '';
       sb += #10;
       if next=nil then
         sb += 'Return //Const' else
@@ -776,19 +787,17 @@ type
           lsbs[i].fname := fname;
           lsbs[i].lbl := '#'+br.ReadString;
           lsbs[i].Load(br, lsbs);
-          lsbs[i].Seal;
         end;
         
         for var i := 0 to lsbs.Length-1 do
-          if not lsbs[i].lbl.StartsWith('#%') then
-          begin
-            
-            var key := fname + lsbs[i].lbl;
-            if not self.sbs.ContainsKey(key) then
-              self.sbs.Add(key, lsbs[i]) else
-              raise new DuplicateLabelNameException(nil, key);
-            
-          end;
+        begin
+          
+          var key := fname + lsbs[i].lbl;
+          if not self.sbs.ContainsKey(key) then
+            self.sbs.Add(key, lsbs[i]) else
+            raise new DuplicateLabelNameException(nil, key);
+          
+        end;
         
       end;
       
@@ -3719,7 +3728,7 @@ begin
     '!fref': Result := new DrctFRef(p[1].Split(','));
     
     '!startpos':
-    if (sb.stms.Count = 0) and (not sb.lbl.StartsWith('#%')) and not sb.StartPos then
+    if (sb.stms.Count = 0) and (sb.lbl <> '') and not sb.StartPos then
     begin
       sb.scr.start_pos_def := true;
       sb.StartPos := true
@@ -3821,7 +3830,6 @@ begin
   var last := new StmBlock(self);
   var lname := ffname+'#';
   
-  var tmp_b_c := 0;
   var skp_ar := false;
   
   foreach var ss in lns do
@@ -3832,8 +3840,7 @@ begin
       if s.StartsWith('#') then
       begin
         
-        if s.Contains('%') then raise new InvalidLabelCharactersException(last, s, '%');
-        if not lname.Contains('#%') then sbs.Add(lname, last);
+        if lname <> '' then sbs.Add(lname, last);
         last.fname := ffname;
         last.lbl := lname.Remove(0,lname.IndexOf('#'));
         if skp_ar then
@@ -3859,14 +3866,13 @@ begin
           
           if stm is ICallOper then
           begin
-            if not lname.Contains('#%') then sbs.Add(lname, last);
+            if lname <> '' then sbs.Add(lname, last);
             last.fname := ffname;
             last.lbl := lname.Remove(0,lname.IndexOf('#'));
             last.Seal;
             last.next := new StmBlock(self);
             last := last.next;
-            lname := $'{ffname}#%{tmp_b_c}';
-            tmp_b_c += 1;
+            lname := '';
           end else
           if stm is IContextJumpOper then
             skp_ar := true;
@@ -3876,7 +3882,7 @@ begin
   last.fname := ffname;
   last.lbl := lname.Remove(0,lname.IndexOf('#'));
   last.Seal;
-  if not lname.Contains('#%') then sbs.Add(lname, last);
+  if lname <> '' then sbs.Add(lname, last);
 end;
 
 constructor Script.Create(fname: string; ep: ExecParams);
