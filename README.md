@@ -53,13 +53,13 @@ Uninstalling:
 
 Installing:
 1. Download all modules you need:
-	- [SAC.exe](http://github.com/SunSerega/SAC/raw/master/SAC.exe) - runs scripts;
-	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/Editor.exe) - editor for scripts;
-	- [Help.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - general manual;
-	- [FuncHelp.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - manual for functions;
-	- [OperHelp.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - manual for operators;
-	- [DrctHelp.exe](http://github.com/SunSerega/SAC/raw/master/Help.exe) - manual for directives;
-	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/WK.exe) - shows key codes;
+	- [SAC.exe](http://github.com/SunSerega/SAC/raw/master/src/SAC.exe) - runs scripts;
+	- [Editor.exe](http://github.com/SunSerega/SAC/raw/master/src/Editor.exe) - editor for scripts;
+	- [Help.exe](http://github.com/SunSerega/SAC/raw/master/src/Help.exe) - general manual;
+	- [FuncHelp.exe](http://github.com/SunSerega/SAC/raw/master/src/FuncHelp.exe) - manual for functions;
+	- [OperHelp.exe](http://github.com/SunSerega/SAC/raw/master/src/OperHelp.exe) - manual for operators;
+	- [DrctHelp.exe](http://github.com/SunSerega/SAC/raw/master/src/DrctHelp.exe) - manual for directives;
+	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/src/WK.exe) - shows key codes;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts.
 
 To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line (Win+R), like this:\
