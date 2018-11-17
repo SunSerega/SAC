@@ -153,11 +153,14 @@ begin
     
     new Entry('Config',     gres or mnft, 'LibPacker', 'WK', 'SAC', 'Editor', 'FuncHelp', 'OperHelp', 'DrctHelp', 'Help');
     
-    
-    
     Entry.can_finalize := true;
     
+    
+    
     while Entry.defined.Count<>0 do Sleep(10);
+    
+    System.IO.File.Copy('Config.exe',$'{System.IO.Path.GetDirectoryName(GetCurrentDir)}\Config.exe',true);
+    
     System.Console.ForegroundColor := System.ConsoleColor.Green;
     ReadlnString('Ready');
     Halt;

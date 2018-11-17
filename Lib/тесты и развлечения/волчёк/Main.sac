@@ -1,4 +1,0 @@
-Random y 200
-y=y-100
-MoveMouse WW/2-100 WH/2+y
-Next Main.txt
