@@ -660,22 +660,7 @@ type
     stms.JoinIntoString(#10);
     
     public function ToString: string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      var curr := self;
-      repeat
-        sb += curr.GetBodyString;
-        curr := curr.next;
-        if curr=nil then break;
-      until curr.lbl <> '';
-      sb += #10;
-      if next=nil then
-        sb += 'Return //Const' else
-        sb += $'Jump {next.fname+next.lbl} //Const';
-      
-      Result := sb.ToString;
-    end;
+    
   end;
   
   ExecParams = record
@@ -814,7 +799,7 @@ type
         sb += $' (file {kvp.Key})';
         sb += #10;
         
-        foreach var bl in kvp do
+        foreach var bl: StmBlock in kvp do
         begin
           sb += bl.lbl;
           sb += #10;
@@ -3338,6 +3323,9 @@ type
     private static procedure Calc(ec: ExecutingContext) :=
     Halt;
     
+    private static procedure CalcSuppr(ec: ExecutingContext) :=
+    if ec.scr.otp<>nil then ec.scr.otp('%halted');
+    
     
     
     public constructor := exit;
@@ -3350,7 +3338,7 @@ type
     end;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
     $'Halt //Const';
@@ -3934,9 +3922,16 @@ end;
 
 {$region Script optimization}
 
-function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): boolean;
+type
+  GBCResT = (
+    GBCR_done = $0,
+    GBCR_found_loop = $1,
+    GBCR_context_halt = $3,
+    GBCR_nonconst_context_jump = $4
+  );
+
+function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): GBCResT;
 begin
-  Result := true;
   
   var curr := bl;
   
@@ -3956,12 +3951,11 @@ begin
         bl.next := bl_lst[pi];
         var stm_ind := ind_lst[pi-1];
         stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
-        bl_lst.RemoveRange(pi, bl_lst.Count-pi);
-        //ind_lst.RemoveRange//нигде дальше всё равно не используется
+        ind_lst.RemoveRange(pi, ind_lst.Count-pi);
       end;
       
-      Result := false;
-      break;
+      Result := GBCR_found_loop;
+      exit;
     end;
     
     
@@ -3969,17 +3963,24 @@ begin
     bl_lst.Add(curr);
     
     foreach var stm in curr.stms do
-    begin
-      var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
-      if opt <> nil then
-        stm_lst.Add(opt) else
-        if stm is IContextJumpOper then
-        begin
-          bl.next := stm.bl.next;
-          //Result := true;
-          break;
-        end;
-    end;
+      if stm is OperReturn then
+      begin
+        Result := GBCR_done;
+        exit;
+      end else
+      if stm is OperHalt then
+      begin
+        Result := GBCR_context_halt;
+        stm_lst += stm;
+        exit;
+      end else
+      begin
+        
+        var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
+        if opt <> nil then
+          stm_lst += opt;
+        
+      end;
     
     
     
@@ -3988,23 +3989,51 @@ begin
       
       if stm_lst[stm_lst.Count-1] is OperConstCall(var occ) then
       begin
+        var stm := stm_lst[stm_lst.Count-1];
         stm_lst.RemoveLast;
         ind_lst.Add(stm_lst.Count);
+        pi := ind_lst.Count;
         
-        if not GetBlockChain(occ.CalledBlock, bl_lst, stm_lst, ind_lst, allow_final_opt) then
-        begin
-          Result := false;//bl.next уже изменило в рекурсивном вызове GetBlockChain
-          break;
+        case GetBlockChain(occ.CalledBlock, bl_lst.ToList, stm_lst, ind_lst, allow_final_opt) of
+          
+          GBCR_done: ;
+          
+          GBCR_context_halt:
+          begin
+            Result := GBCR_context_halt;
+            exit;
+          end;
+          
+          GBCR_found_loop,
+          GBCR_nonconst_context_jump:
+          if ind_lst.Count < pi then
+          begin
+            Result := GBCR_found_loop;
+            exit;
+          end else
+          begin
+            
+            ind_lst.RemoveRange(pi, ind_lst.Count-pi);
+            var stm_ind := ind_lst[pi-1];
+            stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
+            
+            stm_lst += stm;
+            ind_lst[pi-1] += 1;
+            
+          end;
+          
         end;
         
       end else
-        ind_lst.Add(stm_lst.Count);
-      
-      if stm_lst[stm_lst.Count-1] is IJumpCallOper then
       begin
-        bl.next := nil;
-        Result := false;
-        break;
+        ind_lst.Add(stm_lst.Count);
+        
+        if stm_lst[stm_lst.Count-1] is IJumpCallOper then
+        begin
+          Result := GBCR_nonconst_context_jump;
+          exit;
+        end;
+        
       end;
       
     end;
@@ -4012,6 +4041,7 @@ begin
     curr := curr.next;
   end;
   
+  Result := GBCR_done;
 end;
 
 procedure Script.Optimize;
@@ -4025,7 +4055,11 @@ begin
     {$region Init}
     
     var done := new HashSet<StmBlock>;
-    var waiting := new HashSet<StmBlock>(start_pos_def?sbs.Values.Where(bl->bl.StartPos):sbs.Values);
+    var waiting := new HashSet<StmBlock>(
+      (start_pos_def and sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef))?
+      sbs.Values.Where(bl->bl.StartPos):
+      sbs.Values
+    );
     var add_to_waiting := start_pos_def;
     
     var new_dyn_refs := waiting.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
@@ -4052,14 +4086,23 @@ begin
     
     while waiting.Count <> 0 do
     begin
-      var curr := waiting.Last;
+      var curr := waiting.First;
       waiting.Remove(curr);
       if curr=nil then continue;
       if not done.Add(curr) then continue;
       
       var stms := new List<StmBase>;
       
-      GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr));
+      case GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) of
+        
+        GBCR_done,
+        GBCR_context_halt,
+        GBCR_nonconst_context_jump:
+          curr.next := nil;
+        
+        GBCR_found_loop: ;
+        
+      end;
       
       curr.stms := stms;
       
@@ -4075,9 +4118,10 @@ begin
       end;
     end;
     
-    foreach var kvp in sbs.ToList do
-      if not done.Contains(kvp.Value) then
-        sbs.Remove(kvp.Key);
+    if not done.Any(bl->bl.GetAllFRefs.Any(ref->ref is DynamicStmBlockRef)) then
+      foreach var kvp in sbs.ToList do
+        if not done.Contains(kvp.Value) then
+          sbs.Remove(kvp.Key);
     
     {$endregion Block chaining}
     
@@ -4406,6 +4450,28 @@ begin
   
   //str.Flush;
   str.Close;
+end;
+
+function StmBlock.ToString: string;
+begin
+  var sb := new StringBuilder;
+  
+  var last_stm: StmBase;
+  var curr := self;
+  repeat
+    sb += curr.GetBodyString;
+    sb += #10;
+    last_stm := curr.stms[curr.stms.Count-1];
+    curr := curr.next;
+    if curr=nil then break;
+  until curr.lbl <> '';
+  
+  if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
+    if next=nil then
+      sb += 'Return //Const' else
+      sb += $'Jump "{next.fname+next.lbl}" //Const';
+  
+  Result := sb.ToString;
 end;
 
 {$endregion Save/Load}

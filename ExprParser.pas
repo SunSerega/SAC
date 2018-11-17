@@ -493,6 +493,7 @@ type
     function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
     function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr;
     procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean);
+    function IsSame(oe: IOptExpr): boolean;
     
     function Optimize: IOptExpr;
     procedure ClampLists;
@@ -577,6 +578,8 @@ type
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, true));
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; abstract;
+    
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
     
@@ -636,6 +639,9 @@ type
     public constructor(val: real) :=
     self.res := val;
     
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptNLiteralExpr(var noe)) and (noe.res=self.res);
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(1));
@@ -651,6 +657,9 @@ type
     
     public constructor(val: string) :=
     self.res := val;
+    
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptSLiteralExpr(var noe)) and (noe.res=self.res);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -669,6 +678,9 @@ type
     
     public constructor :=
     self.res := nil;
+    
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptNullLiteralExpr);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -825,6 +837,20 @@ type
     begin
       if not CB_N then raise new ConflictingExprTypesException(nil,nil);
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
+    end;
+    
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptNNPlusExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      if noe.Negative.Count<>self.Negative.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1])) and
+        noe.Negative.ZipTuple(self.Negative).All(t->t[0].IsSame(t[1]));
+      
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1009,6 +1035,18 @@ type
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false, true));
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptSSPlusExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1]));
+      
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
@@ -1158,6 +1196,20 @@ type
       
       foreach var oe in Positive do oe.ClampLists;
       foreach var oe in Negative do oe.ClampLists;
+    end;
+    
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptOPlusExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      if noe.Negative.Count<>self.Negative.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1])) and
+        noe.Negative.ZipTuple(self.Negative).All(t->t[0].IsSame(t[1]));
+      
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1373,6 +1425,20 @@ type
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptNNMltExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      if noe.Negative.Count<>self.Negative.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1])) and
+        noe.Negative.ZipTuple(self.Negative).All(t->t[0].IsSame(t[1]));
+      
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
@@ -1547,6 +1613,17 @@ type
       if not CB_S then raise new ConflictingExprTypesException(nil,nil);
       Base.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false, true);
       Positive.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false);
+    end;
+    
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptSNMltExpr;
+      if noe=nil then exit;
+      
+      Result :=
+        noe.Base.IsSame(self.Base) and
+        noe.Positive.IsSame(self.Positive);
+      
     end;
     
     public function GetCalc: sequence of Action0; override;
@@ -1796,6 +1873,20 @@ type
       foreach var oe in Negative do oe.ClampLists;
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptOMltExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      if noe.Negative.Count<>self.Negative.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1])) and
+        noe.Negative.ZipTuple(self.Negative).All(t->t[0].IsSame(t[1]));
+      
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive.Concat(Negative) do
@@ -1984,6 +2075,18 @@ type
       ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptNPowExpr;
+      if noe=nil then exit;
+      
+      if noe.Positive.Count<>self.Positive.Count then exit;
+      
+      Result :=
+        noe.Positive.ZipTuple(self.Positive).All(t->t[0].IsSame(t[1]));
+      
+    end;
+    
     public function GetCalc: sequence of Action0; override;
     begin
       foreach var oe in Positive do
@@ -2101,6 +2204,18 @@ type
         par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i] <> typeof(string), tps[i] <> typeof(real));
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptNFuncExpr;
+      if noe=nil then exit;
+      
+      if noe.par.Length<>self.par.Length then exit;
+      
+      Result :=
+        noe.par.ZipTuple(self.par).All(t->t[0].IsSame(t[1]));
+      
+    end;
+    
     public function GetCalc: sequence of Action0; override :=
     par.SelectMany(p->p.GetCalc());
     
@@ -2203,6 +2318,18 @@ type
       var tps := self.GetTps;
       for var i := 0 to tps.Length-1 do
         par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i] <> typeof(string), tps[i] <> typeof(real));
+    end;
+    
+    public function IsSame(oe: IOptExpr): boolean; override;
+    begin
+      var noe := oe as OptSFuncExpr;
+      if noe=nil then exit;
+      
+      if noe.par.Length<>self.par.Length then exit;
+      
+      Result :=
+        noe.par.ZipTuple(self.par).All(t->t[0].IsSame(t[1]));
+      
     end;
     
     public function GetCalc: sequence of Action0; override :=
@@ -2309,6 +2436,9 @@ type
       
     end;
     
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is UnOptVarExpr(var noe)) and (noe.name=self.name);
+    
     public constructor(name: string) :=
     self.name := name;
     
@@ -2329,13 +2459,16 @@ type
     public source: array of real;
     public id: integer;
     
+    public procedure Calc :=
+    res := source[id];
+    
     
     
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     AsDefinitelyNumExpr(new UnOptVarExpr(nn[id]));
     
-    public procedure Calc :=
-    res := source[id];
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptNVarExpr(var noe)) and (noe.id=self.id);
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2372,13 +2505,16 @@ type
     public source: array of string;
     public id: integer;
     
+    public procedure Calc :=
+    res := source[id];
+    
     
     
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     AsStrExpr(new UnOptVarExpr(ns[id]));
     
-    public procedure Calc :=
-    res := source[id];
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptSVarExpr(var noe)) and (noe.id=self.id);
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2415,13 +2551,16 @@ type
     public source: array of object;
     public id: integer;
     
+    public procedure Calc :=
+    res := source[id];
+    
     
     
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
     new UnOptVarExpr(no[id]);
     
-    public procedure Calc :=
-    res := source[id];
+    public function IsSame(oe: IOptExpr): boolean; override :=
+    (oe is OptOVarExpr(var noe)) and (noe.id=self.id);
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -3501,7 +3640,7 @@ begin
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  if Main=self.GetMain then
+  if Main.IsSame(self.GetMain) then
     Result := self else
   if Main is OptNExprBase then
     Result := new OptNExprWrapper(Main as OptNExprBase) else
@@ -3558,7 +3697,7 @@ begin
   Main := Main.FinalFixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  if Main=self.GetMain then
+  if Main.IsSame(self.GetMain) then
     Result := self else
   if Main is OptNExprBase then
     Result := new OptNExprWrapper(Main as OptNExprBase) else
@@ -3757,29 +3896,37 @@ type
       var Main := GetOptExpr(e);
       if conv <> nil then Main := conv(Main as OptExprBase);
       
+      var n_vars_names := new string[0];
+      var s_vars_names := new string[0];
+      var o_vars_names := var_names.ToArray;
+      
+      var n_vars := new real[0];
+      var s_vars := new string[0];
+      var o_vars := ArrFill(var_names.Count, object(nil));
+      
+      Main := Main.FixVarExprs(
+        n_vars,
+        s_vars,
+        o_vars,
+        
+        n_vars_names,
+        s_vars_names,
+        o_vars_names
+      );
+      
       if Main is OptNExprBase then
         Result := new OptNExprWrapper(Main as OptNExprBase) else
       if Main is OptSExprBase then
         Result := new OptSExprWrapper(Main as OptSExprBase) else
         Result := new OptOExprWrapper(Main as OptOExprBase);
       
-      Result.n_vars_names := new string[0];
-      Result.s_vars_names := new string[0];
-      Result.o_vars_names := var_names.ToArray;
+      Result.n_vars := n_vars;
+      Result.s_vars := s_vars;
+      Result.o_vars := o_vars;
       
-      Result.n_vars := new real[0];
-      Result.s_vars := new string[0];
-      Result.o_vars := ArrFill(var_names.Count, object(nil));
-      
-      Main := Main.FixVarExprs(
-        Result.n_vars,
-        Result.s_vars,
-        Result.o_vars,
-        
-        Result.n_vars_names,
-        Result.s_vars_names,
-        Result.o_vars_names
-      );
+      Result.n_vars_names := n_vars_names;
+      Result.s_vars_names := s_vars_names;
+      Result.o_vars_names := o_vars_names;
       
       Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
       

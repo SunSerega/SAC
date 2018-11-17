@@ -7,7 +7,7 @@ SAC (Script Auto Clicker) is script language, with clicker commands.
 You can write simple scripts:
 ```
 
-KeyP 65 //(Presses key A)
+KeyP KeyCode("A") //(Presses key A)
 Sleep 1000/50 //(waits 1/50 of a second)
 
 Jump "#" //(Jumps to the start)
@@ -19,7 +19,9 @@ SAC has:
 - Powerful optimizer;
 - Multifile scripts;
 - Dynamic lib's;
-- Operators that allows for non-linear scripts (like Call[If]).
+- Operators that allows for non-linear scripts (like Call[If] ).
+
+---
 
 </details>
 

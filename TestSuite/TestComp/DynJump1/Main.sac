@@ -1,0 +1,10 @@
+
+!StartPos
+Output "test0"
+GetKey 1 n
+Call "#lbl1"
+Output "test1"
+
+#lbl1
+Output "test2"
+Jump n
