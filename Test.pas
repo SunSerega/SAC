@@ -107,9 +107,19 @@ type
       ep.SupprIO := true;
       
       var s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+      
       var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if exp_opt_code=nil then
-        System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10) else
+      begin
+        System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
+        exp_opt_code := opt_code;
+      end else
+      if opt_code <> exp_opt_code then
+        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+      
+      loop 10 do s.Optimize;
+      
+      opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if opt_code <> exp_opt_code then
         writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
       
@@ -149,30 +159,43 @@ type
     end;
     
   end;
-
-procedure TestExec(dir: string := 'TestExec');
-begin
-  if not System.IO.File.Exists(dir+'\0.sactd') then
-  begin
-    System.IO.Directory.EnumerateDirectories(dir).ForEach(TestExec);
-    exit;
+  CompTester = class(Tester)
+    
+    function Copy: Tester; override := new CompTester;
+    
+    procedure Test(dir: string := 'TestSuite\TestComp'); override :=
+    try
+      curr_dir := dir;
+      sfn := dir+'\0.sactd';
+      if StartTesting then exit;
+      
+      LoadSettings;
+      
+      var ep := new ExecParams;
+      
+      var s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+      
+      var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
+      if exp_opt_code=nil then
+      begin
+        System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
+        exp_opt_code := opt_code;
+      end else
+      if opt_code <> exp_opt_code then
+        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+      
+      loop 10 do s.Optimize;
+      
+      opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
+      if opt_code <> exp_opt_code then
+        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+      
+    except
+      on e: Exception do
+        writeln($'Exception in {dir}: {_ObjectToString(e)}');
+    end;
+    
   end;
-  
-  
-  
-end;
-
-procedure TestComp(dir: string := 'TestComp');
-begin
-  if not System.IO.File.Exists(dir+'\0.sactd') then
-  begin
-    System.IO.Directory.EnumerateDirectories(dir).ForEach(TestComp);
-    exit;
-  end;
-  
-  
-  
-end;
 
 procedure TestErr(dir: string := 'TestErr');
 begin
@@ -202,6 +225,7 @@ begin
   try
     
     ExecTester.Create.Test;
+    CompTester.Create.Test;
 //    TestComp;
 //    TestErr;
 //    SpecTests;
