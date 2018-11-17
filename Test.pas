@@ -226,9 +226,10 @@ begin
     
     ExecTester.Create.Test;
     CompTester.Create.Test;
-//    TestComp;
 //    TestErr;
 //    SpecTests;
+    
+    Writeln('done');
     
   except
     on e: Exception do

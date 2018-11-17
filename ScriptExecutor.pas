@@ -21,6 +21,7 @@ uses SettingsData;
 //uses ВБФ;
 
 type
+  ExecParams=StmParser.ExecParams;
   ScriptExecutionForm=class(Form)
     
     scr: Script;

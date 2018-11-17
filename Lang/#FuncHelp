@@ -17,12 +17,16 @@ n2 is 5.6\
 n3 is 0\
 \
 n=Num("abc") (error, can't convert to Num)
-H|Ord=Gets id of symbol
-T|Ord=KeyP Ord("G")\
+H|KeyCode=Gets key code by it's name
+T|KeyCode=KeyP KeyCode("G")\
 Will press letter "G" on keyboard\
-Only works for eng. letters\
+Only works for eng. and rus. letters, and some names, like:\
 \
-Also can be used with Chr for Unicode encoding/decoding
+[,L,R][Shift,Ctrl,Alt] (all 9 combinations works)\
+SpaceBar,Coma\
+\
+Note, when you press Left Shift on keyboard - it activates both Shift and LShift\
+But KeyD KeyCode("LShift") would press only LShift
 %1=
 H|Str=Converts value to Num
 T|Str=s1=Str(5.5)\
@@ -63,12 +67,16 @@ n2 это 5.6\
 n3 это 0\
 \
 n=Num("abc") (ошибка, нельзя конвертировать в Num)
-H|Ord=Получает id символа
-T|Ord=KeyP Ord("G")\
-Нажмёт кнопку "G" на клавиатуре\
-Работает только для англ. букв\
+H|KeyCode=Получает код клавиши, по её имени
+T|KeyCode=KeyP KeyCode("G")\
+Нажмёт латинскую букву "G" на клавиатуре\
+Работает только для англ. и русс. букв, а так же некоторых имён, как:\
 \
-Можно ещё использовать с Chr для кодирования/декодирования в юникоде
+[,L,R][Shift,Ctrl,Alt] (все 9 комбинаций работают)\
+SpaceBar,Coma\
+\
+Обратите внимание, когда вы нажимаете на клавиатуре левый Shift - нажимаются сразу Shift и LShift\
+Но KeyD KeyCode("LShift") нажмёт только LShift
 %1=
 H|Str=Конвертирует значение в Str
 T|Str=s1=Str(5.5)\
