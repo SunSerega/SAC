@@ -1,6 +1,6 @@
 ﻿
 #ExpOptCode
- (file D:\1Cергей\Мои программы\кликеры\SAC\TestSuite\TestExec\Exmp\Hello world\Main.sac)
+ (file Main.sac)
 \#
 KeyDown 160 //Const
 KeyPress 72 //Const

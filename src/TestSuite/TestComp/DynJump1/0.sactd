@@ -1,15 +1,14 @@
 ﻿
 #ExpOptCode
- (file D:\1Cергей\Мои программы\кликеры\SAC\TestSuite\TestComp\DynJump1\Main.sac)
+ (file Main.sac)
 \#
 !StartPos //Const
 Output "test0" //Const
 GetKey 1 n //Const
-Call "D:\1Cергей\Мои программы\кликеры\SAC\TestSuite\TestComp\DynJump1\Main.sac\#lbl1" //Const
+Call "Main.sac\#lbl1" //Const
 Output "test1" //Const
 Output "test2" //Const
 Jump Str(n)
-
 
 \#lbl1
 Output "test2" //Const

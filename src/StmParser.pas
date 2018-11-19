@@ -3,6 +3,9 @@
 //ToDo Контекст ошибок
 //ToDo Удалять Call null
 
+//ToDo Script.ToString должно давать относительные пути файлов
+// - и так же все Jump, в конце блоков и просто...
+
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
 
@@ -680,6 +683,7 @@ type
     private static nfi := new System.Globalization.NumberFormatInfo;
     
     public read_start_lbl_name: string;
+    private main_path: string;
     public start_pos_def := false;
     public SupprIO: SuppressedIOData := nil;
     
@@ -712,7 +716,7 @@ type
       var pp1 := p1.Split('\');
       var pp2 := p2.Split('\');
       
-      var sc := pp1.Numerate(0).Count(t->t[1]=pp2[t[0]]);
+      var sc := pp1.ZipTuple(pp2).TakeWhile(t->t[0]=t[1]).Count;
       loop pp1.Length-sc do sb += '..\';
       
       foreach var pp in pp2.Skip(sc) do
@@ -796,7 +800,7 @@ type
       
       foreach var kvp: System.Linq.IGrouping<string, StmBlock> in sbs.Values.GroupBy(bl->bl.fname) do
       begin
-        sb += $' (file {kvp.Key})';
+        sb += $' (file {GetRelativePath(main_path,kvp.Key)})';
         sb += #10;
         
         foreach var bl: StmBlock in kvp do
@@ -804,7 +808,6 @@ type
           sb += bl.lbl;
           sb += #10;
           sb += bl.ToString;
-          sb += #10;
           sb += #10;
         end;
         
@@ -1013,7 +1016,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'"{bl.fname+bl.lbl}"';
+    $'"{Script.GetRelativePath(bl.scr.main_path, bl.fname+bl.lbl)}"';
     
   end;
   DynamicStmBlockRef = sealed class(StmBlockRef)
@@ -3876,6 +3879,12 @@ begin
     self.SupprIO := new SuppressedIOData;
   
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
+  
+  if read_start_lbl_name.Contains('#') then
+    main_path := read_start_lbl_name.Remove(read_start_lbl_name.IndexOf('#')) else
+    main_path := read_start_lbl_name;
+  
+  main_path := main_path.Remove(main_path.LastIndexOf('\'));
   ReadFile(nil, read_start_lbl_name);
   
   self.Optimize;
@@ -3904,6 +3913,28 @@ begin
     yield nil else
   if next <> nil then
     yield sequence next.EnumrNextStms;
+end;
+
+function StmBlock.ToString: string;
+begin
+  var sb := new StringBuilder;
+  
+  var last_stm: StmBase;
+  var curr := self;
+  repeat
+    sb += curr.GetBodyString;
+    sb += #10;
+    last_stm := curr.stms[curr.stms.Count-1];
+    curr := curr.next;
+    if curr=nil then break;
+  until curr.lbl <> '';
+  
+  if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
+    if next=nil then
+      sb += 'Return //Const' else
+      sb += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
+  
+  Result := sb.ToString;
 end;
 
 function ExecutingContext.ExecuteNext: boolean;
@@ -4424,9 +4455,12 @@ begin
   
   var bw := new System.IO.BinaryWriter(str);
   
-  var main_fname := read_start_lbl_name.Split('#')[0];
-  var main_path := main_fname.Split('\').SkipLast.JoinIntoString('\');
-  bw.Write(main_fname.Split('\').Last);
+  var main_fname := read_start_lbl_name.Substring(read_start_lbl_name.LastIndexOf('\')+1);
+  bw.Write(
+    main_fname.Contains('#')?
+    main_fname.Remove(main_fname.IndexOf('#')):
+    main_fname
+  );
   
   var sbbs :=
   sbs
@@ -4450,28 +4484,6 @@ begin
   
   //str.Flush;
   str.Close;
-end;
-
-function StmBlock.ToString: string;
-begin
-  var sb := new StringBuilder;
-  
-  var last_stm: StmBase;
-  var curr := self;
-  repeat
-    sb += curr.GetBodyString;
-    sb += #10;
-    last_stm := curr.stms[curr.stms.Count-1];
-    curr := curr.next;
-    if curr=nil then break;
-  until curr.lbl <> '';
-  
-  if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
-    if next=nil then
-      sb += 'Return //Const' else
-      sb += $'Jump "{next.fname+next.lbl}" //Const';
-  
-  Result := sb.ToString;
 end;
 
 {$endregion Save/Load}

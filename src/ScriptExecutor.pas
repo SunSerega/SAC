@@ -207,6 +207,10 @@ type
         self.Text := 'SAC: '+self.Text.Split('\').SkipWhile(s->s.ToLower <> 'lib').JoinIntoString('\') else
         self.Text := 'SAC: '+self.Text.Split('\').Last;
       
+      {$resource 'Icon.ico'}
+      self.Icon := System.Drawing.Icon.Create(GetResourceStream('Icon.ico'));
+      self.FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
+      
       {$endregion Form}
       
       {$region Pause/Resume}
