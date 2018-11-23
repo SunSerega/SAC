@@ -2,7 +2,6 @@
 
 //ToDo Контекст ошибок
 //ToDo Удалять Call null
-//ToDo Не только ExprStm может перезаписывать переменную. В оптимизации переменных неправильно
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -411,6 +410,7 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
     
     
+    
     public function Optimize(nvn, svn: HashSet<string>): StmBase; virtual := self;
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; virtual :=
@@ -418,6 +418,9 @@ type
     
     public function FindVarUsages(vn: string): array of OptExprWrapper; virtual :=
     new OptExprWrapper[0];
+    
+    public function DoesRewriteVar(vn: string): boolean; virtual := false;
+    
     
     
     
@@ -523,6 +526,8 @@ type
     e.DoesUseVar(vn)?
     new OptExprWrapper[](e):
     new OptExprWrapper[0];
+    
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -2564,6 +2569,8 @@ type
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
     
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2660,6 +2667,8 @@ type
     public function FindVarUsages(vn: string): array of OptExprWrapper; override :=
     new OptExprWrapper[](kk.FindVarUsages(vn));
     
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2737,6 +2746,9 @@ type
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn, svn, ovn);
+    
+    public function DoesRewriteVar(vn: string): boolean; override :=
+    (self.x=vn) or (self.y=vn);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3542,6 +3554,8 @@ type
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn, svn, ovn);
     
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -4208,8 +4222,9 @@ begin
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
         
+        {$region usages}
+        
         var usages := new List<(StmBase, OptExprWrapper)>;
-        //var auf := true;//что это? after ... ? по моему это было на случай если переменная используется в цикле
         
         foreach var stm in
           bl.stms
@@ -4224,8 +4239,12 @@ begin
             .Select(e2->(stm, e2))
           );
           
-          if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
+          if stm.DoesRewriteVar(e.vname) then break;
         end;
+        
+        {$endregion usages}
+        
+        {$region nue}
         
         //next usage exists (in next block(s) )
         var nue := false;
@@ -4247,10 +4266,12 @@ begin
               break;
             end;
             
-            if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
+            if stm.DoesRewriteVar(e.vname) then break;
           end;
           
         end;
+        
+        {$endregion nue}
         
         var main := e.e.GetMain.UnFixVarExprs(e.e.n_vars_names, e.e.s_vars_names, e.e.o_vars_names) as OptExprBase;
         
