@@ -63,8 +63,8 @@ Installing:
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts.
 
 You can also download and launch [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe).\
-But instead of pressing ok - just close it.\
-This way it would unpack itself, without puting anything in ProgramFiles and Registry.\
+But instead of pressing OK - just close it.\
+This way it would unpack itself, without putting anything in ProgramFiles and Registry.\
 And the last also means that you don't need to restart computer.
 
 To start script after manual installing it would need to be:
