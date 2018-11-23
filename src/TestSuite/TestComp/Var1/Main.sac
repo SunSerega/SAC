@@ -1,0 +1,7 @@
+
+GetKey 1 n
+n=n+1
+
+#lbl1
+KeyP n
+Jump "#lbl1"

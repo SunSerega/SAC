@@ -1,7 +1,11 @@
 ﻿unit StmParser;
 
 //ToDo Контекст ошибок
+
+//ToDo Переменные нельзя перекидывать в следующий блок, потому что он всегда цикл (всё что не цикл и не динамично - слизывает оптимизация)
+
 //ToDo Удалять Call null
+// - А Jump null можно заменять на Return
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const

@@ -1,0 +1,10 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+GetKey 1 n //Const
+Jump Str(n)
+
+\#lbl1
+Output "test" //Const
+Return //Const

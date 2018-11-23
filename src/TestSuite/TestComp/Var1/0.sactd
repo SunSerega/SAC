@@ -1,0 +1,11 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+GetKey 1 n //Const
+n=((n+%Num)+1)
+Jump "Main.sac\#lbl1" //Const
+
+\#lbl1
+KeyP DeflyNum(n)
+Jump "Main.sac\#lbl1" //Const

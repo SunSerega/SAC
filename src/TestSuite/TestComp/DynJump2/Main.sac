@@ -1,0 +1,6 @@
+
+GetKey 1 n
+Jump n
+
+#lbl1
+Output "test"
