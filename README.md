@@ -85,7 +85,7 @@ Uninstalling:
 How to build
 </summary>
 
-1. Install [PABC.Net](pascalabc.net);
+1. Install [PABC.Net](http://pascalabc.net);
 2. Compile "PackAll.pas";
 3. Start "PackAll.exe".
 
