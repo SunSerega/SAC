@@ -1,0 +1,9 @@
+
+MousePos 175 398
+MouseP 2
+
+MousePos 270 497
+MouseP 1
+
+Sleep 100
+Jump "#"

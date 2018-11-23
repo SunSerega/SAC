@@ -1,5 +1,31 @@
 ﻿uses StmParser;
 
+//ToDo Проверить, не исправили ли issue компилятора
+// - #1520
+
+{ $define SingleThread}
+{ $define WriteDone}
+
+function TimedExecute(p: procedure; t: integer): boolean;
+begin
+  var res := false;
+  
+  var exec_thr := new System.Threading.Thread(p);
+  var stop_thr := new System.Threading.Thread(()->
+  begin
+    Sleep(t);
+    exec_thr.Abort;
+    res := true;
+  end);
+  
+  exec_thr.Start;
+  stop_thr.Start;
+  exec_thr.Join;
+  stop_thr.Abort;
+  
+  Result := res;
+end;
+
 type
   Tester=abstract class
     
@@ -8,6 +34,7 @@ type
     stg: Dictionary<string, string>;
     exp_opt_code: string;
     main_fname: string;
+    
     
     
     function Copy: Tester; abstract;
@@ -19,8 +46,10 @@ type
       Result := not System.IO.File.Exists(sfn);
       
       if Result then
-//        foreach var dir in System.IO.Directory.EnumerateDirectories(curr_dir) do
-//          self.Copy.Test(dir);
+      {$ifdef SingleThread}
+        foreach var dir in System.IO.Directory.EnumerateDirectories(curr_dir) do
+          self.Copy.Test(dir);
+      {$else}
       begin
         var c := 0;
         var done := 0;
@@ -39,6 +68,7 @@ type
         
         while done<c do Sleep(10);
       end;
+      {$endif}
       
     end;
     
@@ -103,10 +133,20 @@ type
       LoadSettings;
       if not stg.TryGetValue('#ExpOtp', exp_otp) then exp_otp := nil;
       
-      var ep := new ExecParams;
-      ep.SupprIO := true;
-      
-      var s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+      var s: Script;
+      if TimedExecute(
+        ()->
+        begin
+          var ep := new ExecParams;
+          ep.SupprIO := true;
+          s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+        end,
+        1000
+      ) then
+      begin
+        writeln($'{dir}: Error, compiling took too long!');
+        exit;
+      end;
       
       var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if exp_opt_code=nil then
@@ -115,43 +155,44 @@ type
         exp_opt_code := opt_code;
       end else
       if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+        writeln($'{dir}: Error, wrong code!');
       
-      loop 10 do s.Optimize;
+      if TimedExecute(
+        procedure->begin loop 10 do s.Optimize end,//ToDo #1520
+        1000
+      ) then
+      begin
+        writeln($'{dir}: Error, optimizing took too long!');
+        exit;
+      end;
       
       opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+        writeln($'{dir}: Error, wrong code after optimize!');
       
       
       
       var otp := new StringBuilder;
-      s.otp := s->
+      s.otp := str->
       begin
-        otp += s;
+        otp += str;
         otp += #10;
       end;
       s.susp_called := procedure->otp += '%susp_called'#10;
       s.stoped := procedure->otp += '%stoped'#10;
       
-      var exec_thr := new System.Threading.Thread(procedure->s.Execute);
-      exec_thr.Start;
-      
-      var stop_thr := new System.Threading.Thread(()->
-      begin
-        Sleep(5000);
-        exec_thr.Abort;
+      if TimedExecute(procedure->s.Execute, 5000) then
         otp += '%aborted'#10;
-      end);
-      stop_thr.Start;
-      exec_thr.Join;
-      stop_thr.Abort;
       
       var otp_str := otp.ToString.TrimEnd(#10);
       if exp_otp=nil then
         System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10) else
       if otp_str <> exp_otp then
         writeln($'{dir}: Error, wrong output!');
+      
+      {$ifdef WriteDone}
+      write($'DONE: {dir}{#10}');
+      {$endif WriteDone}
       
     except
       on e: Exception do
@@ -171,9 +212,20 @@ type
       
       LoadSettings;
       
-      var ep := new ExecParams;
-      
-      var s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+      var s: Script;
+      if TimedExecute(
+        ()->
+        begin
+          var ep := new ExecParams;
+          ep.SupprIO := true;
+          s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
+        end,
+        1000
+      ) then
+      begin
+        writeln($'{dir}: Error, compiling took too long!');
+        exit;
+      end;
       
       var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if exp_opt_code=nil then
@@ -182,13 +234,20 @@ type
         exp_opt_code := opt_code;
       end else
       if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+        writeln($'{dir}: Error, wrong code!');
       
-      loop 10 do s.Optimize;
+      if TimedExecute(
+        procedure->begin loop 10 do s.Optimize end,//ToDo #1520
+        1000
+      ) then
+      begin
+        writeln($'{dir}: Error, optimizing took too long!');
+        exit;
+      end;
       
-      opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
-      if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code! {opt_code.Length}/{exp_opt_code.Length}');
+      {$ifdef WriteDone}
+      write($'DONE: {dir}{#10}');
+      {$endif WriteDone}
       
     except
       on e: Exception do
@@ -224,12 +283,20 @@ end;
 begin
   try
     
-    ExecTester.Create.Test;
-    CompTester.Create.Test;
+    var c := 2;
+    var done := 0;
+    var done_lock := new object;
+    
+    System.Threading.Thread.Create(()->begin ExecTester.Create.Test; lock done_lock do done += 1 end).Start;
+    System.Threading.Thread.Create(()->begin CompTester.Create.Test; lock done_lock do done += 1 end).Start;
+    
 //    TestErr;
 //    SpecTests;
     
-    Writeln('done');
+    
+    
+    while done<c do Sleep(10);
+    Writeln('Done testing');
     
   except
     on e: Exception do

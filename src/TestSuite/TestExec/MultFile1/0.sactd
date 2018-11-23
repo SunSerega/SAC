@@ -1,0 +1,9 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos //Const
+Jump "Main.sac\#" //Const
+
+#ExpOtp
+%aborted

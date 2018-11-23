@@ -1,0 +1,13 @@
+
+!StartPos
+Output 0
+
+#l1
+Output 1
+
+#l2
+Output 2
+
+#l3
+Output 3
+Jump "#l1"

@@ -1,0 +1,10 @@
+
+n=n-n+2
+Jump "#lbl1"
+
+#lbl2
+n=n-n+5
+
+#lbl1
+n=n-n+3
+Jump "Main.sac#lbl1"

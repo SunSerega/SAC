@@ -1,7 +1,9 @@
 ﻿unit StmParser;
 
-//ToDo Контекст ошибок
+//ToDo Контекст ошибок//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
 //ToDo Удалять Call null
+//ToDo Не только ExprStm может перезаписывать переменную. В оптимизации переменных неправильно
+//ToDo MouseP.ToString возвращается MousePress, и наверное для других операторов так же
 
 //ToDo Script.ToString должно давать относительные пути файлов
 // - и так же все Jump, в конце блоков и просто...
@@ -594,8 +596,11 @@ type
     
     public function EnumrNextStms: sequence of StmBase;
     
+    private static procedure _EmptyBlockExecute(ec: ExecutingContext) := exit;
+    
     public procedure Seal;
     begin
+      
       Execute :=
         System.Delegate.Combine(
           stms
@@ -603,6 +608,8 @@ type
           .Cast&<System.Delegate>
           .ToArray
         ) as Action<ExecutingContext>;
+      
+      if Execute=nil then Execute := _EmptyBlockExecute;
     end;
     
     public constructor(scr: Script) :=
@@ -2449,7 +2456,7 @@ type
     public function Simplify(nx,ny: InputNValue): StmBase;
     begin
       if (nx is SInputNValue) and (ny is SInputNValue) then
-        Result := new OperConstMousePos(NumToInt(nil, x.res), NumToInt(nil, y.res), bl) else
+        Result := new OperConstMousePos(NumToInt(nil, nx.res), NumToInt(nil, ny.res), bl) else
       if (x=nx) and (y=ny) then
         Result := self else
         Result := new OperMousePos(nx,ny, bl);
@@ -3908,11 +3915,20 @@ end;
 
 function StmBlock.EnumrNextStms: sequence of StmBase;
 begin
+  if stms.Count = 0 then
+  begin
+    if next=nil then exit;
+    if next=self then exit;
+    yield sequence next.EnumrNextStms;
+    exit;
+  end;
+  
   yield sequence stms;
   if stms[stms.Count-1] is IJumpCallOper then
     yield nil else
   if next <> nil then
     yield sequence next.EnumrNextStms;
+  
 end;
 
 function StmBlock.ToString: string;
@@ -3922,17 +3938,27 @@ begin
   var last_stm: StmBase;
   var curr := self;
   repeat
+    
     sb += curr.GetBodyString;
-    sb += #10;
-    last_stm := curr.stms[curr.stms.Count-1];
+    if curr.stms.Count <> 0 then
+    begin
+      sb += #10;
+      last_stm := curr.stms[curr.stms.Count-1];
+    end;
+    
     curr := curr.next;
     if curr=nil then break;
   until curr.lbl <> '';
   
   if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
+  begin
+    
     if next=nil then
       sb += 'Return //Const' else
       sb += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
+    
+    sb += #10;
+  end;
   
   Result := sb.ToString;
 end;
@@ -3956,7 +3982,8 @@ end;
 type
   GBCResT = (
     GBCR_done = $0,
-    GBCR_found_loop = $1,
+    GBCR_all_loop = $1,
+    GBCR_found_loop = $2,
     GBCR_context_halt = $3,
     GBCR_nonconst_context_jump = $4
   );
@@ -3976,17 +4003,21 @@ begin
     var pi := bl_lst.IndexOf(curr);
     if pi <> -1 then
     begin
+      var stm_ind := (pi=0)? 0: ind_lst[pi-1];
       
-      if pi <> 0 then
+      if stm_ind <> 0 then
       begin
         bl.next := bl_lst[pi];
-        var stm_ind := ind_lst[pi-1];
         stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
         ind_lst.RemoveRange(pi, ind_lst.Count-pi);
+        Result := GBCR_found_loop;
+        exit;
+      end else
+      begin
+        Result := GBCR_all_loop;
+        exit;
       end;
       
-      Result := GBCR_found_loop;
-      exit;
     end;
     
     
@@ -4067,7 +4098,8 @@ begin
         
       end;
       
-    end;
+    end else
+      ind_lst.Add(stm_lst.Count);
     
     curr := curr.next;
   end;
@@ -4078,23 +4110,34 @@ end;
 procedure Script.Optimize;
 begin
   
-  var try_final_opt := true;
+  var try_opt_again := false;
+  var mini_opt := true;
   var dyn_refs := new List<StmBlockRef>;
-  while try_final_opt do
+  while try_opt_again or mini_opt do
   begin
+    mini_opt := try_opt_again;
     
     {$region Init}
     
     var done := new HashSet<StmBlock>;
+    var not_all_waiting :=
+      start_pos_def and
+      (
+        mini_opt or
+        sbs.Values
+        .Where(bl->bl.StartPos)
+        .SelectMany(bl->bl.GetAllFRefs)
+        .All(ref->ref is StaticStmBlockRef)
+      );
+    
     var waiting := new HashSet<StmBlock>(
-      (start_pos_def and sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef))?
+      not_all_waiting?
       sbs.Values.Where(bl->bl.StartPos):
       sbs.Values
     );
-    var add_to_waiting := start_pos_def;
     
-    var new_dyn_refs := waiting.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
-    try_final_opt := (new_dyn_refs.Count <> 0) and not dyn_refs.SequenceEqual(new_dyn_refs);
+    var new_dyn_refs := sbs.Values.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
+    try_opt_again := (new_dyn_refs.Count <> 0) and not dyn_refs.SequenceEqual(new_dyn_refs);
     dyn_refs := new_dyn_refs;
     
     var allow_final_opt := new List<StmBlock>;
@@ -4131,20 +4174,26 @@ begin
         GBCR_nonconst_context_jump:
           curr.next := nil;
         
+        GBCR_all_loop:
+          curr.next := curr;
+        
         GBCR_found_loop: ;
         
       end;
       
       curr.stms := stms;
       
-      if add_to_waiting then
+      if not_all_waiting then
       begin
-        var refs := curr.GetAllFRefs.ToArray;
-        add_to_waiting := refs.All(ref->ref is StaticStmBlockRef);
-        if not add_to_waiting then continue;
-        waiting += curr;
-        foreach var ref in refs.Select(ref->(ref as StaticStmBlockRef).bl) do
+        
+        foreach var ref in
+          curr.GetAllFRefs
+          .Select(ref->ref as StaticStmBlockRef)
+          .Where(ref-> ref<>nil )
+          .Select(ref->ref.bl)
+        do
           waiting += ref;
+        
         waiting += curr.next;
       end;
     end;
@@ -4164,7 +4213,7 @@ begin
       begin
         
         var usages := new List<(StmBase, OptExprWrapper)>;
-        var auf := true;
+        //var auf := true;//что это? after ... ? по моему это было на случай если переменная используется в цикле
         
         foreach var stm in
           bl.stms
@@ -4175,47 +4224,87 @@ begin
           usages.AddRange(
             stm
             .FindVarUsages(e.vname)
-            .Where(e-> e<>nil )
-            .Select(e->(stm, e))
+            .Where(e2-> e2<>nil )
+            .Select(e2->(stm, e2))
           );
           
           if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
         end;
         
+        //next usage exists (in next block(s) )
         var nue := false;
+        
         if bl.next <> nil then
         begin
-          var prev := new HashSet<StmBase>;
+          var prev := new HashSet<StmBase>(bl.stms);
           
           foreach var stm in
             bl.next
             .EnumrNextStms
           do
           begin
+            if not prev.Add(stm) then break;
             
-            if (stm=nil) or stm.FindVarUsages(e.vname).Where(e-> e<>nil ).Any then
+            if (stm=nil) or stm.FindVarUsages(e.vname).Any(e-> e<>nil ) then
             begin
               nue := true;
               break;
             end;
             
-            if not prev.Add(stm) then break;
             if (stm is ExprStm(var e2)) and (e2.vname=e.vname) then break;
           end;
           
         end;
         
-        var main := e.e.GetMain;
-        if (main is IOptSimpleExpr) or (usages.Count < 2) then
+        var main := e.e.GetMain.UnFixVarExprs(e.e.n_vars_names, e.e.s_vars_names, e.e.o_vars_names) as OptExprBase;
+        
+        {$region No usages}
+        if usages.Count = 0 then
         begin
+          
+          if not nue then
+          begin
+            bl.stms.Remove(e);
+            try_opt_again := true;
+          end else
+          if bl.next.next <> bl.next then
+          begin
+            bl.stms.Remove(e);
+            bl.next.stms.Insert(0, e);
+            try_opt_again := true;
+          end;
+          
+        end else
+        {$endregion No usages}
+        
+        {$region IOptSimpleExpr}
+        if main is IOptSimpleExpr then
+        begin
+          bl.stms.Remove(e);
           
           foreach var use in usages do
             use[1].ReplaceVar(e.vname, main);
           
-          if auf and not nue then bl.stms.Remove(e);
+          if nue and (bl.next.next <> bl.next) then
+            bl.next.stms.Insert(0, e);
           
-          if (usages.Count<>0) or not nue then try_final_opt := true;
+          try_opt_again := true;
         end else
+        {$endregion IOptSimpleExpr}
+        
+        {$region Only 1 use}
+        if (usages.Count = 1) and not nue then
+        begin
+          bl.stms.Remove(e);
+          
+          foreach var use in usages do
+            use[1].ReplaceVar(e.vname, main);
+          
+          try_opt_again := true;
+        end else
+        {$endregion Only 1 use}
+        
+        {$region Move closer to first use}
         begin
           var use := usages[0];
           var stms := use[0].bl.stms;
@@ -4227,11 +4316,11 @@ begin
             stms.Remove(e);
             stms.Insert(ind-1,e);
             
-            try_final_opt := true;
+            try_opt_again := true;
           end;
           
         end;
-        
+        {$endregion Move closer to first use}
         
       end;
     end;

@@ -1,0 +1,8 @@
+
+!StartPos
+n=n-n+1
+Jump "F2.sac"
+
+#lbl1
+n=n-n+4
+Jump "F2.sac#lbl2"
