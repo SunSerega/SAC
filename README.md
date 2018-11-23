@@ -62,7 +62,14 @@ Installing:
 	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/src/WK.exe) - shows key codes;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts.
 
-To start script it would need to be properly placed in "Lib" folder, or executed with SAC.exe via command line (Win+R), like this:\
+You can also download and launch [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe).\
+But instead of pressing ok - just close it.\
+This way it would unpack itself, without puting anything in ProgramFiles and Registry.\
+And the last also means that you don't need to restart computer.
+
+To start script after manual installing it would need to be:
+- Properly placed in "Lib" folder;
+- Or executed with SAC.exe via command line (Win+R), like this:\
 `"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac"`\
 If you want to start editor - use the same command, just replace "SAC.exe" with "Editor.exe".
 
