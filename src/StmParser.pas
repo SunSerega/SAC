@@ -1,12 +1,8 @@
 ﻿unit StmParser;
 
-//ToDo Контекст ошибок//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
+//ToDo Контекст ошибок
 //ToDo Удалять Call null
 //ToDo Не только ExprStm может перезаписывать переменную. В оптимизации переменных неправильно
-//ToDo MouseP.ToString возвращается MousePress, и наверное для других операторов так же
-
-//ToDo Script.ToString должно давать относительные пути файлов
-// - и так же все Jump, в конце блоков и просто...
 
 //ToDo Directives:  !NoOpt/!Opt
 //ToDo Directives:  !SngDef:i1=num:readonly/const
@@ -1164,7 +1160,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyDown {kk} //Const';
+    $'KeyD {kk} //Const';
     
   end;
   OperConstKeyUp = sealed class(OperStmBase)
@@ -1208,7 +1204,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyUp {kk} //Const';
+    $'KeyU {kk} //Const';
     
   end;
   OperConstKeyPress = sealed class(OperStmBase)
@@ -1255,7 +1251,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyPress {kk} //Const';
+    $'KeyP {kk} //Const';
     
   end;
   
@@ -1342,7 +1338,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'KeyDown {kk}';
+    $'KeyD {kk}';
     
   end;
   OperKeyUp = sealed class(OperStmBase)
@@ -1428,7 +1424,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'KeyUp {kk}';
+    $'KeyU {kk}';
     
   end;
   OperKeyPress = sealed class(OperStmBase)
@@ -1515,7 +1511,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'KeyPress {kk}';
+    $'KeyP {kk}';
     
   end;
   OperKey = sealed class(OperStmBase)
@@ -1685,7 +1681,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MouseDown {kk} //Const';
+    $'MouseD {kk} //Const';
     
   end;
   OperConstMouseUp = sealed class(OperStmBase)
@@ -1754,7 +1750,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MouseUp {kk} //Const';
+    $'MouseU {kk} //Const';
     
   end;
   OperConstMousePress = sealed class(OperStmBase)
@@ -1823,7 +1819,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MousePress {kk} //Const';
+    $'MouseP {kk} //Const';
     
   end;
   
@@ -1922,7 +1918,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'MouseDown {kk}';
+    $'MouseD {kk}';
     
   end;
   OperMouseUp = sealed class(OperStmBase)
@@ -2020,7 +2016,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'MouseUp {kk}';
+    $'MouseU {kk}';
     
   end;
   OperMousePress = sealed class(OperStmBase)
@@ -2118,7 +2114,7 @@ type
     );
     
     public function ToString: string; override :=
-    $'MousePress {kk}';
+    $'MouseP {kk}';
     
   end;
   OperMouse = sealed class(OperStmBase)
@@ -4110,7 +4106,7 @@ end;
 procedure Script.Optimize;
 begin
   
-  var try_opt_again := false;
+  var try_opt_again := true;
   var mini_opt := true;
   var dyn_refs := new List<StmBlockRef>;
   while try_opt_again or mini_opt do

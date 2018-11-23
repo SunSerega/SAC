@@ -1,0 +1,8 @@
+
+!StartPos
+KeyP 1
+Jump "F2.sac"
+
+#lbl1
+KeyP 4
+Jump "F2.sac#lbl2"

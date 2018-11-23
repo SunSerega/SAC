@@ -1,0 +1,10 @@
+
+KeyP 2
+Jump "#lbl1"
+
+#lbl2
+KeyP 5
+
+#lbl1
+KeyP 3
+Jump "Main.sac#lbl1"

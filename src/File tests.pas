@@ -8,7 +8,7 @@ begin
   ep.SupprIO := true;
   
   //var s := new Script('Lib\examples\Basic operators\main.sac');
-  var s := new Script('TestSuite\TestComp\DynJump1\Main.sac', ep);
+  var s := new Script('TestSuite\TestExec\MultFile2\Main.sac', ep);
   
   //SaveObj('test.bin',s);
   

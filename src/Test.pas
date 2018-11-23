@@ -144,7 +144,7 @@ type
         1000
       ) then
       begin
-        writeln($'{dir}: Error, compiling took too long!');
+        write($'{dir}: Error, compiling took too long!{#10}');
         exit;
       end;
       
@@ -155,20 +155,26 @@ type
         exp_opt_code := opt_code;
       end else
       if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code!');
+      begin
+        write($'{dir}: Error, wrong code!{#10}');
+        exit;
+      end;
       
       if TimedExecute(
         procedure->begin loop 10 do s.Optimize end,//ToDo #1520
         1000
       ) then
       begin
-        writeln($'{dir}: Error, optimizing took too long!');
+        write($'{dir}: Error, optimizing took too long!{#10}');
         exit;
       end;
       
       opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
       if opt_code <> exp_opt_code then
-        writeln($'{dir}: Error, wrong code after optimize!');
+      begin
+        write($'{dir}: Error, wrong code after optimize!{#10}');
+        exit;
+      end;
       
       
       
@@ -188,7 +194,10 @@ type
       if exp_otp=nil then
         System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10) else
       if otp_str <> exp_otp then
-        writeln($'{dir}: Error, wrong output!');
+      begin
+        write($'{dir}: Error, wrong output!{#10}');
+        exit;
+      end;
       
       {$ifdef WriteDone}
       write($'DONE: {dir}{#10}');

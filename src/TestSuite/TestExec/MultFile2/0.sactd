@@ -1,0 +1,18 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos //Const
+KeyP 1 //Const
+KeyP 2 //Const
+Jump "F2.sac\#lbl1" //Const
+
+ (file F2.sac)
+\#lbl1
+KeyP 3 //Const
+KeyP 4 //Const
+KeyP 5 //Const
+Jump "F2.sac\#lbl1" //Const
+
+#ExpOtp
+%aborted
