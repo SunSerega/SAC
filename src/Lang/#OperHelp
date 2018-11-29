@@ -5,7 +5,7 @@ T|Key=Key 65 0\
 Will do nothing\
 \
 Key 65 1\
-Will press "A" on keyboard, and will left it pressed\
+Will press "A" on keyboard, and will leave it pressed\
 \
 Key 65 2\
 Will unpress "A" on keyboard\
@@ -19,7 +19,7 @@ So 10(0x1010) would work like 2(0x0010), etc.\
 You can find out key code by running WK.exe and pressing that key
 H|KeyD=Presses keyboard button
 T|KeyD=KeyD 65\
-Will press "A" on keyboard, and will left it pressed\
+Will press "A" on keyboard, and will leave it pressed\
 \
 You can find out key code by running WK.exe and pressing that key
 H|KeyU=Unpresses keyboard button
@@ -38,7 +38,7 @@ T|Mouse=Mouse 2 0\
 Will do nothing\
 \
 Mouse 2 1\
-Will press RMB, and will left it pressed\
+Will press RMB, and will leave it pressed\
 \
 Mouse 2 2\
 Will unpress RMB\
@@ -57,7 +57,7 @@ Valid MB codes:\
 6: SideMB2
 H|MouseD=Presses mouse button
 T|MouseD=MouseD 2\
-Will press RMB, and will left it pressed\
+Will press RMB, and will leave it pressed\
 \
 Valid MB codes:\
 1: LMB\
@@ -124,7 +124,7 @@ T|JumpIf=JumpIf n < 5 #label1 null\
 If n is less then 5 - will perform Jump "#label1"\
 Otherwise will perform Jump null\
 \
-	You can only use ">", "<" or "=" as comparers
+You can only use ">", "<" or "=" as comparers
 %4=
 H|Call=Transfers control to target label, saving current position
 T|Call=Call exec_point_name\
@@ -134,14 +134,14 @@ You can save a lot of positions on top of each other,\
 this allows for recursion\
 \
 Call null\
-Will be ignored, because it saves exec.pos. and immediately loads back\
-(Jump null works like Return)
+Will be ignored, because it saves exec.pos. and immediately loads it back\
+(because Jump null works like Return)
 H|CallIf=Transfers control to 1 of 2 target labels, saving current position
 T|CallIf=CallIf n < 5 #label1 null\
 If n is less then 5 - will perform Call "#label1"\
 Otherwise will perform Call null\
 \
-	You can only use ">", "<" or "=" as comparers
+You can only use ">", "<" or "=" as comparers
 %5=
 H|Susp=Suspends execution and waits for resume key(s)
 T|Susp=Susp\
@@ -293,7 +293,7 @@ T|JumpIf=JumpIf n < 5 #lable1 null\
 Если n меньше чем 5 - будет выполнено Jump "#lable1"\
 Иначе будет выполнено Jump null\
 \
-	В качестве символа сравнения можно использовать только ">", "<" или "="
+В качестве символа сравнения можно использовать только ">", "<" или "="
 %4=
 H|Call=Переставляет точку выполнения к указаной метке, сохраняя текущую позицию
 T|Call=Call exec_point_name\
@@ -310,7 +310,7 @@ T|CallIf=CallIf n < 5 #lable1 null\
 Если n меньше чем 5 - будет выполнено Call "#lable1"\
 Иначе будет выполнено Call null\
 \
-	В качестве символа сравнения можно использовать только ">", "<" или "="
+В качестве символа сравнения можно использовать только ">", "<" или "="
 %5=
 H|Susp=Приостанавливает выполнение и ожидает нажатия кнопки(-ок) возобновления
 T|Susp=Susp\

@@ -47,6 +47,7 @@ H|DeflyNum=[Internal] Gives error if expression isn't Num
 T|DeflyNum=n1=DeflyNum(null) //0\
 n2=DeflyNum(3.4) //3.4\
 n3=DeflyNum("abc") //error
+n4=DeflyNum("5.6") //also error
 ~RU
 %EnterName=Введите имя функции, чтоб получить её описание\
 Введите пустую строку для списка функций
@@ -97,3 +98,4 @@ H|DeflyNum=[Внутреннее] Возвращает ошибку, если в
 T|DeflyNum=n1=DeflyNum(null) //0\
 n2=DeflyNum(3.4) //3.4\
 n3=DeflyNum("abc") //ошибка
+n4=DeflyNum("5.6") //тоже ошибка

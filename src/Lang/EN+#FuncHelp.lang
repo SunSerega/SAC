@@ -75,5 +75,6 @@ T|DeflyNum					=\
 	n1\=DeflyNum(null) //0\
 	n2\=DeflyNum(3.4) //3.4\
 	n3\=DeflyNum("abc") //error
+	n4\=DeflyNum("5.6") //also error
 
 

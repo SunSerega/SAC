@@ -6,6 +6,12 @@
 { $define SingleThread}
 { $define WriteDone}
 
+const
+  TimeToComp=2000;
+  TimeToExec=5000;
+
+
+
 function TimedExecute(p: procedure; t: integer): boolean;
 begin
   var res := false;
@@ -141,7 +147,7 @@ type
           ep.SupprIO := true;
           s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
         end,
-        1000
+        TimeToComp
       ) then
       begin
         write($'{dir}: Error, compiling took too long!{#10}');
@@ -162,7 +168,7 @@ type
       
       if TimedExecute(
         procedure->begin loop 10 do s.Optimize end,//ToDo #1520
-        1000
+        TimeToComp
       ) then
       begin
         write($'{dir}: Error, optimizing took too long!{#10}');
@@ -187,7 +193,7 @@ type
       s.susp_called := procedure->otp += '%susp_called'#10;
       s.stoped := procedure->otp += '%stoped'#10;
       
-      if TimedExecute(procedure->s.Execute, 5000) then
+      if TimedExecute(procedure->s.Execute, TimeToExec) then
         otp += '%aborted'#10;
       
       var otp_str := otp.ToString.TrimEnd(#10);
@@ -229,7 +235,7 @@ type
           ep.SupprIO := true;
           s := new Script(dir + '\' + (main_fname=nil?'Main.sac':main_fname), ep);
         end,
-        1000
+        TimeToComp
       ) then
       begin
         writeln($'{dir}: Error, compiling took too long!');
@@ -247,7 +253,7 @@ type
       
       if TimedExecute(
         procedure->begin loop 10 do s.Optimize end,//ToDo #1520
-        1000
+        TimeToComp
       ) then
       begin
         writeln($'{dir}: Error, optimizing took too long!');
@@ -306,6 +312,7 @@ begin
     
     while done<c do Sleep(10);
     Writeln('Done testing');
+    if not System.Console.IsOutputRedirected then readln;
     
   except
     on e: Exception do

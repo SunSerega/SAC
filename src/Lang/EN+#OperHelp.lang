@@ -10,7 +10,7 @@ T|Key							=\
 	Will do nothing\
 	\
 	Key 65 1\
-	Will press "A" on keyboard, and will left it pressed\
+	Will press "A" on keyboard, and will leave it pressed\
 	\
 	Key 65 2\
 	Will unpress "A" on keyboard\
@@ -26,7 +26,7 @@ T|Key							=\
 H|KeyD							=Presses keyboard button
 T|KeyD							=\
 	KeyD 65\
-	Will press "A" on keyboard, and will left it pressed\
+	Will press "A" on keyboard, and will leave it pressed\
 	\
 	You can find out key code by running WK.exe and pressing that key
 
@@ -56,7 +56,7 @@ T|Mouse							=\
 	Will do nothing\
 	\
 	Mouse 2 1\
-	Will press RMB, and will left it pressed\
+	Will press RMB, and will leave it pressed\
 	\
 	Mouse 2 2\
 	Will unpress RMB\
@@ -77,7 +77,7 @@ T|Mouse							=\
 H|MouseD						=Presses mouse button
 T|MouseD						=\
 	MouseD 2\
-	Will press RMB, and will left it pressed\
+	Will press RMB, and will leave it pressed\
 	\
 	Valid MB codes:\
 	1: LMB\
@@ -170,7 +170,7 @@ T|JumpIf						=\
 	If n is less then 5 - will perform Jump "#label1"\
 	Otherwise will perform Jump null\
 	\
-	You can only use ">", "<" or "=" as comparers
+	You can only use ">", "<" or "\=" as comparers
 
 %4=
 
@@ -187,8 +187,8 @@ T|Call							=\
 	this allows for recursion\
 	\
 	Call null\
-	Will be ignored, because it saves exec.pos. and immediately loads back\
-	(Jump null works like Return)
+	Will be ignored, because it saves exec.pos. and immediately loads it back\
+	(because Jump null works like Return)
 
 H|CallIf						=Transfers control to 1 of 2 target labels, saving current position
 T|CallIf						=\
@@ -196,7 +196,7 @@ T|CallIf						=\
 	If n is less then 5 - will perform Call "#label1"\
 	Otherwise will perform Call null\
 	\
-	You can only use ">", "<" or "=" as comparers
+	You can only use ">", "<" or "\=" as comparers
 
 %5=
 

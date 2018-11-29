@@ -71,13 +71,20 @@ type
       
       while waiting.Count<>0 do Sleep(10);
       
-      comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
-      //comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-      comp.Arguments := string.Format(comp_arg_tmpl, fname);
-      
-      p := System.Diagnostics.Process.Start(comp);
-      p.WaitForExit;
-      write($'{fname} - {p.StandardOutput.ReadToEnd}{#10}');
+      loop 10 do
+      begin
+          
+        comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
+        //comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
+        comp.Arguments := string.Format(comp_arg_tmpl, fname);
+        
+        p := System.Diagnostics.Process.Start(comp);
+        p.WaitForExit;
+        var otp := p.StandardOutput.ReadToEnd;
+        write($'{fname} - {otp}{#10}');
+        if not otp.ToLower.Contains('error') then break;
+        
+      end;
       
       if integer(flags and mnft) <> 0 then
       begin
@@ -131,10 +138,31 @@ type
     
   end;
 
+procedure Init;
+begin
+  
+  System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);
+  
+  var s := ReadAllText('version.dat');
+  var chs := s.Skip(1).TakeWhile(ch->ch.IsDigit).ToArray;
+  var maj := string.Create(chs).ToInteger;
+  var min := s.Skip(1+chs.Length+12).TakeWhile(ch->ch.IsDigit).JoinIntoString.ToInteger;
+  
+  min += 1;
+  if min > word.MaxValue then
+  begin
+    maj += 1;
+    min := 0;
+  end;
+  
+  WriteAllText('version.dat', $'({maj} shl 16) + ({min})');
+  
+end;
+
 begin
   try
     
-    System.IO.File.Copy('Icon(backup).ico','Icon.ico',true);
+    Init;
     
     
     

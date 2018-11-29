@@ -337,7 +337,7 @@ type
     const RegName = 'ScriptAutoClicker';
     static ProgFilesName := System.Environment.GetEnvironmentVariable('ProgramFiles')+'\'+RegName;
     
-    const version = 1;
+    const version: cardinal = {$include 'version.dat'};
     static files_loaded: boolean;
     
     
@@ -525,9 +525,9 @@ type
         if key <> nil then
         begin
           if key.GetValue('version') is integer(var val) then
-            if val > version then
+            if cardinal(val) > version then
               if
-                MessageBox.Show(string.Format(Translate('Text|reg ver'), val, version),Translate('Cap|reg ver'),MessageBoxButtons.OKCancel) <>
+                MessageBox.Show(string.Format(Translate('Text|reg ver'), cardinal(val), version),Translate('Cap|reg ver'),MessageBoxButtons.OKCancel) <>
                 System.Windows.Forms.DialogResult.OK
               then exit;
         end else
@@ -535,20 +535,20 @@ type
         
         if not files_loaded then
         begin
-          FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
-          FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
-          FileFromStream('Help.exe', GetResourceStream('Help.exe'));
-          FileFromStream('FuncHelp.exe', GetResourceStream('FuncHelp.exe'));
-          FileFromStream('OperHelp.exe', GetResourceStream('OperHelp.exe'));
-          FileFromStream('DrctHelp.exe', GetResourceStream('DrctHelp.exe'));
-          FileFromStream('WK.exe', GetResourceStream('WK.exe'));
-          FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
+          FileFromStream('Icon.ico',      GetResourceStream('Icon.ico'));
+          FileFromStream('Editor.exe',    GetResourceStream('Editor.exe'));
+          FileFromStream('Help.exe',      GetResourceStream('Help.exe'));
+          FileFromStream('FuncHelp.exe',  GetResourceStream('FuncHelp.exe'));
+          FileFromStream('OperHelp.exe',  GetResourceStream('OperHelp.exe'));
+          FileFromStream('DrctHelp.exe',  GetResourceStream('DrctHelp.exe'));
+          FileFromStream('WK.exe',        GetResourceStream('WK.exe'));
+          FileFromStream('SAC.exe',       GetResourceStream('SAC.exe'));
           LoadLib;
           files_loaded := true;
         end;
         
         key.SetValue('', 'SAC Script');
-        key.SetValue('version', version);
+        key.SetValue('version', integer(version));
         
         if not key.ExistsSubKey('shell') then rest_needed := true;
         var shell := key.OpenOrCreate('shell');

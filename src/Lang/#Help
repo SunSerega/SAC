@@ -12,14 +12,14 @@ Press arrow keys to switch between sections
 1=Each line contains one command:\
 \
 x=5 (assigns value 5 to variable x)\
-KeyP Ord("A") (presses key A on keyboard)\
+KeyP KeyCode("A") (presses key A on keyboard)\
 !FRef "f1.sac" "f2.sac"\
  (loads files, even if script wouldn't use them)\
 \
 Everything (except strings contents) threaded as lover case\
 So, you can write like this:\
 \
-kEyp Ord("A")
+kEyp KeyCode("A")
 2=Everything after needed operands - is comments:\
 \
 Halt comment\
@@ -118,14 +118,14 @@ Jump "#" //(This will create infinite loop)
 1=Каждая строчка содержит 1 команду:\
 \
 x=5 (присваивает значение 5 переменной x)\
-KeyP Ord("A") (нажимает кнопку A на клавиатуре)\
+KeyP KeyCode("A") (нажимает кнопку A на клавиатуре)\
 !FRef "f1.sac" "f2.sac"\
  (загружает файлы, даже если скрипт не будет использовать их)\
 \
 Всё (кроме содержимого строк) приводиться в нижний регистр\
 Поэтому можно писать так:\
 \
-kEyp Ord("A")
+kEyp KeyCode("A")
 2=Всё после необходимых операндов - комментарии:\
 \
 Halt комментарий\

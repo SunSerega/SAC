@@ -1,9 +1,5 @@
 
-MousePos 175 398
-MouseP 2
-
-MousePos 270 497
-MouseP 1
-
+Output "test"
 Sleep 100
+Susp
 Jump "#"

@@ -21,14 +21,14 @@
 	Each line contains one command:\
 	\
 	x\=5 (assigns value 5 to variable x)\
-	KeyP Ord("A") (presses key A on keyboard)\
+	KeyP KeyCode("A") (presses key A on keyboard)\
 	!FRef "f1.sac" "f2.sac"\
 	 (loads files, even if script wouldn't use them)\
 	\
 	Everything (except strings contents) threaded as lover case\
 	So, you can write like this:\
 	\
-	kEyp Ord("A")
+	kEyp KeyCode("A")
 
 
 2=\
