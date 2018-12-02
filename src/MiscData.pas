@@ -44,5 +44,14 @@ type
       self.Y := Y;
     end;
   end;
+  ExecParams = record
+    
+    public help_conf := false;
+    
+    public debug := false;
+    public SupprIO := false;
+    public lib_mode := false;
+    
+  end;
   
 end.

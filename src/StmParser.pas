@@ -6,7 +6,6 @@
 // - А Jump null можно заменять на Return
 
 //ToDo Directives:  !NoOpt/!Opt
-//ToDo Directives:  !SngDef:i1=num:readonly/const
 
 //ToDo даже если несколько блоков вызывают какой то один - можно всё равно узнать какие переменные могут иметь какой тип. FinalOptimize не проведёшь, но Optimize вполне
 
@@ -173,14 +172,51 @@ type
   
   FileCompilingException = abstract class(Exception)
     
-    public Sender: StmBlock;
+    public Sender: object;
     public ExtraInfo := new Dictionary<string, object>;
     
     public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
     begin
       inherited Create($'Precompiling error in block {Sender}: ' + text);
-      self.source := source;
+      self.Sender := Sender;
+      ExtraInfo := Dict(d);
     end;
+    
+  end;
+  CannotOverrideConstException = class(FileCompilingException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Cannot override const');
+    
+  end;
+  InvalidUseOfConstDefException = class(FileCompilingException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Invalid use of const defining');
+    
+  end;
+  ConflictingVarTypesException = class(FileCompilingException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Conflicting var types');
+    
+  end;
+  VarDefOtherTException = class(FileCompilingException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Invalid var type, var defined as other type');
+    
+  end;
+  InvalidVarTypeException = class(FileCompilingException)
+    
+    public constructor(source: object; vname: string) :=
+    inherited Create(source, $'"{vname}" isn''t a defined variable type. Must be "Str" or "Num"');
+    
+  end;
+  InvalidVarAccessTypeException = class(FileCompilingException)
+    
+    public constructor(source: object; at: string) :=
+    inherited Create(source, $'"{at}" isn''t a defined variable access type. Must be "readonly" or "const"');
     
   end;
   UndefinedDirectiveNameException = class(FileCompilingException)
@@ -213,7 +249,7 @@ type
     inherited Create(source, $'Recursion level was > maximum, {max}');
     
   end;
-  InsufficientOperParamCount = class(FileCompilingException)
+  InsufficientStmParamCount = class(FileCompilingException)
     
     public constructor(source: Script; exp: integer; par: array of string) :=
     inherited Create(source, $'Insufficient operator params count, expeted {exp}, but found {par.Length}', KV('par', object(par)));
@@ -249,10 +285,10 @@ type
     inherited Create(source, $'!StartPos can only be placed after label or on begining of the file');
     
   end;
-  DrctFRefNotConstException = class(FileCompilingException)
+  ConstExprExpectedException = class(FileCompilingException)
     
     public constructor(par: string; opt: OptExprBase) :=
-    inherited Create(source, $'!FRef must Not contain runtime calculated expressions{#10}Input [> {par} <] was optimized to [> {opt} <], but it can''t be converted to constant');
+    inherited Create(source, $'Expected const expr{#10}Input [> {par} <] was optimized to [> {opt} <], but it can''t be converted to constant');
     
   end;
   DuplicateLabelNameException = class(FileCompilingException)
@@ -337,10 +373,66 @@ type
     inherited Create($'Invalid Drct type: {(t1,t2)}', KV('t1', object(t1)), KV('t2', object(t2)));
     
   end;
+  InvalidSngDefValTException = class(LoadException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Invalid const val T');
+    
+  end;
+  InvalidSngDefAccessTException = class(LoadException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Invalid var access T');
+    
+  end;
   
   {$endregion Load}
   
+  {$region Settings}
+  
+  WrongSettingsException = abstract class(Exception)
+    
+    public Sender: StmBlock;
+    public ExtraInfo := new Dictionary<string, object>;
+    
+    public constructor(Sender: object; text: string; params d: array of KeyValuePair<string, object>);
+    begin
+      inherited Create($'Precompiling error in block {Sender}: ' + text);
+      self.source := source;
+    end;
+    
+  end;
+  CannotSerializeInExecModeException = class(WrongSettingsException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Cannot serialize in non-lib compiller mode');
+    
+  end;
+  CannotExecInLibModeException = class(WrongSettingsException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Cannot execute in lib compiller mode');
+    
+  end;
+  
+  {$endregion Settings}
+  
   {$endregion Exception's}
+  
+  {$region Misc}
+  
+  SuppressedIOData = sealed class
+    
+    public mX,mY: integer;
+    public ks := new byte[256];
+    
+  end;
+  
+  VarAccessT = (none=byte(0), read_only=byte(1), init_only=byte(2));
+  
+  comprT = (equ=byte(1), less=byte(2), more=byte(3));
+  
+  {$endregion Misc}
   
   {$region Single stm}
   
@@ -354,24 +446,6 @@ type
     public svs := new Dictionary<string, string>;
     public CallStack := new Stack<StmBlock>;
     public max_recursion: integer;
-    
-    public procedure SetVar(vname:string; val: object);
-    begin
-      if val is real then
-      begin
-        svs.Remove(vname);
-        nvs[vname] := real(val);
-      end else
-      if val is string then
-      begin
-        nvs.Remove(vname);
-        svs[vname] := string(val);
-      end else
-      begin
-        nvs.Remove(vname);
-        svs.Remove(vname);
-      end;
-    end;
     
     public procedure Push(bl: StmBlock);
     begin
@@ -387,6 +461,8 @@ type
         bl := CallStack.Pop else
         bl := nil;
     end;
+    
+    public procedure SetVar(vname:string; val: object);
     
     public function ExecuteNext: boolean;
     
@@ -408,6 +484,8 @@ type
     public scr: Script;
     
     
+    
+    public procedure PostInit; virtual := exit;
     
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
     
@@ -676,18 +754,6 @@ type
     
   end;
   
-  ExecParams = record
-    
-    public debug := false;
-    public SupprIO := false;
-    
-  end;
-  SuppressedIOData = sealed class
-    
-    public mX,mY: integer;
-    public ks := new byte[256];
-    
-  end;
   Script = sealed class
     
     private static nfi := new System.Globalization.NumberFormatInfo;
@@ -695,6 +761,8 @@ type
     public read_start_lbl_name: string;
     private main_path: string;
     public start_pos_def := false;
+    
+    public settings: ExecParams;
     public SupprIO: SuppressedIOData := nil;
     
     public otp: procedure(s: string);
@@ -703,6 +771,10 @@ type
     
     public LoadedFiles := new HashSet<string>;
     public sbs := new Dictionary<string, StmBlock>;
+    
+    public SngDefConsts := new Dictionary<string, object>;
+    public SngDefNums := new Dictionary<string, (boolean, string)>;//is readonly, fname for readonly
+    public SngDefStrs := new Dictionary<string, (boolean, string)>;
     
     private function ReadFile(context: object; lbl: string): boolean;
     
@@ -752,6 +824,8 @@ type
     
     public procedure Execute(entry_point: string);
     begin
+      if settings.lib_mode then raise new CannotExecInLibModeException(nil);
+      
       if not entry_point.Contains('#') then entry_point += '#';
       if not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
       var ec := new ExecutingContext(self, sbs[entry_point], 10000);
@@ -1287,7 +1361,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -1373,7 +1447,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -1460,7 +1534,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -1550,7 +1624,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       kk := new DInputNValue(par[1]);
       dp := new DInputNValue(par[2]);
@@ -1865,7 +1939,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -1963,7 +2037,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -2061,7 +2135,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
       kk := new DInputNValue(par[1]);
     end;
@@ -2166,7 +2240,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       kk := new DInputNValue(par[1]);
       dp := new DInputNValue(par[2]);
@@ -2442,7 +2516,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       x := new DInputNValue(par[1]);
       y := new DInputNValue(par[2]);
@@ -2530,7 +2604,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       kk := new DInputNValue(par[1]);
       vname := par[2];
@@ -2628,7 +2702,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       kk := new DInputNValue(par[1]);
       vname := par[2];
@@ -2723,7 +2797,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 3 then raise new InsufficientOperParamCount(self.scr, 3, par);
+      if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
       x := par[1];
       y := par[2];
@@ -2780,7 +2854,6 @@ type
   {$endregion Other simulators}
   
   {$region Jump/Call}
-  comprT=(equ=byte(1), less=byte(2), more=byte(3));
   
   OperJump = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
     
@@ -2798,7 +2871,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
@@ -2879,7 +2952,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientOperParamCount(sb.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientStmParamCount(sb.scr, 6, par);
       
       if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
       case par[2][1] of
@@ -3074,7 +3147,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
@@ -3156,7 +3229,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientOperParamCount(sb.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientStmParamCount(sb.scr, 6, par);
       
       if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
       case par[2][1] of
@@ -3465,7 +3538,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
       
       l := new DInputNValue(par[1]);
     end;
@@ -3535,7 +3608,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
       
       vname := par[1];
     end;
@@ -3595,7 +3668,7 @@ type
     
     public constructor(sb: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientOperParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
       otp := new DInputSValue(par[1]);
     end;
     
@@ -3656,62 +3729,180 @@ type
   
   {$region directive's}
   
-  DrctFRef = sealed class(DrctStmBase, IFileRefStm)
+  DrctFRef = sealed class(DrctStmBase)
     
-    public fns: array of string;
-    
-    private procedure Calc(ec: ExecutingContext := nil) :=
-    foreach var fn in fns do
-      scr.ReadFile(nil, fn);
-    
-    
-    
-    public function GetRefs: sequence of StmBlockRef :=
-    fns.Select(fn->DynamicStmBlockRef.Create(new SInputSValue(fn)).Optimize(self.bl));
-    
-    public constructor(par: array of string);
+    public static procedure Create(bl: StmBlock; par: array of string) :=
+    foreach var s in par.Skip(1) do
     begin
-      self.fns := par.ConvertAll(
-        s->
-        begin
-          var res := OptExprWrapper.FromExpr(Expr.FromString(s)).GetMain;
-          res := res.Optimize as OptExprBase;
-          if not (res is IOptLiteralExpr) then raise new DrctFRefNotConstException(s, res);
-          Result := ObjToStr(res.GetRes());
-        end
-      );
+      var res := OptExprWrapper.FromExpr(Expr.FromString(s)).GetMain;
+      res := res.Optimize as OptExprBase;
+      if not (res is IOptLiteralExpr) then raise new ConstExprExpectedException(s, res);
+      bl.scr.ReadFile(nil, ObjToStr(res.GetRes()));
     end;
     
-    public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
+  end;
+  DrctSngDef = sealed class(DrctStmBase)
+    
+    public vname: string;
+    public IsNum: boolean;
+    public val: object;
+    
+    public Access: VarAccessT;
+    
+    public procedure SetForScript;
     begin
-      Calc;
-      Result := nil;
+      
+      if Access=VarAccessT.init_only then
+      begin
+        if
+          scr.SngDefConsts.ContainsKey(vname) or
+          scr.SngDefNums.ContainsKey(vname) or
+          scr.SngDefStrs.ContainsKey(vname)
+        then raise new CannotOverrideConstException(nil);//ToDo надо отдельное исключение, потому что это не совсем отражает проблему
+        
+        scr.SngDefConsts[vname] := val;
+        
+      end else
+      begin
+        if scr.SngDefConsts.ContainsKey(vname) then raise new CannotOverrideConstException(nil);
+        if (IsNum?scr.SngDefStrs:scr.SngDefNums).ContainsKey(vname) then raise new ConflictingVarTypesException(nil);
+        
+        (IsNum?scr.SngDefNums:scr.SngDefStrs)
+        [vname] := (Access=VarAccessT.read_only, bl.fname);
+        
+      end;
+      
     end;
     
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
+    
+    
+    public constructor(bl: StmBlock; par: array of string);
+    begin
+      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
+      
+      var ss := par[1].SmartSplit(':',2);
+      
+      var vd := ss[0].SmartSplit('=',2);
+      vname := vd[0].ToLower;
+      case vd[1].ToLower of
+        'num': IsNum := true;
+        'str': IsNum := false;
+        else raise new InvalidVarTypeException(nil, vd[1]);
+      end;
+      
+      val := nil;
+      if ss.Length=1 then
+        Access := VarAccessT.none else
+      if ss[1].ToLower = 'readonly' then
+        Access := VarAccessT.read_only else
+      if ss[1].ToLower.StartsWith('const') then
+      begin
+        ss := ss[1].SmartSplit('=',2);
+        if ss[1].ToLower <> 'const' then raise new InvalidUseOfConstDefException(nil);
+        if ss.Length <> 2 then raise new InvalidUseOfConstDefException(nil);
+        
+        var e := Expr.FromString(ss[1]);
+        var oe := OptExprWrapper.FromExpr(e);
+        var main := oe.Optimize(new HashSet<string>, new HashSet<string>).GetMain;
+        if not (oe is IOptLiteralExpr) then raise new ConstExprExpectedException(ss[1], main);
+        
+        val := main.GetRes;
+        IsNum := val is real;
+        
+      end else
+        raise new InvalidVarAccessTypeException(nil, ss[1]);
+      
+    end;
+    
+    public procedure PostInit; override := SetForScript;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
       bw.Write(byte(1));
       bw.Write(byte(1));
-      bw.Write(fns.Length);
-      foreach var fn in fns do
-        bw.Write(fn);
+      bw.Write(self.vname);
+      
+      match val with
+        
+        real(var r):
+        begin
+          bw.Write(byte(1));
+          bw.Write(real(val));
+        end;
+        
+        string(var r):
+        begin
+          bw.Write(byte(2));
+          bw.Write(string(val));
+        end;
+        
+        else bw.Write(byte(0));
+      end;
+      
+      bw.Write(byte(self.Access));
+      
     end;
     
     public static function Load(br: System.IO.BinaryReader): DrctStmBase;
     begin
-      var res := new DrctFRef;
-      res.fns := new string[br.ReadInt32];
-      for var i := 0 to res.fns.Length-1 do
-        res.fns[i] := br.ReadString;
+      
+      var res := new DrctSngDef;
+      res.vname := br.ReadString;
+      
+      case br.ReadByte of
+        
+        0: res.val := nil;
+        1: res.val := br.ReadDouble;
+        2: res.val := br.ReadString;
+        
+        else raise new InvalidSngDefValTException(nil);
+      end;
+      
+      case br.ReadByte of
+        
+        0: res.Access := VarAccessT.none;
+        1: res.Access := VarAccessT.read_only;
+        2: res.Access := VarAccessT.init_only;
+        
+        else raise new InvalidSngDefAccessTException(nil);
+      end;
+      
       Result := res;
     end;
     
-    public function ToString: string; override :=
-    '!FRef'+fns.Select(s->' '+s).JoinIntoString;
+    public function ToString: string; override;
+    begin
+      var sb := new StringBuilder;
+      
+      sb += '!SngDef ';
+      sb += vname;
+      sb += IsNum?'Num':'Str';
+      if Access<>VarAccessT.none then
+      begin
+        sb += ':';
+        case Access of
+          
+          read_only: sb += 'readonly';
+          
+          init_only:
+          begin
+            sb += 'const=';
+            
+            match val with
+              real(var r): sb += r.ToString(nfi);
+              string(var s): sb += $'"{s}"';
+              else sb += 'null';
+            end;
+            
+          end;
+          
+          else raise new System.NotImplementedException;
+        end;
+      end;
+      
+      Result := sb.ToString;
+    end;
     
   end;
   
@@ -3732,10 +3923,11 @@ end;
 
 static function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
 begin
-  var p := text.Split(new char[]('='),2);
+  var p := text.SmartSplit(' ');
   case p[0].ToLower of
     
-    '!fref': Result := new DrctFRef(p[1].Split(','));
+    '!fref': DrctFRef.Create(sb, p);
+    '!sngdef': Result := new DrctSngDef(sb, p);
     
     '!startpos':
     if (sb.stms.Count = 0) and (sb.lbl <> '') and not sb.StartPos then
@@ -3786,6 +3978,7 @@ end;
 
 static function StmBase.FromString(sb: StmBlock; s: string; par: array of string): StmBase;
 begin
+  
   if s.StartsWith('!') then
     Result := DrctStmBase.FromString(sb, s) else
   if par[0].Contains('=') then
@@ -3795,6 +3988,7 @@ begin
   if Result=nil then exit;
   Result.bl := sb;
   Result.scr := sb.scr;
+  Result.PostInit;
 end;
 
 {$endregion Single stm}
@@ -3894,6 +4088,7 @@ end;
 
 constructor Script.Create(fname: string; ep: ExecParams);
 begin
+  self.settings := ep;
   if ep.SupprIO then
     self.SupprIO := new SuppressedIOData;
   
@@ -3914,6 +4109,8 @@ end;
 {$endregion Reading}
 
 {$region Misc Impl}
+
+{$region StmBlock}
 
 procedure StmBlock.SaveId(bw: System.IO.BinaryWriter) :=
 bw.Write(scr.sbs.Values.Numerate(0).First(t->t[1]=self)[0]);
@@ -3975,6 +4172,10 @@ begin
   Result := sb.ToString;
 end;
 
+{$endregion StmBlock}
+
+{$region ExecutingContext}
+
 function ExecutingContext.ExecuteNext: boolean;
 begin
   if curr = nil then
@@ -3986,6 +4187,30 @@ begin
     Result := true;
   end;
 end;
+
+procedure ExecutingContext.SetVar(vname:string; val: object);
+begin
+  if val is real then
+  begin
+    if scr.SngDefStrs.ContainsKey(vname) then raise new VarDefOtherTException(nil);
+    
+    svs.Remove(vname);
+    nvs[vname] := real(val);
+  end else
+  if val is string then
+  begin
+    if scr.SngDefNums.ContainsKey(vname) then raise new VarDefOtherTException(nil);
+    
+    nvs.Remove(vname);
+    svs[vname] := string(val);
+  end else
+  begin
+    nvs.Remove(vname);
+    svs.Remove(vname);
+  end;
+end;
+
+{$endregion ExecutingContext}
 
 {$endregion Misc Impl}
 
@@ -4511,7 +4736,7 @@ begin
     1:
     case t2 of
       
-      1: Result := DrctFRef.Load(br);
+      1: Result := DrctSngDef.Load(br);
       
       else raise new InvalidDrctTException(t1,t2);
     end;
@@ -4536,6 +4761,7 @@ end;
 
 procedure Script.Save(str: System.IO.Stream);
 begin
+  if not settings.lib_mode then raise new CannotSerializeInExecModeException(nil);
   
   if LoadedFiles <> nil then
   begin
