@@ -2,12 +2,17 @@
 {$apptype windows}
 
 uses ScriptExecutor;
+uses CompArgsData;
 
 uses LocaleData;
 uses SettingsData;
 
+uses MiscData;
+
 var
   WW, WH: integer;
+
+{$region Lib}
 
 type
   ScriptFile = class
@@ -144,6 +149,8 @@ type
     
   end;
 
+{$endregion Lib}
+
 procedure OpenLib;
 begin
   
@@ -174,58 +181,24 @@ begin
   
 end;
 
-procedure HelpWithArgs(ep: ExecParams);
-begin
-  var ToDo := 0;
-  writeln('Nothing in "!conf" start yet');
-  writeln('Press Enter to continue without config');
-  readln;
-  halt;
-end;
-
 procedure StartScript;
 begin
-  
-  var conf := false;
-  
-  var TryParseBool: string->boolean :=
-  s->
-  begin
-    Result := false;
-    if not boolean.TryParse(s, Result) then
-    begin
-      var bi: BigInteger;
-      if BigInteger.TryParse(s, bi) then
-        Result := bi <> 0 else
-      begin
-        WritelnFormat(Translate('CanNotParseBoolArg'),s);
-        Readln;
-        Halt;
-      end;
-    end;
-  end;
-  
   var ep: ExecParams;
-  
-  foreach var arg:string in CommandLineArgs.Skip(1) do
-  begin
-    var par := arg.SmartSplit('=',2);
-    
-    if par[0] = '!conf' then conf := (par.Length=1) or TryParseBool(par[1]) else
-    if par[0] = '!debug' then ep.debug := (par.Length=1) or TryParseBool(par[1]) else
+  try
+    ep := ParseArgs(CommandLineArgs.Skip(1));
+  except
+    on e: _CompArgException do
     begin
-      WritelnFormat(Translate('UnknownArg'), arg);
+      Writeln(e);
+      Writeln;
+      Writeln(Translate('PressToExit'));
       Readln;
       Halt;
     end;
-    
   end;
   
-  if conf then HelpWithArgs(ep);
-  
+  if ep.help_conf then ep := ArgsHelpForm.Create(ep, CommandLineArgs[0], CommandLineArgs.Select(arg->$'"{arg}"').JoinIntoString).ep;
   new ScriptExecutionForm(CommandLineArgs[0], ep);
-  Halt;
-  
 end;
 
 begin
@@ -238,10 +211,11 @@ begin
     //CommandLineArgs := new string[]('Lib\Temp\main.sac');
     //CommandLineArgs := new string[]('Lib\examples\Basic operators\main.sac');
     //CommandLineArgs := new string[]('Lib\Temp\SAC Script.sac');
+    //CommandLineArgs := new string[]('Lib\examples\Basic operators\main.sac', '!conf');
     
     if CommandLineArgs.Any then
       StartScript else
-    if System.IO.Directory.Exists('lib') then
+    if System.IO.Directory.Exists('Lib') then
       OpenLib else
       WriteHelp;
     

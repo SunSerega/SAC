@@ -11,9 +11,6 @@ NoLibHelp						=\
 	"!debug" - will start script with debug (slower, but more info)\
 	Thats all for now, press Enter to exit
 
-CanNotParseBoolArg				=Can't parse "{0}" to bool value
-UnknownArg						=Unknown arg: "{0}"
-
 LibView|CurrLib					=Folder: "{0}"
 LibView|RootLib					=Root: "{0}"
 LibView|SubLibs					=SubLibs:
@@ -28,4 +25,6 @@ Running							=Running
 SetKey							=Set key
 PreCompile						=PreCompile
 PreCompFileFilter				=SAC files (*.sac)|*.sac|All files (*.*)|*.*
+
+PressToExit						=Press Enter to exit
 

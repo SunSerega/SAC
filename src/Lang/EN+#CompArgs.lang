@@ -1,0 +1,27 @@
+
+
+ArgsHelpFormTitle			=Command line arguments help
+RunWithNewArgs				=Run
+
+!conf descr					=\
+	Shows this help window\
+	You can't press "Run" with !conf selected\
+	But you can copy command that includes !conf, for feture use
+
+!debug descr					=\
+	*idk what this shoud do, so, reserved*
+
+!lib_m descr					=\
+	lib mode\
+	In this mode you can't run\
+	But you can pre-compile multiple connected files into single\
+	You can than attach it to other script\
+	This will add all of the code to what you attaching it to
+
+!supr descr					=\
+	supressed mode\
+	In this mode - all the clicker command's, Susp and Halt are supressed\
+	You can't send nor resive key/mouse event's\
+	But if you try to send event - it would save, so you can read it later\
+	Usefull for debug
+

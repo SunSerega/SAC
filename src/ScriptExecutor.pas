@@ -16,12 +16,8 @@ uses ExprParser;
 
 uses MiscData;
 uses LocaleData;
-uses SettingsData;
-
-//uses ВБФ;
 
 type
-  ExecParams=StmParser.ExecParams;
   ScriptExecutionForm=class(Form)
     
     scr: Script;
@@ -91,29 +87,11 @@ type
       SetKey.Left := Running.Right+10;
       Running.Top += (SetKey.Height-Running.Height) div 2;
       
-      var PreCompile := new Button;
-      self.Controls.Add(PreCompile);
-      SetKey.AutoSize := true;
-      PreCompile.Text := Translate('PreCompile');
-      PreCompile.Top := SetKey.Bottom+10;
-      PreCompile.Left := Running.Left;
-      PreCompile.Width := SetKey.Right-PreCompile.Left;
-      {$region PreCompile}
-      PreCompile.Click += (o,e)->
-      begin
-        //SaveObj('temp.bin', scr);
-        var sfd := new System.Windows.Forms.SaveFileDialog;
-        sfd.Filter := Translate('PreCompFileFilter');
-        if sfd.ShowDialog <> System.Windows.Forms.DialogResult.OK then exit;
-        scr.Save(sfd.OpenFile);
-      end;
-      {$endregion PreCompile}
-      
       var KeyList := new RichTextBox;
       self.Controls.Add(KeyList);
-      KeyList.Top := PreCompile.Bottom+10;
-      KeyList.Left := PreCompile.Left;
-      KeyList.Width := PreCompile.Width;
+      KeyList.Top := SetKey.Bottom+10;
+      KeyList.Left := Running.Left;
+      KeyList.Width := SetKey.Right-KeyList.Left;
       KeyList.ReadOnly := true;
       KeyList.WordWrap := false;
       KeyList.Multiline := true;
@@ -200,16 +178,16 @@ type
       end).Start;
       {$endregion SetKey}
       
+      {$resource 'Icon.ico'}
+      self.Icon := System.Drawing.Icon.Create(GetResourceStream('Icon.ico'));
+      self.FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
+      self.Closing += procedure(o,e)->Halt;
       self.Width := SetKey.Right+25;
       self.Height := Output.Bottom+48;
       self.Text := System.IO.Path.GetFullPath(entry_point.Split(new char[]('#'),2)[0]);
       if self.Text.ToLower.Contains('\lib\') then
         self.Text := 'SAC: '+self.Text.Split('\').SkipWhile(s->s.ToLower <> 'lib').JoinIntoString('\') else
         self.Text := 'SAC: '+self.Text.Split('\').Last;
-      
-      {$resource 'Icon.ico'}
-      self.Icon := System.Drawing.Icon.Create(GetResourceStream('Icon.ico'));
-      self.FormBorderStyle := System.Windows.Forms.FormBorderStyle.Fixed3D;
       
       {$endregion Form}
       

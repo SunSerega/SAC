@@ -1,6 +1,8 @@
 ﻿unit StmParser;
 
 //ToDo Контекст ошибок
+//ToDo Переделать упаковку файлов-переводов
+//ToDo Сделать выбор файла в !lib_m
 
 //ToDo Удалять Call null
 // - А Jump null можно заменять на Return

@@ -7,8 +7,6 @@ Here is list of them:\
 "!conf" - will start program to help add arguments\
 "!debug" - will start script with debug (slower, but more info)\
 Thats all for now, press Enter to exit
-CanNotParseBoolArg=Can't parse "{0}" to bool value
-UnknownArg=Unknown arg: "{0}"
 LibView|CurrLib=Folder: "{0}"
 LibView|RootLib=Root: "{0}"
 LibView|SubLibs=SubLibs:
@@ -22,6 +20,7 @@ Running=Running
 SetKey=Set key
 PreCompile=PreCompile
 PreCompFileFilter=SAC files (*.sac)|*.sac|All files (*.*)|*.*
+PressToExit=Press Enter to exit
 ~RU
 NoLibHelp=Папка Lib не найдена\
 Вы всё ещё можете запустить скрипт из любой другой папки\
@@ -47,3 +46,4 @@ Running=Выполняется
 SetKey=Уст. кнопку
 PreCompile=ПреКомпилировать
 PreCompFileFilter=SAC файлы (*.sac)|*.sac|Все файлы (*.*)|*.*
+PressToExit=Нажмите Enter для выхода

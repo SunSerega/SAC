@@ -29,3 +29,5 @@ SetKey							=Уст. кнопку
 PreCompile						=ПреКомпилировать
 PreCompFileFilter				=SAC файлы (*.sac)|*.sac|Все файлы (*.*)|*.*
 
+PressToExit						=Нажмите Enter для выхода
+

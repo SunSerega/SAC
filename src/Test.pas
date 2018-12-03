@@ -1,5 +1,7 @@
 ﻿uses StmParser;
 
+uses MiscData;
+
 //ToDo Проверить, не исправили ли issue компилятора
 // - #1520
 
