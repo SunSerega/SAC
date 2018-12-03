@@ -1,63 +1,87 @@
 ﻿uses LocaleData;
 
+function GetAllLangData(fname: string): Dictionary<string, string>;
+begin
+  Result := new Dictionary<string, string>;
+  var sr := new System.IO.StreamReader(System.IO.File.OpenRead(fname));
+  var sb := new StringBuilder;
+  var header := nil as string;
+  
+  while not sr.EndOfStream do
+  begin
+    var s := sr.ReadLine.Trim(' ').Remove(#0, #13);
+    
+    if header<>nil then
+    begin
+      s := s.TrimStart(#9);
+      
+      if s.EndsWith('\') then
+      begin
+        sb += s;
+        sb.Length -= 1;
+        sb += #10;
+      end else
+      begin
+        sb += s;
+        Result.Add(header, sb.ToString);
+        header := nil;
+        sb.Clear;
+      end;
+      
+    end else
+    begin
+      if s.Length=0 then continue;
+      
+      var ss := s.Split(new char[]('='),2);
+      if ss.Length<>2 then raise new Exception('Expected next def');
+      
+      header := ss[0].TrimEnd(#9);
+      if ss[1].EndsWith('\') then
+      begin
+        sb += ss[1];
+        sb.Length -= 1;
+      end else
+      begin
+        Result.Add(header, ss[1]);
+        header := nil;
+      end;
+      
+    end;
+    
+  end;
+  
+  sr.Close;
+end;
+
 begin
   try
     
-    var fls :=
+    foreach var htg in
       System.IO.Directory.EnumerateFiles('Lang')
       .Where(fname->fname.StartsWith($'Lang\{LangList[0]}'))
-      .ToList;
-    
-    foreach var fname in fls do
+      .Select(fname->System.IO.Path.GetFileNameWithoutExtension(fname).Split('+')[1])
+    do
     begin
       
-      var htg := System.IO.Path.GetFileNameWithoutExtension(fname).Split('+')[1];
       var str := System.IO.File.Create($'Lang\{htg}');
-      var sw := new System.IO.StreamWriter(str);
+      var bw := new System.IO.BinaryWriter(str);
       
       foreach var lang in LangList do
       begin
         
-        if lang <> LangList[0] then
-          sw.WriteLine($'~{lang}');
+        bw.Write(lang);
         
-        var sr := new System.IO.StreamReader(System.IO.File.OpenRead(fname.Replace(LangList[0],lang)));
-        while not sr.EndOfStream do
+        var d := GetAllLangData($'Lang\{lang}+{htg}.lang');
+        bw.Write(d.Count);
+        foreach var kvp in d do
         begin
-          var s := sr.ReadLine;
-          if s = '' then continue;
-          var s_sp := s.Split(new char[]('='), 2);
-          
-          if (s_sp.Length=2) and (s_sp[0].Last='\') then
-            s_sp := new string[](s_sp[0].Remove(s_sp[0].Length-1)+'='+s_sp[1]);
-          
-          if (s_sp.Length=2) and (s_sp[1]='\') then
-            sw.WriteLine(s_sp[0].TrimEnd(#9)+'='+sr.ReadLine.TrimStart(#9).Replace('\=','=')) else
-            sw.WriteLine(
-              s_sp
-              .Reverse
-              .Select(
-                (ss,i)->
-                begin
-                  
-                  Result := i=0?
-                  ss.TrimStart(#9):
-                  ss.TrimEnd(#9)
-                  
-                end
-                
-              )
-              .Reverse
-              .JoinIntoString('=')
-              .Replace(#13,'')
-            );
-          
+          bw.Write(kvp.Key);
+          bw.Write(kvp.Value);
         end;
-        sr.Close;
         
       end;
       
-      sw.Close;
+      str.Close;
       writeln($'Packed all langs for {htg}');
     end;
     

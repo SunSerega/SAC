@@ -170,7 +170,7 @@ T|JumpIf						=\
 	If n is less then 5 - will perform Jump "#label1"\
 	Otherwise will perform Jump null\
 	\
-	You can only use ">", "<" or "\=" as comparers
+	You can only use ">", "<" or "=" as comparers
 
 %4=
 
@@ -196,7 +196,7 @@ T|CallIf						=\
 	If n is less then 5 - will perform Call "#label1"\
 	Otherwise will perform Call null\
 	\
-	You can only use ">", "<" or "\=" as comparers
+	You can only use ">", "<" or "=" as comparers
 
 %5=
 

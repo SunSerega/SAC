@@ -13,32 +13,22 @@ const
 
 procedure LoadLocale(htg: string);
 begin
-  var sr := new System.IO.StreamReader(GetResourceStream(htg));
-  var lang_id := LangList[0];
-  var sb := new StringBuilder;
+  var str := GetResourceStream(htg);
+  var br := new System.IO.BinaryReader(str);
   
-  while not sr.EndOfStream do
+  while str.Position < str.Length do
   begin
-    var s := sr.ReadLine;
-    if s = '' then continue;
-    if s[1] = '~' then
-      lang_id := s.Remove(0,1) else
+    var lang_id := br.ReadString;
+    
+    loop br.ReadInt32 do
     begin
-      var ss := s.Split(new char[]('='),2);
-      sb += ss[1];
-      if ss[1].LastOrDefault='\' then
-      repeat
-        sb.Remove(sb.Length-1,1);
-        s := sr.ReadLine;
-        sb += #10;
-        sb += s;
-      until (s.Last<>'\') or sr.EndOfStream;
-      Locale.Add((lang_id, ss[0]),sb.ToString);
-      sb.Clear;
+      var key := br.ReadString;
+      var val := br.ReadString;
+      Locale.Add((lang_id, key), val);
     end;
+    
   end;
   
-  sr.Close;
 end;
 
 function Translate(text:string):string;

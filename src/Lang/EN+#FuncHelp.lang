@@ -8,25 +8,25 @@
 
 H|Length					=Gets length of Str
 T|Length					=\
-	l\=Length("abcd")\
+	l=Length("abcd")\
 	Will set l to 4\
 	\
-	l1\=Length(null)\
-	l2\=Length(5.3)\
+	l1=Length(null)\
+	l2=Length(5.3)\
 	Both will give error
 
 
 H|Num						=Converts value to Num
 T|Num						=\
-	n1\=Num(5.5)\
-	n2\=Num("5.6")\
-	n3\=Num(null)\
+	n1=Num(5.5)\
+	n2=Num("5.6")\
+	n3=Num(null)\
 	\
 	n1 is 5.5\
 	n2 is 5.6\
 	n3 is 0\
 	\
-	n\=Num("abc") (error, can't convert to Num)
+	n=Num("abc") (error, can't convert to Num)
 
 
 H|KeyCode					=Gets key code by it's name
@@ -48,9 +48,9 @@ T|KeyCode					=\
 
 H|Str						=Converts value to Num
 T|Str						=\
-	s1\=Str(5.5)\
-	s2\=Str("abc")\
-	s3\=Str(null)\
+	s1=Str(5.5)\
+	s2=Str("abc")\
+	s3=Str(null)\
 	\
 	s1 is "5.5"\
 	s2 is "abc"\
@@ -59,11 +59,11 @@ T|Str						=\
 
 H|CutStr					=Cuts and returns part of Str
 T|CutStr					=\
-	s\=CutStr("abcdef",2,4)\
+	s=CutStr("abcdef",2,4)\
 	s is "cde" (because from letter #2, to letter #4)\
 	\
 	There is also shortcut:\
-	s\="abcdef"[2..4]
+	s="abcdef"[2..4]
 
 
 %2=
@@ -72,9 +72,9 @@ T|CutStr					=\
 
 H|DeflyNum					=[Internal] Gives error if expression isn't Num
 T|DeflyNum					=\
-	n1\=DeflyNum(null) //0\
-	n2\=DeflyNum(3.4) //3.4\
-	n3\=DeflyNum("abc") //error
-	n4\=DeflyNum("5.6") //also error
+	n1=DeflyNum(null) //0\
+	n2=DeflyNum(3.4) //3.4\
+	n3=DeflyNum("abc") //error
+	n4=DeflyNum("5.6") //also error
 
 

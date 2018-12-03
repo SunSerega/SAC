@@ -205,10 +205,13 @@ begin
       ArgBox.GetBox('!lib_m').cb.Checked := ep.lib_mode;
       ArgBox.GetBox('!supr' ).cb.Checked := ep.SupprIO;
       
-      var ind := ResBox.Text.IndexOf(sb.ToString);
-      if ind = -1 then
-        ResBox.SelectionStart := ResBox.Text.Length else
-        ResBox.SelectionStart := ind+sb.Length;
+      if ResBox.SelectionStart=0 then
+      begin
+        var ind := ResBox.Text.LastIndexOf(sb.ToString);
+        if ind = -1 then
+          ResBox.SelectionStart := ResBox.Text.Length else
+          ResBox.SelectionStart := ind+sb.Length;
+      end;
       
     except
       on _CompArgException do;

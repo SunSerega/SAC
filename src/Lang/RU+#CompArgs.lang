@@ -1,2 +1,27 @@
 
+
 ArgsHelpFormTitle			=Помощь с аргументами коммандной строки
+RunWithNewArgs				=Запустить
+
+!conf descr					=\
+	Запускает это окно помощи\
+	Вы не можете нажать "Запустить" когда !conf включено\
+	Но вы можете скопировать программу содержащую !conf, для дальнейшего использования
+
+!debug descr					=\
+	*я пока не знаю что сделаю с этим, пока что оно не работает*
+
+!lib_m descr					=\
+	lib mode - режим генерации библиотеки\
+	В этом режиме вы не можете запустить скрипт\
+	Но вы можете пре-компилировать множество файлов в единый\
+	Потом вы сможете прикрепить полученый файл к другим скриптам\
+	Тогда весь код из библиотеки попадёт в скрипт к которому вы её прикрепили
+
+!supr descr					=\
+	supressed mode\
+	In this mode - all the clicker command's, Susp and Halt are supressed\
+	You can't send nor resive key/mouse event's\
+	But if you try to send event - it would save, so you can read it later\
+	Usefull for debug
+
