@@ -228,6 +228,7 @@ type
     end;
     
     
+    
     procedure TemplatedExecute(s: Script);
     const TimeToExec=5000;
     begin
@@ -262,6 +263,8 @@ type
       end;
     end;
     
+    
+    
     procedure Test(dir: string := 'TestSuite\TestExec'); override :=
     try
       if StartTesting(dir) then exit;
@@ -286,10 +289,15 @@ begin
   try
     CurrLocale := LangList[0];
     
+    {$ifdef SingleThread}
+    CompTester.Create.Test;
+    ExecTester.Create.Test;
+    {$else}
     System.Threading.Tasks.Parallel.Invoke(
-      ExecTester.Create.Test,
-      CompTester.Create.Test
+      CompTester.Create.Test,
+      ExecTester.Create.Test
     );
+    {$endif}
     
     Writeln('Done testing');
     if not System.Console.IsOutputRedirected then readln;
