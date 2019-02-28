@@ -159,6 +159,20 @@ begin
   
 end;
 
+procedure UpdateIcons;
+begin
+  var si := new System.Diagnostics.ProcessStartInfo('cmd');
+  si.UseShellExecute := false;
+  si.RedirectStandardInput := true;
+  si.RedirectStandardOutput := true;
+  var p := System.Diagnostics.Process.Start(si);
+  var sw := p.StandardInput;
+  sw.WriteLine('ie4uinit.exe -ClearIconCache');
+  sw.WriteLine('ie4uinit.exe -show');//Win10
+  sw.WriteLine('exit');
+  p.WaitForExit;
+end;
+
 begin
   try
     
@@ -170,7 +184,6 @@ begin
     
     new Entry('LangPacker', exec);
     new Entry('LibPacker',  exec);
-    new Entry('WK',         gres);
     
     new Entry('SAC',        gres or mnft, 'LangPacker');
     new Entry('Editor',     none,         'LangPacker');
@@ -178,8 +191,10 @@ begin
     new Entry('OperHelp',   gres,         'LangPacker');
     new Entry('DrctHelp',   gres,         'LangPacker');
     new Entry('Help',       gres,         'LangPacker');
+    new Entry('WK',         gres,         'LangPacker');
+    new Entry('WMP',        gres,         'LangPacker');
     
-    new Entry('Config',     gres or mnft, 'LibPacker', 'WK', 'SAC', 'Editor', 'FuncHelp', 'OperHelp', 'DrctHelp', 'Help');
+    new Entry('Config',     gres or mnft, 'LibPacker', 'WK', 'WMP', 'SAC', 'Editor', 'FuncHelp', 'OperHelp', 'DrctHelp', 'Help');
     
     Entry.can_finalize := true;
     
@@ -188,6 +203,8 @@ begin
     while Entry.defined.Count<>0 do Sleep(10);
     
     System.IO.File.Copy('Config.exe',$'{System.IO.Path.GetDirectoryName(GetCurrentDir)}\Config.exe',true);
+    
+    UpdateIcons;
     
     System.Console.ForegroundColor := System.ConsoleColor.Green;
     ReadlnString('Ready');

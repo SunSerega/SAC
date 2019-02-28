@@ -1,4 +1,8 @@
-﻿type
+﻿uses LocaleData;
+uses SettingsData;
+{$mainresource 'WMP.res'}//this is only for icon
+
+type
   Point = record
     X, Y: integer;
   end;
@@ -23,34 +27,54 @@ $'{#10}MousePos {p.X} {p.Y}';
 
 procedure CopyPos :=
 while true do
-begin
+try
   WaitKeyCombo($10, $53);
   
   {$reference System.Windows.Forms.dll}
   System.Windows.Forms.Clipboard.SetText(GetOperString);
   
   System.Console.Beep;
+except
+  on e: Exception do
+  begin
+    writeln('Error:');
+    writeln(e);
+    readln;
+  end;
 end;
 
 begin
-  var thr := new System.Threading.Thread(CopyPos);
-  thr.ApartmentState := System.Threading.ApartmentState.STA;
-  thr.Start;
-  
-  System.Console.CursorVisible := false;
-  write('Нажмите Shift+S чтоб скопировать следующее в буфер обмена:');
-  var last_l := 0;
-  
-  while true do
-  begin
-    GetCursorPos(@p);
+  try
+    var thr := new System.Threading.Thread(CopyPos);
+    thr.ApartmentState := System.Threading.ApartmentState.STA;
+    thr.Start;
     
-    var s := GetOperString;
-    if s.Length<last_l then s += ' '*(last_l-s.Length);
-    write(s);
-    last_l := s.Length;
-    System.Console.SetCursorPosition(0,0);
+    {$resource Lang\#WMP}
+    LoadLocale('#WMP');
+    LoadSettings;
     
-    Sleep(10);
+    System.Console.CursorVisible := false;
+    write(Translate('PressThisToCopy'));
+    var last_l := 0;
+    
+    while true do
+    begin
+      GetCursorPos(@p);
+      
+      var s := GetOperString;
+      if s.Length<last_l then s += ' '*(last_l-s.Length);
+      write(s);
+      last_l := s.Length;
+      System.Console.SetCursorPosition(0,0);
+      
+      Sleep(10);
+    end;
+  except
+    on e: Exception do
+    begin
+      writeln('Error:');
+      writeln(e);
+      readln;
+    end;
   end;
 end.

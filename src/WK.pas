@@ -1,19 +1,44 @@
-﻿{$mainresource 'WK.res'}
+﻿uses LocaleData;
+uses SettingsData;
+{$mainresource 'WK.res'}//this is only for icon
 
 function GetKeyState(Id:byte):byte;
 external 'User32.dll';
 
 begin
   try
+    {$resource Lang\#WK}
+    LoadLocale('#WK');
+    LoadSettings;
+    writeln(Translate('ColExpl'));
+    System.Console.CursorVisible := false;
+    
+    var last_h := 0;
+    
     while true do
     begin
       
-      for i:byte := 0 to $FF do
-        if GetKeyState(i) shr 7 = $01 then
-          writeln($'{i,3} ${i.ToString(''X'')} {char(i)}');
+      var curr_h := 0;
+      var sb := new StringBuilder;
       
-      sleep(30);
-      System.Console.Clear;
+      for var i := 0 to $FF do
+        if GetKeyState(i) shr 7 = 1 then
+        begin
+          sb.AppendLine($'{i,3} |               ${i:X} |         {ChrAnsi(i)}');
+          curr_h += 1;
+        end;
+      
+      loop last_h-curr_h do
+      begin
+        sb.Append(' ', 35);
+        sb.AppendLine;
+      end;
+      
+      write(sb.ToString);
+      System.Console.SetCursorPosition(0,1);
+      last_h := curr_h;
+      
+      Sleep(10);
     end;
   except
     on e: Exception do

@@ -398,6 +398,7 @@ type
       {$resource 'OperHelp.exe'}
       {$resource 'DrctHelp.exe'}
       {$resource 'WK.exe'}
+      {$resource 'WMP.exe'}
       {$resource 'SAC.exe'}
       FileFromStream('Icon.ico', GetResourceStream('Icon.ico'));
       FileFromStream('Editor.exe', GetResourceStream('Editor.exe'));
@@ -406,6 +407,7 @@ type
       FileFromStream('OperHelp.exe', GetResourceStream('OperHelp.exe'));
       FileFromStream('DrctHelp.exe', GetResourceStream('DrctHelp.exe'));
       FileFromStream('WK.exe', GetResourceStream('WK.exe'));
+      FileFromStream('WMP.exe', GetResourceStream('WMP.exe'));
       FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       
       {$resource 'lib_pack'}
@@ -542,6 +544,7 @@ type
           FileFromStream('OperHelp.exe',  GetResourceStream('OperHelp.exe'));
           FileFromStream('DrctHelp.exe',  GetResourceStream('DrctHelp.exe'));
           FileFromStream('WK.exe',        GetResourceStream('WK.exe'));
+          FileFromStream('WMP.exe',        GetResourceStream('WMP.exe'));
           FileFromStream('SAC.exe',       GetResourceStream('SAC.exe'));
           LoadLib;
           files_loaded := true;
@@ -677,6 +680,7 @@ type
           System.IO.File.Delete('OperHelp.exe');
           System.IO.File.Delete('DrctHelp.exe');
           System.IO.File.Delete('WK.exe');
+          System.IO.File.Delete('WMP.exe');
           System.IO.File.Delete('SAC.exe');
           
         end;

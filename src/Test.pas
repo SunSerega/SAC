@@ -11,20 +11,28 @@ uses LocaleData;
 function TimedExecute(p: procedure; t: integer): boolean;
 begin
   var res := false;
+  var err: Exception;
   
-  var exec_thr := new System.Threading.Thread(p);
+  var exec_thr := new System.Threading.Thread(()->
+    try
+      p;
+    except
+      on e: System.Threading.ThreadAbortException do ;
+      on e: Exception do err := e;
+    end);
   var stop_thr := new System.Threading.Thread(()->
-  begin
-    Sleep(t);
-    exec_thr.Abort;
-    res := true;
-  end);
+    begin
+      Sleep(t);
+      exec_thr.Abort;
+      res := true;
+    end);
   
   exec_thr.Start;
   stop_thr.Start;
   exec_thr.Join;
   stop_thr.Abort;
   
+  if err<>nil then raise new Exception('',err);
   Result := res;
 end;
 
@@ -47,10 +55,10 @@ type
     
     function Copy: Tester; abstract;
     
-    function StartTesting(dir: string): boolean;
+    function StartTesting(test_dir: string): boolean;
     begin
-      curr_dir := dir;
-      sfn := dir+'\0.sactd';
+      curr_dir := test_dir;
+      sfn := test_dir+'\0.sactd';
       
       Result := not System.IO.File.Exists(sfn);
       
@@ -147,11 +155,11 @@ type
           begin
             var ep := new ExecParams;
             ep.SupprIO := true;
-            s := new Script(dir + '\' + main_fname, ep);
+            s := new Script(curr_dir + '\' + main_fname, ep);
           end,
           TimeToComp
         ) then
-          raise new TesterException($'{dir}: Error, compiling took too long!{#10}');
+          raise new TesterException($'{curr_dir}: Error, compiling took too long!{#10}');
         
         var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
         if exp_opt_code=nil then
@@ -160,17 +168,17 @@ type
           exp_opt_code := opt_code;
         end else
         if opt_code <> exp_opt_code then
-          raise new TesterException($'{dir}: Error, wrong code!{#10}');
+          raise new TesterException($'{curr_dir}: Error, wrong code!{#10}');
         
         if TimedExecute(
           procedure->loop 10 do s.Optimize,
           TimeToComp
         ) then
-          raise new TesterException($'{dir}: Error, optimizing took too long!{#10}');
+          raise new TesterException($'{curr_dir}: Error, optimizing took too long!{#10}');
         
         opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
         if opt_code <> exp_opt_code then
-          raise new TesterException($'{dir}: Error, wrong code after optimize!{#10}');
+          raise new TesterException($'{curr_dir}: Error, wrong code after optimize!{#10}');
         
         Result := s;
         
@@ -181,7 +189,7 @@ type
           if exp_comp_err='' then
             System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + e.Message + #10) else
           if exp_comp_err<>e.Message then
-            raise new TesterException($'{dir}: Error, wrong error text!{#10}Exp: {exp_comp_err}{#10}Got: {e.Message}');
+            raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_comp_err}{#10}Got: {e.Message}');
       end;
     end;
     
@@ -191,7 +199,9 @@ type
     
     function Copy: Tester; override := new CompTester;
     
-    procedure Test(dir: string := 'TestSuite\TestComp'); override :=
+    procedure Test := Test('TestSuite\TestComp');
+    
+    procedure Test(dir: string); override :=
     try
       if StartTesting(dir) then exit;
       
@@ -250,22 +260,24 @@ type
         if exp_otp=nil then
           System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10) else
         if otp_str <> exp_otp then
-          raise new TesterException($'{dir}: Error, wrong output!{#10}');
+          raise new TesterException($'{curr_dir}: Error, wrong output!{#10}');
         
       except
         on e: Exception do
           if exp_exec_err=nil then
-            raise e else
+            raise new Exception('',e) else
           if exp_exec_err='' then
             System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + e.Message + #10) else
           if exp_exec_err<>e.Message then
-            raise new TesterException($'{dir}: Error, wrong error text!{#10}Exp: {exp_exec_err}{#10}Got: {e.Message}');
+            raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_exec_err}{#10}Got: {e.Message}');
       end;
     end;
     
     
     
-    procedure Test(dir: string := 'TestSuite\TestExec'); override :=
+    procedure Test := Test('TestSuite\TestExec');
+    
+    procedure Test(dir: string); override :=
     try
       if StartTesting(dir) then exit;
       

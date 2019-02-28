@@ -3,9 +3,9 @@
 function GetAllLangData(fname: string): Dictionary<string, string>;
 begin
   Result := new Dictionary<string, string>;
-  var sr := new System.IO.StreamReader(System.IO.File.OpenRead(fname));
+  var sr := System.IO.File.OpenText(fname);
   var sb := new StringBuilder;
-  var header := nil as string;
+  var header: string := nil;
   
   while not sr.EndOfStream do
   begin
@@ -57,9 +57,9 @@ begin
   try
     
     foreach var htg in
-      System.IO.Directory.EnumerateFiles('Lang')
-      .Where(fname->fname.StartsWith($'Lang\{LangList[0]}'))
-      .Select(fname->System.IO.Path.GetFileNameWithoutExtension(fname).Split('+')[1])
+      System.IO.Directory.EnumerateFiles($'Lang\{LangList[0]}')
+      .Where(fname->System.IO.Path.GetExtension(fname)='.lang')
+      .Select(System.IO.Path.GetFileNameWithoutExtension)
     do
     begin
       
@@ -71,7 +71,7 @@ begin
         
         bw.Write(lang);
         
-        var d := GetAllLangData($'Lang\{lang}+{htg}.lang');
+        var d := GetAllLangData($'Lang\{lang}\{htg}.lang');
         bw.Write(d.Count);
         foreach var kvp in d do
         begin
