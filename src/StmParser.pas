@@ -1,6 +1,8 @@
 ﻿unit StmParser;
 //ToDo сейчас надо добавить тесты и справку для !SngDef
 
+//ToDo операторы ReadText и Alert, работающие через месседж боксы
+
 //ToDo Контекст ошибок
 //ToDo Сделать выбор файла в !lib_m
 //ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
@@ -13,7 +15,6 @@
 //ToDo даже если несколько блоков вызывают какой то один - можно всё равно узнать какие переменные могут иметь какой тип. FinalOptimize не проведёшь, но Optimize вполне
 
 //ToDo Проверить, не исправили ли issue компилятора
-// - #1488
 // - #1502
 
 interface
@@ -4448,7 +4449,6 @@ begin
     {$region Variable optimizations}
     
     foreach var bl: StmBlock in sbs.Values do
-    begin//ToDo #1488
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
         
@@ -4570,7 +4570,6 @@ begin
         {$endregion Move closer to first use}
         
       end;
-    end;
     
     {$endregion Variable optimizations}
     
