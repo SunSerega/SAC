@@ -4,7 +4,7 @@ uses LocaleData;
 uses SettingsData;
 
 var
-  h: string;
+  h: string := nil;
   d := new Dictionary<string, string>;
 
 procedure Load;

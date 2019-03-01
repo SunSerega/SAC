@@ -1,0 +1,31 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+i=(i+1)
+Output ("iteration "+Str(i))
+Susp //Const
+JumpIf i < 10 "Main.sac\#" null
+
+#ExpOtp
+iteration 1
+%susp_called
+iteration 2
+%susp_called
+iteration 3
+%susp_called
+iteration 4
+%susp_called
+iteration 5
+%susp_called
+iteration 6
+%susp_called
+iteration 7
+%susp_called
+iteration 8
+%susp_called
+iteration 9
+%susp_called
+iteration 10
+%susp_called
+%stoped

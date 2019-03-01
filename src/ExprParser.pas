@@ -2618,6 +2618,13 @@ type
       s_vars_names.Contains(vn) or
       o_vars_names.Contains(vn);
     
+    public procedure ResetCalc;
+    begin
+      
+      MainCalcProc := System.Delegate.Combine(GetMain.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
+      
+    end;
+    
     protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
       
@@ -3642,7 +3649,10 @@ begin
   Main := Main.Optimize;
   
   if Main.IsSame(self.GetMain) then
-    Result := self else
+  begin
+    Result := self;
+    exit;
+  end else
   if Main is OptNExprBase then
     Result := new OptNExprWrapper(Main as OptNExprBase) else
   if Main is OptSExprBase then
@@ -3659,11 +3669,7 @@ begin
   Result.s_vars := s_vars;
   Result.o_vars := o_vars;
   
-  
-  
   Main.ClampLists;
-  
-  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
   
 end;
 
@@ -3699,7 +3705,10 @@ begin
   Main := Main.Optimize;
   
   if Main.IsSame(self.GetMain) then
-    Result := self else
+  begin
+    Result := self;
+    exit;
+  end else
   if Main is OptNExprBase then
     Result := new OptNExprWrapper(Main as OptNExprBase) else
   if Main is OptSExprBase then
@@ -3716,9 +3725,7 @@ begin
   Result.s_vars := s_vars;
   Result.o_vars := o_vars;
   
-  
-  
-  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
+  Main.ClampLists;
   
 end;
 
@@ -3764,8 +3771,6 @@ begin
   
   
   Main.ClampLists;
-  
-  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
   
 end;
 
@@ -3929,8 +3934,6 @@ type
       Result.s_vars_names := s_vars_names;
       Result.o_vars_names := o_vars_names;
       
-      Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
-      
     end;
     
   end;
@@ -4056,10 +4059,6 @@ begin
   Result.n_vars := nv;
   Result.s_vars := sv;
   Result.o_vars := ov;
-  
-  
-  
-  Result.MainCalcProc := System.Delegate.Combine(Main.GetCalc.Cast&<System.Delegate>.ToArray) as Action0;
   
 end;
 

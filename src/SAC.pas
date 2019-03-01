@@ -208,9 +208,8 @@ begin
     LoadLocale('#SAC');
     LoadSettings;
     
-    //CommandLineArgs := new string[]('Lib\Temp\main.sac');
+    //CommandLineArgs := new string[]('0\0.sac');
     //CommandLineArgs := new string[]('Lib\examples\Basic operators\main.sac');
-    //CommandLineArgs := new string[]('Lib\Temp\SAC Script.sac');
     //CommandLineArgs := new string[]('Lib\examples\Basic operators\main.sac', '!conf');
     
     if CommandLineArgs.Any then

@@ -2,6 +2,7 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #891
+// - #? ToDo это новая ошибка, кажись. или, скорее, там были близнецы
 
 interface
 
@@ -37,6 +38,7 @@ type
       {$region Script}
       
       scr := new Script(entry_point, ep);
+      //writeln(scr);
       scr_thr := new System.Threading.Thread(
         ()->
         try

@@ -165,6 +165,7 @@ type
         if exp_opt_code=nil then
         begin
           System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
+          writeln($'Warning! .sactd updated for {curr_dir}');
           exp_opt_code := opt_code;
         end else
         if opt_code <> exp_opt_code then
@@ -187,7 +188,10 @@ type
           if exp_comp_err=nil then
             raise e else
           if exp_comp_err='' then
-            System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + e.Message + #10) else
+          begin
+            System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + e.Message + #10);
+            writeln($'Warning! .sactd updated for {curr_dir}');
+          end else
           if exp_comp_err<>e.Message then
             raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_comp_err}{#10}Got: {e.Message}');
       end;
@@ -258,7 +262,10 @@ type
         
         var otp_str := otp.ToString.TrimEnd(#10);
         if exp_otp=nil then
-          System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10) else
+        begin
+          System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10);
+          writeln($'Warning! .sactd updated for {curr_dir}');
+        end else
         if otp_str <> exp_otp then
           raise new TesterException($'{curr_dir}: Error, wrong output!{#10}');
         
@@ -267,7 +274,10 @@ type
           if exp_exec_err=nil then
             raise new Exception('',e) else
           if exp_exec_err='' then
-            System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + e.Message + #10) else
+          begin
+            System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + e.Message + #10);
+            writeln($'Warning! .sactd updated for {curr_dir}');
+          end else
           if exp_exec_err<>e.Message then
             raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_exec_err}{#10}Got: {e.Message}');
       end;

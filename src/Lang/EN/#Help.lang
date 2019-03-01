@@ -131,7 +131,7 @@
 	i=i+1\
 	Output "iteration "+i\
 	Susp\
-	Jump "#" //(This will create infinite loop)
+	JumpIf i < 10 "#" null //(This will create loop, which would count from 1 to 10)
 
 
 8=\
