@@ -1,8 +1,14 @@
 
 
 %EnterName=\
+	\
+	\
+	\
+	\
+	\
 	Enter directive name for it's description\
-	Enter empty string for list of directives
+	Enter empty string for list of directives\
+	> 
 
 
 

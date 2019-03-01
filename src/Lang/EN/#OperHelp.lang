@@ -1,8 +1,14 @@
 
 
 %EnterName=\
+	\
+	\
+	\
+	\
+	\
 	Enter operator name for it's description\
-	Enter empty string for list of operators
+	Enter empty string for list of operators\
+	> 
 
 H|Key							=Presses/unpresses keyboard button
 T|Key							=\

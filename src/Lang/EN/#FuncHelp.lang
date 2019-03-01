@@ -1,8 +1,14 @@
 
 
 %EnterName=\
+	\
+	\
+	\
+	\
+	\
 	Enter function name for it's description\
-	Enter empty string for list of functions
+	Enter empty string for list of functions\
+	> 
 
 
 

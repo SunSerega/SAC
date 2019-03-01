@@ -45,7 +45,6 @@ begin
       System.Console.Clear;
       writeln(scts[curr]);
       last := curr;
-      loop 3 do writeln;
       writeln(Translate('%EnterID'));
     end;
     
