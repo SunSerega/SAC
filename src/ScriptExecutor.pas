@@ -17,6 +17,7 @@ uses ExprParser;
 
 uses MiscData;
 uses LocaleData;
+uses KCDData;
 
 type
   ScriptExecutionForm=class(Form)
@@ -109,39 +110,12 @@ type
       var n_pause_keys := pause_keys;//ToDo #? 2.pas
       var UpdateKeyList: procedure := ()->
       begin
-        var s := '';
+        var sb := new StringBuilder;
+        var h := 0;
         foreach var key in n_pause_keys do
-        begin
-          s += $'{key} : ';
-          case key of
-            65..90,48..57: s += ChrAnsi(key);
-            96..105: s += $'NUMPAD{key-96}';
-            
-            9: s += 'Tab';
-            20: s += 'CapsLock';
-            27: s += 'Esc';
-            91: s += 'Win';
-            144: s += 'NumLock';
-            192: s += '~';
-            
-            16: s += 'Shift';
-            160: s += 'LShift';
-            161: s += 'RShift';
-            
-            17: s += 'Ctrl';
-            162: s += 'LCtrl';
-            163: s += 'RCtrl';
-            
-            18: s += 'Alt';
-            164: s += 'LAlt';
-            165: s += 'RAlt';
-            
-            else s += '?';
-          end;
-          s += #10;
-        end;
-        KeyList.Height := Min(s.Split(#10).Length*13+5, Output.Height-KeyList.Top+Output.Top);
-        KeyList.Text := s;
+          sb.AppendLine($'{key} : {GetKeyName(key)}');
+        KeyList.Height := Min(h*13+5, Output.Height-KeyList.Top+Output.Top);
+        KeyList.Text := sb.ToString;
       end;
       UpdateKeyList;
       {$endregion Update KeyList}

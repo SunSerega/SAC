@@ -2777,6 +2777,8 @@ type
   
 implementation
 
+uses KCDData;
+
 {$region PreOpt}
 
 function FindNext(self: string; from: integer; ch: char): integer; extensionmethod;
@@ -3276,36 +3278,6 @@ type
   end;
   OptFunc_KeyCode = sealed class(OptNFuncExpr)
     
-    private static lang_spec_keys := new Dictionary<char, byte>;
-    private static named_keys := new Dictionary<string, byte>;
-    
-    static procedure LoadKeys(fname: string);
-    begin
-      var sr := new System.IO.StreamReader(GetResourceStream(fname));
-      
-      while not sr.EndOfStream do
-      begin
-        var s := sr.ReadLine;
-        if s='' then continue;
-        var ss := s.Split('=');
-        if ss[0].Length=1 then
-          lang_spec_keys.Add(ss[0][1].ToLower, byte.Parse(ss[1])) else
-          named_keys.Add(ss[0].ToLower, byte.Parse(ss[1]));
-      end;
-      
-    end;
-    
-    static constructor;
-    begin
-      
-      LoadKeys('RU.kkd');   {$resource 'Key Name-Code Data\RU.kkd'}
-      
-      LoadKeys('Names.kkd');{$resource 'Key Name-Code Data\Names.kkd'}
-      
-    end;
-    
-    
-    
     public procedure CheckParams; override :=
     CheckParamsBase;
     
@@ -3318,14 +3290,7 @@ type
     begin
       var pr := par[0].GetRes;
       if pr is string(var s) then
-        if s.Length = 1 then
-          case s[1] of
-            'A'..'Z': self.res := word(s[1]);
-            '0'..'9': self.res := word(s[1]);
-            'a'..'z': self.res := word(s[1])-32;
-                 else self.res := lang_spec_keys[s[1].ToLower];
-          end else
-          self.res := named_keys[s.ToLower] else
+        self.res := GetKeyCode(s) else
         raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(string), pr?.GetType);
     end;
     

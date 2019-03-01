@@ -7,7 +7,8 @@ end;
 begin
   try
     
-    var bw := new System.IO.BinaryWriter(System.IO.File.Create('lib_pack'));
+    var bw := new System.IO.BinaryWriter(System.IO.File.Create('Packs\lib_pack'));
+    //System.Environment.CurrentDirectory := System.IO.Path.GetDirectoryName(System.Environment.CurrentDirectory);
     
     var saving :=
       'Lib\examples'.Split(#10);

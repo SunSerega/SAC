@@ -11,7 +11,6 @@ type
   Entry=class
     
     static defined := new Dictionary<string, Entry>;
-    static comp_arg_tmpl := '"{0}.pas" ' + $'"{GetCurrentDir}" "Debug=0"';
     static can_finalize := false;
     
     fname: string;
@@ -19,6 +18,13 @@ type
     
     waiting := new List<Entry>;
     next := new List<Entry>;
+    
+    function GetCompArgs(fname: string): string;
+    begin
+      fname := System.IO.Path.GetFullPath(fname);
+      //Result := $'"{System.IO.Path.GetFileName(fname)}.pas" ' + $'"{System.IO.Path.GetDirectoryName(fname)}" "Debug=0"';
+      Result := $'"{fname}.pas" "" "Debug=0"';
+    end;
     
     constructor(fname: string; flags: CompFlags; params wait: array of string);
     begin
@@ -76,7 +82,7 @@ type
           
         comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetcclear.exe"';
         //comp.FileName := '"C:\Program Files (x86)\PascalABC.NET\pabcnetc.exe"';
-        comp.Arguments := string.Format(comp_arg_tmpl, fname);
+        comp.Arguments := GetCompArgs(fname);
         
         p := System.Diagnostics.Process.Start(comp);
         p.WaitForExit;
@@ -182,11 +188,12 @@ begin
     
     new Entry('Test',       exec);
     
-    new Entry('LangPacker', exec);
-    new Entry('LibPacker',  exec);
+    new Entry('LangPacker',       exec);
+    new Entry('Packs\LibPacker',  exec);
+    new Entry('Packs\KCDPacker',  exec);
     
-    new Entry('SAC',        gres or mnft, 'LangPacker');
-    new Entry('Editor',     none,         'LangPacker');
+    new Entry('SAC',        gres or mnft, 'LangPacker', 'Packs\KCDPacker');
+    new Entry('Editor',     none,         'LangPacker', 'Packs\KCDPacker');
     new Entry('FuncHelp',   gres,         'LangPacker');
     new Entry('OperHelp',   gres,         'LangPacker');
     new Entry('DrctHelp',   gres,         'LangPacker');
@@ -194,7 +201,7 @@ begin
     new Entry('WK',         gres,         'LangPacker');
     new Entry('WMP',        gres,         'LangPacker');
     
-    new Entry('Config',     gres or mnft, 'LibPacker', 'WK', 'WMP', 'SAC', 'Editor', 'FuncHelp', 'OperHelp', 'DrctHelp', 'Help');
+    new Entry('Config',     gres or mnft, 'Packs\LibPacker', 'WK', 'WMP', 'SAC', 'Editor', 'FuncHelp', 'OperHelp', 'DrctHelp', 'Help');
     
     Entry.can_finalize := true;
     

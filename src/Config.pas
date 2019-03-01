@@ -410,7 +410,7 @@ type
       FileFromStream('WMP.exe', GetResourceStream('WMP.exe'));
       FileFromStream('SAC.exe', GetResourceStream('SAC.exe'));
       
-      {$resource 'lib_pack'}
+      {$resource 'Packs\lib_pack'}
       LoadLib;
       
       files_loaded := true;
