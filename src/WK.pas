@@ -12,11 +12,13 @@ begin
     LoadSettings;
     writeln(Translate('ColExpl'));
     System.Console.CursorVisible := false;
+    System.Console.CancelKeyPress += procedure(o,e)->e.Cancel := true;
     
     var last_h := 0;
     
     while true do
     begin
+      if System.Console.CursorVisible then System.Console.CursorVisible := false;//Draging window can turn it on ¯\_(ツ)_/¯
       
       var curr_h := 0;
       var sb := new StringBuilder;
@@ -24,7 +26,7 @@ begin
       for var i := 0 to $FF do
         if GetKeyState(i) shr 7 = 1 then
         begin
-          sb.AppendLine($'{i,3} |               ${i:X} |         {ChrAnsi(i)}');
+          sb.AppendLine($'{i,3} |               ${i:X2} |         {ChrAnsi(i)}');
           curr_h += 1;
         end;
       

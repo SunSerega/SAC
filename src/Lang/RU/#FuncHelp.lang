@@ -39,10 +39,9 @@ H|KeyCode					=Получает код клавиши, по её имени
 T|KeyCode					=\
 	KeyP KeyCode("G")\
 	Нажмёт латинскую букву "G" на клавиатуре\
-	Работает только для англ. и русс. букв, а так же некоторых имён, как:\
 	\
-	[,L,R][Shift,Ctrl,Alt] (все 9 комбинаций работают)\
-	SpaceBar,Coma\
+	Работает для всех цифр, англ. букв и всего что указано тут:\
+	https://github.com/SunSerega/SAC/tree/master/src/Key%20Name-Code%20Data\
 	\
 	Обратите внимание, когда вы нажимаете на клавиатуре левый Shift - нажимаются сразу Shift и LShift\
 	Но KeyD KeyCode("LShift") нажмёт только LShift

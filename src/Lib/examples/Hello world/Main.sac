@@ -8,7 +8,7 @@ KeyP KeyCode("L")
 KeyP KeyCode("L")
 KeyP KeyCode("O")
 
-KeyP KeyCode("Coma")
+KeyP KeyCode(",")
 KeyP KeyCode("SpaceBar")
 
 KeyP KeyCode("W")

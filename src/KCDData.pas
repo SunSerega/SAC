@@ -2,11 +2,17 @@
 
 interface
 
-function GetKeyCode(s: string): byte;
+function GetKeyCode(key: string): byte;
 
-function GetKeyName(k: byte): string;
+function GetKeyName(key: byte): string;
 
-type KeyDataNotFoundException = class(Exception) end;
+type 
+  KeyDataNotFoundException = class(Exception)
+    
+    constructor(key: string) :=
+    inherited Create($'Undefined key: "{key}"');
+    
+  end;
 
 implementation
 
@@ -14,37 +20,36 @@ var
   lang_spec_keys := new List<(char, byte)>;
   named_keys := new List<(string, byte)>;
 
-function GetKeyCode(s: string): byte;
+function GetKeyCode(key: string): byte;
 begin
-  if s.Length=1 then
-    case s[1] of
-      'A'..'Z': Result := word(s[1]);
-      '0'..'9': Result := word(s[1]);
-      'a'..'z': Result := word(s[1])-32;
+  var s := key.ToLower;
+  var res := named_keys.FirstOrDefault(t->t[0].ToLower=s);
+  
+  if res<>nil then
+    Result := res[1] else
+    case key[1] of
+      'A'..'Z': Result := word(key[1]);
+      '0'..'9': Result := word(key[1]);
+      'a'..'z': Result := word(key[1])-32;
       else
         begin
-          var ch := s[1].ToUpper;
-          var res := lang_spec_keys.FirstOrDefault(t->t[0]=ch);
-          if res=nil then raise new KeyDataNotFoundException;
-          Result := res[1];
+          var ch := key[1].ToUpper;
+          var res2 := lang_spec_keys.FirstOrDefault(t->t[0]=ch);
+          if res2=nil then raise new KeyDataNotFoundException(key);
+          Result := res2[1];
         end;
-    end else
-    begin
-      s := s.ToLower;
-      var res := named_keys.FirstOrDefault(t->t[0].ToLower=s);
-      if res=nil then raise new KeyDataNotFoundException;
-      Result := res[1];
     end;
+  
 end;
 
-function GetKeyName(k: byte): string;
+function GetKeyName(key: byte): string;
 begin
-  case k of
-    65..90: Result := char(k);
-    48..57: Result := char(k);
+  case key of
+    65..90:   Result := char(key);
+    48..57:   Result := char(key);
     else
       begin
-        var res := named_keys.FirstOrDefault(kvp->kvp[1]=k);
+        var res := named_keys.FirstOrDefault(kvp->kvp[1]=key);
         Result := res=nil?'?':res[0];
       end;
   end;
