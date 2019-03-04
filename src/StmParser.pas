@@ -1,13 +1,12 @@
 ﻿unit StmParser;
-//ToDo сейчас надо добавить тесты и справку для !SngDef
-
-//ToDo тесты для всех программ из справки
-
-//ToDo операторы ReadText и Alert, работающие через месседж боксы
+//ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
 
 //ToDo Контекст ошибок
 //ToDo Сделать выбор файла в !lib_m
-//ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
+//ToDo тесты для всех программ из справки
+
+//ToDo операторы ReadText и Alert, работающие через месседж боксы
+//ToDo оператор Assert
 
 //ToDo Удалять Call null
 // - А Jump null можно заменять на Return
@@ -331,6 +330,12 @@ type
     
     public constructor(source: object) :=
     inherited Create(source, $'Output stream was null');
+    
+  end;
+  WrongConstTypeException = class(InnerException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'const had wrong type, not double nor string');
     
   end;
   
@@ -830,6 +835,10 @@ type
     //ToDo #1502
 //    public constructor(fname: string) :=
 //    Create(fname, new ExecParams);
+    
+    public procedure AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
+    
+    public procedure ReplaceAllConstsFor(oe: OptExprWrapper);
     
     public procedure Optimize;
     
@@ -3785,36 +3794,11 @@ type
     
     public Access: VarAccessT;
     
-    public procedure SetForScript;
-    begin
-      
-      if Access=VarAccessT.init_only then
-      begin
-        if
-          scr.SngDefConsts.ContainsKey(vname) or
-          scr.SngDefNums.ContainsKey(vname) or
-          scr.SngDefStrs.ContainsKey(vname)
-        then raise new CannotOverrideConstException(nil);//ToDo надо отдельное исключение, потому что это не совсем отражает проблему
-        
-        scr.SngDefConsts[vname] := val;
-        
-      end else
-      begin
-        if scr.SngDefConsts.ContainsKey(vname) then raise new CannotOverrideConstException(nil);
-        if (IsNum?scr.SngDefStrs:scr.SngDefNums).ContainsKey(vname) then raise new ConflictingVarTypesException(nil);
-        
-        (IsNum?scr.SngDefNums:scr.SngDefStrs)
-        [vname] := (Access=VarAccessT.read_only, bl.fname);
-        
-      end;
-      
-    end;
-    
     
     
     public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       var ss := par[1].SmartSplit(':',2);
       
@@ -3839,6 +3823,7 @@ type
         
         var e := Expr.FromString(ss[1]);
         var oe := OptExprWrapper.FromExpr(e);
+        bl.scr.ReplaceAllConstsFor(oe);
         var main := oe.Optimize(new HashSet<string>, new HashSet<string>).GetMain;
         if not (oe is IOptLiteralExpr) then raise new ConstExprExpectedException(ss[1], main);
         
@@ -3850,7 +3835,7 @@ type
       
     end;
     
-    public procedure PostInit; override := SetForScript;
+    public procedure PostInit; override := scr.AddSngDef(vname, IsNum, val, Access, bl.fname);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -4128,6 +4113,10 @@ begin
   if ep.SupprIO then
     self.SupprIO := new SuppressedIOData;
   
+  var sc_sz := System.Windows.Forms.Screen.PrimaryScreen.WorkingArea.Size;
+  AddSngDef('WW', true, real(sc_sz.Width),  VarAccessT.init_only, nil);
+  AddSngDef('WH', true, real(sc_sz.Height), VarAccessT.init_only, nil);
+  
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
   
   if read_start_lbl_name.Contains('#') then
@@ -4226,6 +4215,8 @@ end;
 
 procedure ExecutingContext.SetVar(vname:string; val: object);
 begin
+  if scr.SngDefConsts.ContainsKey(vname) then raise new CannotOverrideConstException(nil);
+  
   if val is real then
   begin
     if scr.SngDefStrs.ContainsKey(vname) then raise new VarDefOtherTException(nil);
@@ -4251,6 +4242,45 @@ end;
 {$endregion Misc Impl}
 
 {$region Script optimization}
+
+procedure Script.AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
+begin
+  
+  if Access=VarAccessT.init_only then
+  begin
+    if
+      SngDefConsts.ContainsKey(vname) or
+      SngDefNums.ContainsKey(vname) or
+      SngDefStrs.ContainsKey(vname)
+    then raise new CannotOverrideConstException(nil);//ToDo надо отдельное исключение, потому что это не совсем отражает проблему
+    
+    SngDefConsts[vname] := val;
+    
+  end else
+  begin
+    if SngDefConsts.ContainsKey(vname) then raise new CannotOverrideConstException(nil);
+    if (IsNum?SngDefStrs:SngDefNums).ContainsKey(vname) then raise new ConflictingVarTypesException(nil);
+    
+    (IsNum?SngDefNums:SngDefStrs)
+    [vname] := (Access=VarAccessT.read_only, fname);
+    
+  end;
+  
+end;
+
+procedure Script.ReplaceAllConstsFor(oe: OptExprWrapper) :=
+foreach var c: KeyValuePair<string, object> in SngDefConsts do
+begin
+  
+  var le: OptExprBase;
+  if c.Value is real    then le := new OptNLiteralExpr(real(c.Value)) else
+  if c.Value is string  then le := new OptSLiteralExpr(string(c.Value)) else
+  if c.Value = nil      then le := new OptNullLiteralExpr else
+  raise new WrongConstTypeException(nil);
+  
+  oe.ReplaceVar(c.Key, le);
+  
+end;
 
 type
   GBCResT = (
@@ -4382,6 +4412,15 @@ end;
 
 procedure Script.Optimize;
 begin
+  
+  foreach var bl: StmBlock in sbs.Values do
+    foreach var stm in bl.stms do
+      foreach var oe in stm.GetAllExprs do
+        self.ReplaceAllConstsFor(oe);
+  
+  if not settings.lib_mode then
+    foreach var key in SngDefConsts.Keys.ToArray do
+      SngDefConsts[key] := nil;//Они больше никогда не понадобятся. Но для ExecutingContext.SetVar надо всё же оставить ключи
   
   var try_opt_again := true;
   var mini_opt := true;

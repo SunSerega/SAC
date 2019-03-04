@@ -1,4 +1,5 @@
 ﻿unit MiscData;
+{$reference System.Windows.Forms.dll}
 
 {$region Loging}
 

@@ -33,6 +33,29 @@ T|StartPos						=\
 	\
 	If there is no !StartPos directive in script - every block is valid start position\
 	\
-	Adding this directive not only helps compiler help you\
-	It also enables a lot more optimizations
+	Other then foolproof, !StartPos also helps compiler to do more optimization's
 
+
+H|SngDef						=Defines some properties for variable
+T|SngDef						=\
+	!SngDef n1=Num             (n1 is defined as Num, it now can't be set to Str value)\
+	!SngDef n2=Num:ReadOnly    (n2 can only be set in file that contains this directive)\
+	!SngDef n3=Num:Const=1.23  (n3 set to constant value. It can never be changed)\
+	\
+	!SngDef s1=Str             (s1 is defined as Str, it now can't be set to Num value)\
+	!SngDef s2=Str:ReadOnly    (s2 can only be set in file that contains this directive)\
+	!SngDef s3=Str:Const="abc" (s3 set to constant value. It can never be changed)\
+	\
+	ReadOnly variable can be used as return value of .sac file\
+	Because only file that defined it would be able to edit it's value\
+	And other files would only be able to read it's value\
+	Though, multiple files may have common ReadOnly variable, as long as type is consistant\
+	\
+	You can also use expressions when setting constants:\
+	\
+	!SngDef Pi=Num:Const=3.14\
+	!SngDef 2Pi=Num:Const=Pi*2\
+	\
+	During optimization occurrences of all const variables would be replaced with their values\
+	\
+	Other then foolproof, !SngDef also helps compiler to do more optimization's
