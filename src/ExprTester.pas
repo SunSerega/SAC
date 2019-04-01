@@ -493,9 +493,10 @@ begin
   //exit;
   
   var skiping: integer;
-  //skiping := 3395763;
+  //skiping := 6;
   var n := 0;
   
+  // 4M+ tests
   foreach var te in TestExpr.GetAnyExprs(true, 3) do
   try
     n += 1;
@@ -523,6 +524,7 @@ begin
     
     var e := Expr.FromString(s);
     var oe := OptExprWrapper.FromExpr(e).FinalOptimize(nvs.Keys.ToHashSet, svs.Keys.ToHashSet, ovs.Keys.ToHashSet);
+    oe.ResetCalc;
     var res2 := ExprRes(oe.Calc(cnvs, csvs));
     
     if ExprRes.CalcEqu(res1,res2) < 0.2 then
@@ -542,6 +544,7 @@ begin
       write('-'*50);
       res1 := ExprRes(te.GetExpRes);
       oe := OptExprWrapper.FromExpr(e).FinalOptimize(nvs.Keys.ToHashSet, svs.Keys.ToHashSet, ovs.Keys.ToHashSet);
+      oe.ResetCalc;
       res2 := ExprRes(oe.Calc(cnvs, csvs));
       var b := ExprRes.CalcEqu(res1,res2);
       readln;

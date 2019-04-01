@@ -1,6 +1,4 @@
 ﻿unit ExprParser;
-//ToDo не забыть добавить NumChecks и StrChecks всюду. правильное копирование. может что то ещё
-// - ещё стоит удалять ключи, когда при оптимизации получили инфу что переменная и так не может быть не того типа
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
 // - наверное всё же контекст ошибок придётся сделать для этого
@@ -12,8 +10,6 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
-// - #791//ToDo исправлено
-// - #1417//ToDo исправлено
 // - #1418
 
 interface
@@ -1577,14 +1573,14 @@ type
             if res1.Base = nil then
               res1.Base := oe as OptSExprBase else
               
-              //--------//ToDo #1417 //ToDo #1418
+              //-------- //ToDo #1418
               //raise new CannotMltALotStringsException(self, new object[](nres.Base, oe)) else
               raise new CannotMltALotStringsException(nil, new object[](nil, nil));
               //--------
               
           end else
             
-            //--------//ToDo #1417 //ToDo #1418
+            //-------- //ToDo #1418
             //p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(self,new object[](Base, oe))));
             p.Positive.Add(AsDefinitelyNumExpr(oe, procedure->raise new CannotMltALotStringsException(nil,new object[](nil, nil))));
             //--------
@@ -2424,7 +2420,7 @@ type
       begin
         if not CB_N then raise new ConflictingExprTypesException(nil, nil);
         if asvn.Contains(name) or gsvn.Contains(name) or lsvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
-        if aovn.Contains(name) and not NumChecks.ContainsKey(name) then NumChecks[name] := nil;
+        if aovn.Contains(name) and not NumChecks.ContainsKey(name) then NumChecks[name] := nil; //ToDo
         
         lovn.Remove(name); lnvn.Add(name);
         if aovn.Remove(name) then anvn.Add(name);
@@ -2435,7 +2431,7 @@ type
       begin
         if not CB_S then raise new ConflictingExprTypesException(nil, nil);
         if anvn.Contains(name) or gnvn.Contains(name) or lnvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
-        if aovn.Contains(name) and not StrChecks.ContainsKey(name) then StrChecks[name] := nil;
+        if aovn.Contains(name) and not StrChecks.ContainsKey(name) then StrChecks[name] := nil; //ToDo
         
         lovn.Remove(name); lsvn.Add(name);
         if aovn.Remove(name) then asvn.Add(name);
@@ -2865,13 +2861,11 @@ begin
   while n+str.Length-1 < self.Length do
   begin
     
-    var self_copy := self;//ToDo #791
-    
     if self[n] = '"' then
       n := self.FindNext(n+1,'"') else
     if self[n] = '(' then
       n := self.FindNext(n+1,')') else
-    if 1.&To(str.Length).All(i->self_copy[n+i-1] = str[i]) then
+    if 1.&To(str.Length).All(i->self[n+i-1] = str[i]) then
     begin
       wsp += n;
       if wsp.Count = c then break;
@@ -3729,6 +3723,11 @@ begin
     true, true,
     nNumChecks, nStrChecks
   );
+  
+  //ToDo вообще криво как то, DeduseVarsTypes создаёт контекст для всего из g_vn, а тут его сразу удаляет.
+  //А зачем его вообще там создаёт?
+  foreach var vname in gnvn do nNumChecks.Remove(vname);
+  foreach var vname in gsvn do nStrChecks.Remove(vname);
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
   var s_vars := ArrFill(lsvn.Count, '');
