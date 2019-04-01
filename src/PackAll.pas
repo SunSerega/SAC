@@ -23,7 +23,7 @@ type
     begin
       fname := System.IO.Path.GetFullPath(fname);
       //Result := $'"{System.IO.Path.GetFileName(fname)}.pas" ' + $'"{System.IO.Path.GetDirectoryName(fname)}" "Debug=0"';
-      Result := $'"{fname}.pas" "" "Debug=0"';
+      Result := $'"{fname}.pas"';
     end;
     
     constructor(fname: string; flags: CompFlags; params wait: array of string);

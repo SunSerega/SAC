@@ -383,6 +383,20 @@ type
       br.BaseStream.Position := 0;
     end;
     
+    static procedure UpdateExplorer;
+    begin
+      var si := new System.Diagnostics.ProcessStartInfo('cmd');
+      si.UseShellExecute := false;
+      si.RedirectStandardInput := true;
+      si.RedirectStandardOutput := true;
+      var p := System.Diagnostics.Process.Start(si);
+      var sw := p.StandardInput;
+      sw.WriteLine('ie4uinit.exe -ClearIconCache');
+      sw.WriteLine('ie4uinit.exe -show');//Win10
+      sw.WriteLine('exit');
+      p.WaitForExit;
+    end;
+    
     procedure Load;
     begin
       
@@ -690,7 +704,8 @@ type
       
       
       if not rest_needed then exit;
-      MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK);
+      UpdateExplorer;
+      //MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK);
     end;
     
     procedure ClearAndExit;
