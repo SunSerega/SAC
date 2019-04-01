@@ -1,12 +1,16 @@
 ﻿unit StmParser;
-//ToDo 0\0.sac - добавить в тесты (и там немного недооптимизировало, второе need_cont тоже %Num)
+
 //ToDo оператор Assert
-//ToDo тесты !SngDef
 //ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
 
 //ToDo а что будет если присвоить константе null? протестить
 
-//ToDo если в "KeyP key" компилятор знал что key это Str - получаем внутреннюю ошибку. А надо обычную.
+//ToDo в каждом операторе надо хранить имя начального файла
+// - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
+// - вообще это надо засунуть в контекст ошибок. Это не костыль, ибо ReadOnly переменные тоже для ошибок существуют
+// - когда будет готово - добавить проверку и в ExecutingContext.SetVar . Это важно, но не смертельно, так что можно и подождать контекста ошибок
+
+
 
 //ToDo Контекст ошибок
 //ToDo Сделать выбор файла в !lib_m
@@ -203,6 +207,12 @@ type
     
     public constructor(source: object) :=
     inherited Create(source, $'Cannot override const');
+    
+  end;
+  CannotOverrideReadonlyException = class(FileCompilingException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Cannot override readonly var''s from file, where they are not defined');
     
   end;
   InvalidUseOfConstDefException = class(FileCompilingException)
@@ -467,9 +477,10 @@ type
     
     public procedure Push(bl: StmBlock);
     begin
+      if CallStack.Count >= max_recursion then raise new RecursionTooBig(scr, max_recursion);
+      
       CallStack.Push(bl);
-      if CallStack.Count > max_recursion then
-        raise new RecursionTooBig(scr, max_recursion);
+      
     end;
     
     public function Pop(var bl: StmBlock): boolean;
@@ -513,6 +524,8 @@ type
     new OptExprWrapper[0];
     
     
+    
+    public procedure CheckSngDef; virtual := exit;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; virtual := self;
     
@@ -584,6 +597,8 @@ type
         Result := new ExprStm(vname, ne, bl, scr);
       
     end;
+    
+    public procedure CheckSngDef; override;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override;
     begin
@@ -848,6 +863,25 @@ type
     
     public procedure AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
     
+    public procedure AllCheckSngDef :=
+    foreach var bl in sbs.Values do
+      foreach var stm in bl.stms do
+        stm.CheckSngDef;
+    
+    public procedure CheckCanOverride(vname, fname: string);
+    begin
+      if SngDefConsts.ContainsKey(vname) then raise new CannotOverrideConstException(nil);
+      var def: (boolean, string);
+      
+      if SngDefNums.ContainsKey(vname) then def := SngDefNums[vname] else
+      if SngDefStrs.ContainsKey(vname) then def := SngDefStrs[vname] else
+        exit;
+      
+      if def[0] and (def[1] <> fname) then
+        raise new CannotOverrideReadonlyException(nil);
+      
+    end;
+    
     public procedure ReplaceAllConstsFor(oe: OptExprWrapper);
     
     public procedure Optimize;
@@ -893,7 +927,7 @@ type
       begin
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
-        var fname := br.ReadString;
+        var fname := CombinePaths(main_path, br.ReadString);
         self.SngDefStrs.Add(vname, (is_readonly, fname));
       end;
       
@@ -901,7 +935,7 @@ type
       begin
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
-        var fname := br.ReadString;
+        var fname := CombinePaths(main_path, br.ReadString);
         self.SngDefNums.Add(vname, (is_readonly, fname));
       end;
       
@@ -1188,6 +1222,7 @@ type
         if not curr.scr.sbs.ContainsKey(res) then
         begin
           curr.scr.ReadFile(nil, res);
+          curr.scr.AllCheckSngDef;
           
           if not curr.scr.sbs.ContainsKey(res) then
             raise new LabelNotFoundException(nil, res);
@@ -2451,6 +2486,9 @@ type
       self.scr := bl.scr;
     end;
     
+    public procedure CheckSngDef; override :=
+    scr.CheckCanOverride(vname, bl.fname);
+    
     public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       Result := self;
@@ -2514,6 +2552,9 @@ type
       self.bl := bl;
       self.scr := bl.scr;
     end;
+    
+    public procedure CheckSngDef; override :=
+    scr.CheckCanOverride(vname, bl.fname);
     
     public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
     begin
@@ -2682,6 +2723,9 @@ type
       self.scr := bl.scr;
     end;
     
+    public procedure CheckSngDef; override :=
+    scr.CheckCanOverride(vname, bl.fname);
+    
     public function Simplify(nkk: InputNValue; nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       
@@ -2780,6 +2824,9 @@ type
       self.scr := bl.scr;
     end;
     
+    public procedure CheckSngDef; override :=
+    scr.CheckCanOverride(vname, bl.fname);
+    
     public function Simplify(nkk: InputNValue; nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       
@@ -2866,6 +2913,12 @@ type
       
       x := par[1];
       y := par[2];
+    end;
+    
+    public procedure CheckSngDef; override;
+    begin
+      scr.CheckCanOverride(x, bl.fname);
+      scr.CheckCanOverride(y, bl.fname);
     end;
     
     public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
@@ -3696,6 +3749,9 @@ type
       vname := par[1];
     end;
     
+    public procedure CheckSngDef; override :=
+    scr.CheckCanOverride(vname, bl.fname);
+    
     public function Simplify(nvn, svn, ovn: HashSet<string>): StmBase;
     begin
       Result := self;
@@ -4068,6 +4124,7 @@ begin
   
   main_path := main_path.Remove(main_path.LastIndexOf('\'));
   ReadFile(nil, read_start_lbl_name);
+  AllCheckSngDef;
   
   self.Optimize;
 end;
@@ -4162,10 +4219,17 @@ begin
   
   if val is real then
   begin
-    if scr.SngDefStrs.ContainsKey(vname) then raise new VarDefOtherTException(nil);
     
-    svs.Remove(vname);
-    nvs[vname] := real(val);
+    if scr.SngDefStrs.ContainsKey(vname) then
+    begin
+      nvs.Remove(vname);
+      svs[vname] := StmBase.ObjToStr(val)
+    end else
+    begin
+      svs.Remove(vname);
+      nvs[vname] := real(val);
+    end;
+    
   end else
   if val is string then
   begin
@@ -4173,6 +4237,7 @@ begin
     
     nvs.Remove(vname);
     svs[vname] := string(val);
+    
   end else
   begin
     nvs.Remove(vname);
@@ -4181,6 +4246,31 @@ begin
 end;
 
 {$endregion ExecutingContext}
+
+{$region StmExpr}
+
+procedure ExprStm.CheckSngDef;
+begin
+  scr.CheckCanOverride(vname, bl.fname);
+  var main := e.GetMain;
+  
+  if scr.SngDefNums.ContainsKey(vname) then
+  begin
+    
+    if main is OptSExprBase then raise new VarDefOtherTException(nil) else
+    if main is OptOExprBase then e.SetMain(ExprParser.OptExprBase.AsDefinitelyNumExpr(e.GetMain, ()->raise new VarDefOtherTException(nil)));
+    
+  end else
+  if scr.SngDefStrs.ContainsKey(vname) then
+  begin
+    
+    if not (main is OptSExprBase) then e.SetMain(ExprParser.OptExprBase.AsStrExpr(e.GetMain));
+    
+  end;
+  
+end;
+
+{$endregion StmExpr}
 
 {$endregion Misc Impl}
 
@@ -4236,7 +4326,6 @@ type
 
 function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): GBCResT;
 begin
-  
   var curr := bl;
   
   var nvn := new HashSet<string>;
@@ -4846,7 +4935,10 @@ begin
         var inp := ref.Optimize(new HashSet<string>,new HashSet<string>);
         if inp is SInputSValue then
           if ReadFile(nil, inp.res) then
+          begin
             nopt := false;
+            AllCheckSngDef;
+          end;
       end;
       
     until nopt;
@@ -4892,7 +4984,7 @@ begin
   begin
     bw.Write(kvp.Key);
     bw.Write(kvp.Value[0]);
-    bw.Write(kvp.Value[1]);
+    bw.Write(GetRelativePath(main_path, kvp.Value[1]));
   end;
   
   bw.Write(self.SngDefNums.Count);
@@ -4900,7 +4992,7 @@ begin
   begin
     bw.Write(kvp.Key);
     bw.Write(kvp.Value[0]);
-    bw.Write(kvp.Value[1]);
+    bw.Write(GetRelativePath(main_path, kvp.Value[1]));
   end;
   
   var sbbs :=

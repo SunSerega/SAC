@@ -1,0 +1,31 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+MousePos 179 865 //Const
+Sleep 100 //Const
+MouseP 1 //Const
+Sleep 100 //Const
+MousePos 398 509 //Const
+MouseP 1 //Const
+Sleep 200 //Const
+GetKey 160 need_cont //Const
+JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"
+
+\#loop
+MouseP 1 //Const
+Sleep 200 //Const
+GetKey 160 need_cont //Const
+JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"
+
+\#break
+Susp //Const
+MousePos 179 865 //Const
+Sleep 100 //Const
+MouseP 1 //Const
+Sleep 100 //Const
+MousePos 398 509 //Const
+MouseP 1 //Const
+Sleep 200 //Const
+GetKey 160 need_cont //Const
+JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"

@@ -1,0 +1,3 @@
+﻿
+#ExpCompErr
+Precompiling error in block : Cannot override readonly var's from file, where they are not defined

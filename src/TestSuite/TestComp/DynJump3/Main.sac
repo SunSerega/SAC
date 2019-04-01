@@ -1,0 +1,16 @@
+
+MousePos 179 865
+Sleep 100
+MouseP 1
+Sleep 100
+MousePos 398 509
+
+#loop
+MouseP 1
+Sleep 200
+GetKey KeyCode("LShift") need_cont
+JumpIf need_cont = 1 "#loop" "#break"
+#break
+
+Susp
+Jump "#"

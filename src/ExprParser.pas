@@ -1,12 +1,13 @@
 ﻿unit ExprParser;
+//ToDo Контекст ошибок
+//ToDo Функции округления чисел (Floor, Round, Ceil)
+//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
+
+//ToDo OptExpr пуе_var_types_string
+// - и убрать все +%Num и т.п. Вся дебаг инфа должна быть в комментариях
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
 // - наверное всё же контекст ошибок придётся сделать для этого
-
-//ToDo Контекст ошибок
-//ToDo Костанты WW и WH
-//ToDo Функции округления чисел (Int, Round, Ceil)
-//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
@@ -3704,11 +3705,11 @@ begin
   
   
   
-  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
-  if n_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(object));
+  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  //if n_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(object), typeof(real));
   
-  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
-  if s_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(object));
+  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+  //if s_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(object), typeof(string));
   
   var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
