@@ -8,7 +8,7 @@ GetKey 1 n //Const
 Call "Main.sac\#lbl1" //Const
 Output "test1" //Const
 Output "test2" //Const
-Jump Str(n)
+Jump Str((n+%Num))
 
 \#lbl1
 Output "test2" //Const

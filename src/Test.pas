@@ -1,15 +1,20 @@
 ﻿uses StmParser;
 
-uses MiscData;
-uses LocaleData;
-
 { $define SingleThread}
 { $define WriteDone}
 
+uses System.Windows.Forms;
+uses System.Drawing;
+
+uses MiscData;
+uses LocaleData;
 
 
+
+///Result=True когда времени не хватило
 function TimedExecute(p: procedure; t: integer): boolean;
 begin
+  {$ifndef SingleThread}
   var res := false;
   var err: Exception;
   
@@ -34,9 +39,13 @@ begin
   
   if err<>nil then raise new Exception('',err);
   Result := res;
+  {$else}
+  p;
+  {$endif}
 end;
 
 type
+  
   TesterException = class(Exception)
     constructor(text: string) :=
     inherited Create(text);
@@ -147,6 +156,43 @@ type
     function TemplatedCompile: Script;
     const TimeToComp=2000;
     begin
+      var handle_exc: Exception->() := e->//ToDo #1814
+      begin
+        var ie := e;
+        while ie.InnerException<>nil do ie := ie.InnerException;
+        var err_text := ie.Message;
+        
+        if exp_comp_err=nil then
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'error:'#10 + e.ToString + #10#10#10'Add this to expected errors?', $'Unexpected Exception', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + err_text + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end else
+        if exp_comp_err='' then
+        begin
+          System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + err_text + #10);
+          writeln($'Warning! .sactd updated for {curr_dir}{#10}');
+        end else
+        if exp_comp_err<>err_text then
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'exp:'#10 + exp_comp_err + #10#10#10'got:'#10 + err_text + #10#10#10'error:'#10 + e.ToString + #10#10#10'Add this to expected errors?', $'Wrong error text', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + err_text + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
+      end;
+      
       try
         
         var s: Script;
@@ -169,7 +215,18 @@ type
           exp_opt_code := opt_code;
         end else
         if opt_code <> exp_opt_code then
-          raise new TesterException($'{curr_dir}: Error, wrong code!{#10}');
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'exp:'#10 + exp_opt_code + #10#10#10'got:'#10 + opt_code + #10#10#10'Update expected code?', $'Wrong code', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}');
+              exp_opt_code := opt_code;
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
         
         if TimedExecute(
           procedure->loop 10 do s.Optimize,
@@ -179,21 +236,23 @@ type
         
         opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
         if opt_code <> exp_opt_code then
-          raise new TesterException($'{curr_dir}: Error, wrong code after optimize!{#10}');
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'exp:'#10 + exp_opt_code + #10#10#10'got:'#10 + opt_code + #10, $'Wrong code after optimizing', MessageBoxButtons.OKCancel) of
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
         
         Result := s;
         
+        if exp_comp_err<>nil then
+          raise new TesterException($'{curr_dir}: Error, expected error not found{#10}');
+        
       except
+        on e: TesterException do raise new TesterException(e.Message);
         on e: Exception do
-          if exp_comp_err=nil then
-            raise e else
-          if exp_comp_err='' then
-          begin
-            System.IO.File.AppendAllText(sfn, #10' #ExpCompErr'#10 + e.Message + #10);
-            writeln($'Warning! .sactd updated for {curr_dir}');
-          end else
-          if exp_comp_err<>e.Message then
-            raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_comp_err}{#10}Got: {e.Message}');
+        begin
+          handle_exc(e);//ToDo #1814
+        end;
       end;
     end;
     
@@ -219,7 +278,7 @@ type
       
     except
       on e: TesterException do writeln(e.Message);
-      on e: Exception do writeln($'Exception in {dir}: {_ObjectToString(e)}');
+      on e: Exception do writeln($'Exception in {dir}: {e}');
     end;
     
   end;
@@ -246,6 +305,44 @@ type
     procedure TemplatedExecute(s: Script);
     const TimeToExec=5000;
     begin
+      var handle_exc: Exception->() := e->//ToDo #1814
+      begin
+        var ie := e;
+        while ie.InnerException<>nil do ie := ie.InnerException;
+        var err_text := ie.Message;
+        
+        if exp_exec_err=nil then
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'error:'#10 + e.ToString + #10#10#10'Add this to expected errors?', $'Unexpected Exception when executing', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + err_text + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end else
+        if exp_exec_err='' then
+        begin
+          System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + err_text + #10);
+          writeln($'Warning! .sactd updated for {curr_dir}');
+        end else
+        if exp_exec_err<>err_text then
+        case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'exp:'#10 + exp_exec_err + #10#10#10'got:'#10 + err_text + #10#10#10'error:'#10 + e.ToString + #10#10#10'Add this to expected errors?', $'Wrong error text', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + err_text + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
+        
+      end;
+      
       try
         
         var otp := new StringBuilder;
@@ -267,19 +364,27 @@ type
           writeln($'Warning! .sactd updated for {curr_dir}');
         end else
         if otp_str <> exp_otp then
-          raise new TesterException($'{curr_dir}: Error, wrong output!{#10}');
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'exp:'#10 + exp_otp + #10#10#10'got:'#10 + otp_str + #10#10#10'Update expected output?', $'Wrong output', MessageBoxButtons.YesNoCancel) of
+            
+            DialogResult.Yes:
+            begin
+              System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10);
+              writeln($'%Warning! .sactd updated for {curr_dir}');
+            end;
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
+        
+        if exp_exec_err<>nil then
+          raise new TesterException($'{curr_dir}: Error, expected error not found{#10}');
         
       except
+        on e: TesterException do raise new TesterException(e.Message);
         on e: Exception do
-          if exp_exec_err=nil then
-            raise new Exception('',e) else
-          if exp_exec_err='' then
-          begin
-            System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + e.Message + #10);
-            writeln($'Warning! .sactd updated for {curr_dir}');
-          end else
-          if exp_exec_err<>e.Message then
-            raise new TesterException($'{curr_dir}: Error, wrong error text!{#10}Exp: {exp_exec_err}{#10}Got: {e.Message}');
+        begin
+          handle_exc(e);//ToDo #1814
+        end;
       end;
     end;
     
@@ -322,7 +427,7 @@ begin
     {$endif}
     
     Writeln('Done testing');
-    if not System.Console.IsOutputRedirected then readln;
+    if not System.Console.IsOutputRedirected then ReadlnString('Press Enter to exit');
     
   except
     on e: Exception do

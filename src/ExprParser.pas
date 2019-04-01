@@ -1,4 +1,9 @@
 ﻿unit ExprParser;
+//ToDo не забыть добавить NumChecks и StrChecks всюду. правильное копирование. может что то ещё
+// - ещё стоит удалять ключи, когда при оптимизации получили инфу что переменная и так не может быть не того типа
+
+//ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
+// - наверное всё же контекст ошибок придётся сделать для этого
 
 //ToDo Контекст ошибок
 //ToDo Костанты WW и WH
@@ -7,8 +12,8 @@
 
 //ToDo Проверить, не исправили ли issue компилятора
 // - #533
-// - #791
-// - #1417
+// - #791//ToDo исправлено
+// - #1417//ToDo исправлено
 // - #1418
 
 interface
@@ -175,6 +180,19 @@ type
     end;
     
   end;
+  
+  ValueCannotBeNum = class(ExprCompilingException)
+    
+    public constructor(sender: object) :=
+    inherited Create(sender, $'value can''t be Num');
+    
+  end;
+  ValueCannotBeStr = class(ExprCompilingException)
+    
+    public constructor(sender: object) :=
+    inherited Create(sender, $'value can''t be Str');
+    
+  end;
   UnknownFunctionNameException = class(ExprCompilingException)
     
     public constructor(sender: object; func_name: string) :=
@@ -250,7 +268,7 @@ type
   UndefinedKeyNameException = class(ExprCompilingException)
     
     public constructor(sender: object; s: string) :=
-    inherited Create(sender, $'Key name [> {s} <] not defined');//ToDo test for s too big
+    inherited Create(sender, $'Key name [> {s} <] not defined');//ToDo test for s too long
     
   end;
   
@@ -493,7 +511,7 @@ type
     function UnFixVarExprs(nn, ns, no: array of string): IOptExpr;
     function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
     function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr;
-    procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean);
+    procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks, StrChecks: Dictionary<string, ExprContextArea>);
     function IsSame(oe: IOptExpr): boolean;
     
     function Optimize: IOptExpr;
@@ -570,13 +588,13 @@ type
     public function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr; virtual :=
     TransformAllSubExprs(se->se.ReplaceVar(vn,oe));
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); virtual;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N,CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); virtual;
     begin
       
       if (self as object is OptNExprBase) and not CB_N then raise new ConflictingExprTypesException(nil,nil);
       if (self as object is OptSExprBase) and not CB_S then raise new ConflictingExprTypesException(nil,nil);
       
-      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, true));
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,true, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; abstract;
@@ -834,10 +852,10 @@ type
       foreach var oe in Negative do oe.ClampLists;
     end;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_N then raise new ConflictingExprTypesException(nil,nil);
-      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,false, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -1030,10 +1048,10 @@ type
       foreach var oe in Positive do oe.ClampLists;
     end;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_S then raise new ConflictingExprTypesException(nil,nil);
-      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false, true));
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false,true, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -1420,10 +1438,10 @@ type
       foreach var oe in Negative do oe.ClampLists;
     end;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_N then raise new ConflictingExprTypesException(nil,nil);
-      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,false, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -1609,11 +1627,12 @@ type
       Positive.ClampLists;
     end;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_S then raise new ConflictingExprTypesException(nil,nil);
-      Base.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false, true);
-      Positive.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false);
+      Base    .DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, false,true, NumChecks,StrChecks);
+      Positive.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,false, NumChecks,StrChecks);
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,false, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -2070,10 +2089,10 @@ type
       foreach var oe in Positive do oe.ClampLists;
     end;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_N then raise new ConflictingExprTypesException(nil,nil);
-      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true, false));
+      ExecuteOnEverySubExpr(oe->oe.DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, true,false, NumChecks,StrChecks));
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -2197,12 +2216,12 @@ type
     public procedure ClampLists; override :=
     foreach var oe in par do oe.ClampLists;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_N then raise new ConflictingExprTypesException(nil,nil);
       var tps := self.GetTps;
       for var i := 0 to tps.Length-1 do
-        par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i] <> typeof(string), tps[i] <> typeof(real));
+        par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i]<>typeof(string),tps[i]<>typeof(real), NumChecks,StrChecks);
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -2313,12 +2332,12 @@ type
     public procedure ClampLists; override :=
     foreach var oe in par do oe.ClampLists;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks,StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
       if not CB_S then raise new ConflictingExprTypesException(nil,nil);
       var tps := self.GetTps;
       for var i := 0 to tps.Length-1 do
-        par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i] <> typeof(string), tps[i] <> typeof(real));
+        par[i].DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn, tps[i]<>typeof(string),tps[i]<>typeof(real), NumChecks,StrChecks);
     end;
     
     public function IsSame(oe: IOptExpr): boolean; override;
@@ -2395,43 +2414,41 @@ type
     public function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr; override :=
     vn=name?oe:self;
     
-    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean); override;
+    public procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks, StrChecks: Dictionary<string, ExprContextArea>); override;
     begin
+      //a_ = all,    все которые надо разрешать (FinnalOptimize так удаляет неиспользуемое), изменяется так же как g_
+      //g_ = global, ориентир исключений, новые элементы не добавляются, могут только перейти в [n,s]vn если было в ovn
+      //l_ = local,  подсчёт локальных переменных которые сейчас ищутся, работает как возвращаемое значение
       
       if anvn.Contains(name) or (aovn.Contains(name) and not CB_S) then
       begin
         if not CB_N then raise new ConflictingExprTypesException(nil, nil);
+        if asvn.Contains(name) or gsvn.Contains(name) or lsvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
+        if aovn.Contains(name) and not NumChecks.ContainsKey(name) then NumChecks[name] := nil;
         
-        lovn.Remove(name);
-        lnvn.Add(name);
-        
-        if not CB_S then
-        begin
-          if asvn.Contains(name) or gsvn.Contains(name) or lsvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
-          
-          if govn.Remove(name) then gnvn.Add(name);
-        end;
+        lovn.Remove(name); lnvn.Add(name);
+        if aovn.Remove(name) then anvn.Add(name);
+        if govn.Remove(name) then gnvn.Add(name);
         
       end else
       if asvn.Contains(name) or (aovn.Contains(name) and not CB_N) then
       begin
         if not CB_S then raise new ConflictingExprTypesException(nil, nil);
+        if anvn.Contains(name) or gnvn.Contains(name) or lnvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
+        if aovn.Contains(name) and not StrChecks.ContainsKey(name) then StrChecks[name] := nil;
         
-        lovn.Remove(name);
-        lsvn.Add(name);
-        
-        if not CB_N then
-        begin
-          if anvn.Contains(name) or gnvn.Contains(name) or lnvn.Contains(name) then raise new ConflictingExprTypesException(nil, nil);
-          
-          if govn.Remove(name) then gsvn.Add(name);
-        end;
+        lovn.Remove(name); lsvn.Add(name);
+        if aovn.Remove(name) then asvn.Add(name);
+        if govn.Remove(name) then gsvn.Add(name);
         
       end else
       if aovn.Contains(name) then
       begin
         
-        lovn.Add(name);
+        if not(
+          lnvn.Contains(name) or
+          lsvn.Contains(name)
+        ) then lovn.Add(name);
         
       end;
       
@@ -2600,6 +2617,10 @@ type
     public s_vars_names: array of string;
     public o_vars_names: array of string;
     
+    public NumChecks := new Dictionary<string, ExprContextArea>;
+    public StrChecks := new Dictionary<string, ExprContextArea>;
+    
+    
     public MainCalcProc: procedure;
     
     
@@ -2607,11 +2628,14 @@ type
     public function GetMain: OptExprBase; abstract;
     public procedure SetMain(Main: OptExprBase); abstract;
     
-    public function Optimize(nvn, svn: HashSet<string>): OptExprWrapper;
+    public function Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
     
-    public function FinalOptimize(nvn, svn, ovn: HashSet<string>): OptExprWrapper;
+    public function FinalOptimize(gnvn, gsvn, govn: HashSet<string>): OptExprWrapper;
     
-    public function ReplaceVar(vn: string; oe: OptExprBase): OptExprWrapper;
+    public procedure ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string);
+    
+    public procedure ReplaceVar(vn: string; oe: OptExprWrapper) :=
+    ReplaceVar(vn, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
     
     public function DoesUseVar(vn: string) :=
       n_vars_names.Contains(vn) or
@@ -2627,6 +2651,8 @@ type
     
     protected procedure StartCalc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>);
     begin
+      foreach var vname in NumChecks.Keys do if s_vars.ContainsKey(vname) then raise new ValueCannotBeStr;
+      foreach var vname in StrChecks.Keys do if n_vars.ContainsKey(vname) then raise new ValueCannotBeNum;
       
       for var i := 0 to n_vars_names.Length-1 do
       begin
@@ -2664,6 +2690,20 @@ type
     
     public procedure Save(bw: System.IO.BinaryWriter);
     begin
+      
+      bw.Write(NumChecks.Count);
+      foreach var vname in NumChecks.Keys do
+      begin
+        bw.Write(vname);
+        //NumChecks[vname].Save(bw);//ToDo
+      end;
+      
+      bw.Write(StrChecks.Count);
+      foreach var vname in StrChecks.Keys do
+      begin
+        bw.Write(vname);
+        //StrChecks[vname].Save(bw);//ToDo
+      end;
       
       bw.Write(n_vars_names.Length);
       foreach var nvn in n_vars_names do
@@ -3334,7 +3374,7 @@ type
     
     public function GetTps: array of System.Type; override :=
     new System.Type[](
-      typeof(Object)
+      typeof(real)
     );
     
     public procedure Calc;
@@ -3394,7 +3434,7 @@ type
     end;
     
     public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
-    new OptFunc_DeflyNum(par);
+    new OptFunc_DeflyNum(par, ifnot);
     
   end;
   
@@ -3585,21 +3625,44 @@ end;
 
 {$region Wrapper converters}
 
-function OptExprWrapper.Optimize(nvn, svn: HashSet<string>): OptExprWrapper;
+function OptExprWrapper.Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   
-  if n_vars_names.Any(vn->svn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
-  if s_vars_names.Any(vn->nvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  
+  var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
+  var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   
   var lnvn := new HashSet<string>;
   var lsvn := new HashSet<string>;
   var lovn := new HashSet<string>;
+  
+  var anvn := n_vars_names.ToHashSet;
+  var asvn := s_vars_names.ToHashSet;
+  var aovn := o_vars_names.ToHashSet;
+  
+  foreach var vname in gnvn do
+  begin
+    if asvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
+    aovn.Remove(vname);
+    anvn.Add(vname);
+  end;
+  
+  foreach var vname in gsvn do
+  begin
+    if anvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
+    aovn.Remove(vname);
+    asvn.Add(vname);
+  end;
+  
   Main.DeduseVarsTypes(
-    n_vars_names.ToHashSet,s_vars_names.ToHashSet,o_vars_names.ToHashSet,
-    nvn,svn,new HashSet<string>,
+    anvn,asvn,aovn,
+    gnvn,gsvn,new HashSet<string>,
     lnvn,lsvn,lovn,
-    true, true
+    true, true,
+    nNumChecks, nStrChecks
   );
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
@@ -3626,6 +3689,9 @@ begin
   
   
   
+  Result.NumChecks := nNumChecks;
+  Result.StrChecks := nStrChecks;
+  
   Result.n_vars_names := n_vars_names;
   Result.s_vars_names := s_vars_names;
   Result.o_vars_names := o_vars_names;
@@ -3638,24 +3704,30 @@ begin
   
 end;
 
-function OptExprWrapper.FinalOptimize(nvn, svn, ovn: HashSet<string>): OptExprWrapper;
+function OptExprWrapper.FinalOptimize(gnvn, gsvn, govn: HashSet<string>): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   
-  if n_vars_names.Any(vn->svn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
-  if n_vars_names.Any(vn->ovn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(object));
   
-  if s_vars_names.Any(vn->nvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
-  if s_vars_names.Any(vn->ovn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(object));
+  
+  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+  if n_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(object));
+  
+  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  if s_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(object));
+  
+  var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
+  var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   
   var lnvn := new HashSet<string>;
   var lsvn := new HashSet<string>;
   var lovn := new HashSet<string>;
   Main.DeduseVarsTypes(
-    nvn.ToHashSet,svn.ToHashSet,ovn.ToHashSet,
-    nvn,svn,ovn,
+    gnvn,gsvn,govn,
+    gnvn,gsvn,govn,
     lnvn,lsvn,lovn,
-    true, true
+    true, true,
+    nNumChecks, nStrChecks
   );
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
@@ -3682,6 +3754,9 @@ begin
   
   
   
+  Result.NumChecks := nNumChecks;
+  Result.StrChecks := nStrChecks;
+  
   Result.n_vars_names := n_vars_names;
   Result.s_vars_names := s_vars_names;
   Result.o_vars_names := o_vars_names;
@@ -3694,18 +3769,46 @@ begin
   
 end;
 
-function OptExprWrapper.ReplaceVar(vn: string; oe: OptExprBase): OptExprWrapper;
+procedure OptExprWrapper.ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string);
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
+  Main := Main.ReplaceVar(vn, oe.UnFixVarExprs(envn,esvn,eovn) as OptExprBase);
   
   var lnvn := new HashSet<string>;
   var lsvn := new HashSet<string>;
   var lovn := new HashSet<string>;
+  
+  var anvn := n_vars_names.ToHashSet;
+  var asvn := s_vars_names.ToHashSet;
+  var aovn := o_vars_names.ToHashSet;
+  
+  foreach var vname in envn do
+  begin
+    if asvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
+    aovn.Remove(vname);
+    anvn.Add(vname);
+  end;
+  
+  foreach var vname in esvn do
+  begin
+    if anvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
+    aovn.Remove(vname);
+    asvn.Add(vname);
+  end;
+  
+  foreach var vname in eovn do
+    if not(
+      anvn.Contains(vname) or
+      asvn.Contains(vname)
+    ) then
+      aovn += vname;
+  
   Main.DeduseVarsTypes(
-    n_vars_names.ToHashSet, s_vars_names.ToHashSet, o_vars_names.ToHashSet,
+    anvn,asvn,aovn,
     new HashSet<string>, new HashSet<string>, new HashSet<string>,
     lnvn,lsvn,lovn,
-    true, true
+    true, true,
+    NumChecks, StrChecks
   );
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
@@ -3716,22 +3819,20 @@ begin
   var s_vars_names := lsvn.ToArray;
   var o_vars_names := lovn.ToArray;
   
-  Main := Main.ReplaceVar(vn, oe);
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  Result := self;//ReplaceVar вызывается только для блока откуда берётся, поэтому копировать не надо
   SetMain(Main as OptExprBase);
   
   
   
-  Result.n_vars_names := n_vars_names;
-  Result.s_vars_names := s_vars_names;
-  Result.o_vars_names := o_vars_names;
+  self.n_vars_names := n_vars_names;
+  self.s_vars_names := s_vars_names;
+  self.o_vars_names := o_vars_names;
   
-  Result.n_vars := n_vars;
-  Result.s_vars := s_vars;
-  Result.o_vars := o_vars;
+  self.n_vars := n_vars;
+  self.s_vars := s_vars;
+  self.o_vars := o_vars;
   
   
   
@@ -3991,6 +4092,14 @@ end;
 static function OptExprWrapper.Load(br: System.IO.BinaryReader): OptExprWrapper;
 begin
   
+  var NumChecks := new Dictionary<string, ExprContextArea>;
+  loop br.ReadInt32 do
+    NumChecks[br.ReadString] := nil;//ToDo
+  
+  var StrChecks := new Dictionary<string, ExprContextArea>;
+  loop br.ReadInt32 do
+    StrChecks[br.ReadString] := nil;//ToDo
+  
   var nvn := new string[br.ReadInt32];
   for var i := 0 to nvn.Length-1 do
     nvn[i] := br.ReadString;
@@ -4016,6 +4125,9 @@ begin
     Result := new OptOExprWrapper(Main as OptOExprBase);
   
   
+  
+  Result.NumChecks := NumChecks;
+  Result.StrChecks := StrChecks;
   
   Result.n_vars_names := nvn;
   Result.s_vars_names := svn;

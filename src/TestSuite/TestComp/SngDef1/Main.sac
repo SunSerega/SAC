@@ -1,0 +1,8 @@
+!SngDef n1=Num
+!SngDef s1=Str
+
+n1=5
+n1=3.4
+n1="abc"
+
+KeyP n1

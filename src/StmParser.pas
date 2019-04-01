@@ -1,12 +1,22 @@
 ﻿unit StmParser;
+//ToDo 0\0.sac - добавить в тесты (и там немного недооптимизировало, второе need_cont тоже %Num)
+//ToDo оператор Assert
+//ToDo тесты !SngDef
 //ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
+
+//ToDo а что будет если присвоить константе null? протестить
+
+//ToDo если в "KeyP key" компилятор знал что key это Str - получаем внутреннюю ошибку. А надо обычную.
 
 //ToDo Контекст ошибок
 //ToDo Сделать выбор файла в !lib_m
 //ToDo тесты для всех программ из справки
+//ToDo sb=>bl везде, чтоб было одинаково
+
+//ToDo а как будет работать получение относительного пути, если при подключении файла указать название диска?
+// - и в библиотеках проверить, если указать полный путь - наверное не надо считать относительный в библиотеке...
 
 //ToDo операторы ReadText и Alert, работающие через месседж боксы
-//ToDo оператор Assert
 
 //ToDo Удалять Call null
 // - А Jump null можно заменять на Return
@@ -497,8 +507,6 @@ type
     
     
     
-    public procedure PostInit; virtual := exit;
-    
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
     
     public function GetAllExprs: sequence of OptExprWrapper; virtual :=
@@ -660,7 +668,9 @@ type
   end;
   DrctStmBase = abstract class(StmBase)
     
-    public static function FromString(sb: StmBlock; text: string): DrctStmBase;
+    public static function FromString(sb: StmBlock; s: string; par: array of string): DrctStmBase;
+    
+    public function Optimize(nvn, svn: HashSet<string>): StmBase; override := nil;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[0];
@@ -866,6 +876,34 @@ type
       var prev_main_fname := br.ReadString;
       var new_main_fname := main_path.Split('\').Last;
       main_path := System.IO.Path.GetDirectoryName(main_path);
+      
+      self.start_pos_def := br.ReadBoolean;
+      
+      loop br.ReadInt32 do
+      begin
+        var vname := br.ReadString;
+        case br.ReadByte of
+          1: self.SngDefConsts.Add(vname, nil);
+          2: self.SngDefConsts.Add(vname, br.ReadString);
+          3: self.SngDefConsts.Add(vname, br.ReadDouble);
+        end;
+      end;
+      
+      loop br.ReadInt32 do
+      begin
+        var vname := br.ReadString;
+        var is_readonly := br.ReadBoolean;
+        var fname := br.ReadString;
+        self.SngDefStrs.Add(vname, (is_readonly, fname));
+      end;
+      
+      loop br.ReadInt32 do
+      begin
+        var vname := br.ReadString;
+        var is_readonly := br.ReadBoolean;
+        var fname := br.ReadString;
+        self.SngDefNums.Add(vname, (is_readonly, fname));
+      end;
       
       loop br.ReadInt32 do
       begin
@@ -3788,29 +3826,23 @@ type
   end;
   DrctSngDef = sealed class(DrctStmBase)
     
-    public vname: string;
-    public IsNum: boolean;
-    public val: object;
-    
-    public Access: VarAccessT;
-    
-    
-    
-    public constructor(bl: StmBlock; par: array of string);
+    public static procedure Create(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       var ss := par[1].SmartSplit(':',2);
       
       var vd := ss[0].SmartSplit('=',2);
-      vname := vd[0].ToLower;
+      var vname := vd[0].ToLower;
+      var IsNum: boolean;
       case vd[1].ToLower of
         'num': IsNum := true;
         'str': IsNum := false;
         else raise new InvalidVarTypeException(nil, vd[1]);
       end;
       
-      val := nil;
+      var val: object;
+      var Access: VarAccessT;
       if ss.Length=1 then
         Access := VarAccessT.none else
       if ss[1].ToLower = 'readonly' then
@@ -3833,96 +3865,7 @@ type
       end else
         raise new InvalidVarAccessTypeException(nil, ss[1]);
       
-    end;
-    
-    public procedure PostInit; override := scr.AddSngDef(vname, IsNum, val, Access, bl.fname);
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      inherited Save(bw);
-      bw.Write(byte(1));
-      bw.Write(byte(1));
-      bw.Write(self.vname);
-      
-      match val with
-        
-        real(var r):
-        begin
-          bw.Write(byte(1));
-          bw.Write(real(val));
-        end;
-        
-        string(var r):
-        begin
-          bw.Write(byte(2));
-          bw.Write(string(val));
-        end;
-        
-        else bw.Write(byte(0));
-      end;
-      
-      bw.Write(byte(self.Access));
-      
-    end;
-    
-    public static function Load(br: System.IO.BinaryReader): DrctStmBase;
-    begin
-      
-      var res := new DrctSngDef;
-      res.vname := br.ReadString;
-      
-      case br.ReadByte of
-        
-        0: res.val := nil;
-        1: res.val := br.ReadDouble;
-        2: res.val := br.ReadString;
-        
-        else raise new InvalidSngDefValTException(nil);
-      end;
-      
-      case br.ReadByte of
-        
-        0: res.Access := VarAccessT.none;
-        1: res.Access := VarAccessT.read_only;
-        2: res.Access := VarAccessT.init_only;
-        
-        else raise new InvalidSngDefAccessTException(nil);
-      end;
-      
-      Result := res;
-    end;
-    
-    public function ToString: string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      sb += '!SngDef ';
-      sb += vname;
-      sb += IsNum?'Num':'Str';
-      if Access<>VarAccessT.none then
-      begin
-        sb += ':';
-        case Access of
-          
-          read_only: sb += 'readonly';
-          
-          init_only:
-          begin
-            sb += 'const=';
-            
-            match val with
-              real(var r): sb += r.ToString(nfi);
-              string(var s): sb += $'"{s}"';
-              else sb += 'null';
-            end;
-            
-          end;
-          
-          else raise new System.NotImplementedException;
-        end;
-      end;
-      
-      Result := sb.ToString;
+      bl.scr.AddSngDef(vname, IsNum, val, Access, bl.fname);
     end;
     
   end;
@@ -3942,13 +3885,12 @@ begin
   self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]));
 end;
 
-static function DrctStmBase.FromString(sb: StmBlock; text: string): DrctStmBase;
+static function DrctStmBase.FromString(sb: StmBlock; s: string; par: array of string): DrctStmBase;
 begin
-  var p := text.SmartSplit(' ');
-  case p[0].ToLower of
+  case s.ToLower of
     
-    '!fref': DrctFRef.Create(sb, p);
-    '!sngdef': Result := new DrctSngDef(sb, p);
+    '!fref': DrctFRef.Create(sb, par);
+    '!sngdef': DrctSngDef.Create(sb, par);
     
     '!startpos':
     if (sb.stms.Count = 0) and (sb.lbl <> '') and not sb.StartPos then
@@ -3958,8 +3900,10 @@ begin
     end else
       raise new InvalidUseStartPosException(sb.scr);
     
-    else raise new UndefinedDirectiveNameException(sb, text);
+    else raise new UndefinedDirectiveNameException(sb, s);
   end;
+  
+  Result := nil;
 end;
 
 static function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
@@ -4001,7 +3945,7 @@ static function StmBase.FromString(sb: StmBlock; s: string; par: array of string
 begin
   
   if s.StartsWith('!') then
-    Result := DrctStmBase.FromString(sb, s) else
+    Result := DrctStmBase.FromString(sb, s, par) else
   if par[0].Contains('=') then
     Result := ExprStm.Create(sb, s) else
     Result := OperStmBase.FromString(sb, par);
@@ -4009,7 +3953,6 @@ begin
   if Result=nil then exit;
   Result.bl := sb;
   Result.scr := sb.scr;
-  Result.PostInit;
 end;
 
 {$endregion Single stm}
@@ -4278,7 +4221,7 @@ begin
   if c.Value = nil      then le := new OptNullLiteralExpr else
   raise new WrongConstTypeException(nil);
   
-  oe.ReplaceVar(c.Key, le);
+  oe.ReplaceVar(c.Key, le, new string[0], new string[0], new string[0]);
   
 end;
 
@@ -4306,7 +4249,7 @@ begin
     var pi := bl_lst.IndexOf(curr);
     if pi <> -1 then
     begin
-      var stm_ind := (pi=0)? 0: ind_lst[pi-1];
+      var stm_ind := pi=0 ? 0 : ind_lst[pi-1];
       
       if stm_ind <> 0 then
       begin
@@ -4522,10 +4465,15 @@ begin
     foreach var bl: StmBlock in sbs.Values do
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
+        var n_vars_names := e.e.n_vars_names;
+        var s_vars_names := e.e.s_vars_names;
+        var o_vars_names := e.e.o_vars_names;
         
         {$region usages}
         
         var usages := new List<(StmBase, OptExprWrapper)>;
+        var prf := false;//param rewriter found
+        var uiapr := -1;//usages index after param rewriter
         
         foreach var stm in
           bl.stms
@@ -4533,21 +4481,33 @@ begin
         do
         begin
           
-          usages.AddRange(
-            stm
+          var cu := stm
             .FindVarUsages(e.vname)
             .Where(e2-> e2<>nil )
-            .Select(e2->(stm, e2))
-          );
+            .Select(e2->(stm, e2));
+          
+          if not prf then
+            usages.AddRange(cu) else
+            if cu.Any then
+            begin
+              uiapr := bl.stms.IndexOf(stm);
+              break;
+            end;
           
           if stm.DoesRewriteVar(e.vname) then break;
+          
+          prf := prf or
+            n_vars_names.Any(vname->stm.DoesRewriteVar(vname)) or
+            s_vars_names.Any(vname->stm.DoesRewriteVar(vname)) or
+            o_vars_names.Any(vname->stm.DoesRewriteVar(vname));
+          
         end;
         
         {$endregion usages}
         
         {$region nue}
         
-        //next usage exists (in next block(s) )
+        //next usage exists (в следующих блоках)
         var nue := false;
         
         if bl.next = nil then
@@ -4569,13 +4529,12 @@ begin
             end;
             
             if stm.DoesRewriteVar(e.vname) then break;
+            
           end;
           
         end;
         
         {$endregion nue}
-        
-        var main := e.e.GetMain.UnFixVarExprs(e.e.n_vars_names, e.e.s_vars_names, e.e.o_vars_names) as OptExprBase;
         
         {$region No usages}
         if usages.Count = 0 then
@@ -4583,8 +4542,22 @@ begin
           
           if not nue then
           begin
-            bl.stms.Remove(e);
-            try_opt_again := true;
+            
+            if uiapr=-1 then
+            begin
+              bl.stms.Remove(e);
+              try_opt_again := true;
+            end else
+            begin
+              var ci := bl.stms.IndexOf(e);
+              if ci<>uiapr-1 then
+              begin
+                bl.stms.Insert(uiapr, e);
+                bl.stms.RemoveAt(ci);
+                //try_opt_again := true;//Это не может открыть новую оптимизацию
+              end;
+            end;
+            
           end else
           if bl.next.next <> bl.next then
           begin
@@ -4597,27 +4570,47 @@ begin
         {$endregion No usages}
         
         {$region IOptSimpleExpr}
-        if main is IOptSimpleExpr then
+        if e.e.GetMain is IOptSimpleExpr then
         begin
-          bl.stms.Remove(e);
           
+          if usages.Any then try_opt_again := true;
           foreach var use in usages do
-            use[1].ReplaceVar(e.vname, main);
+            use[1].ReplaceVar(e.vname, e.e);
           
-          if nue and (bl.next.next <> bl.next) then
-            bl.next.stms.Insert(0, e);
+          if uiapr<>-1 then
+          begin
+            var ci := bl.stms.IndexOf(e);
+            if ci<>uiapr-1 then
+            begin
+              bl.stms.Insert(uiapr, e);
+              bl.stms.RemoveAt(ci);
+              //try_opt_again := true;//Это не может открыть новую оптимизацию
+            end;
+          end else
+          if nue then
+          begin
+            if bl.next.next <> bl.next then
+            begin
+              bl.stms.Remove(e);
+              bl.next.stms.Insert(0, e);
+              try_opt_again := true;
+            end;
+          end else
+          if allow_final_opt.Contains(bl) then
+          begin
+            bl.stms.Remove(e);
+            try_opt_again := true;
+          end;
           
-          try_opt_again := true;
         end else
         {$endregion IOptSimpleExpr}
         
         {$region Only 1 use}
-        if (usages.Count = 1) and not nue then
+        if (usages.Count = 1) and (uiapr = -1) and allow_final_opt.Contains(bl) and not nue then
         begin
           bl.stms.Remove(e);
           
-          foreach var use in usages do
-            use[1].ReplaceVar(e.vname, main);
+          usages[0][1].ReplaceVar(e.vname, e.e);
           
           try_opt_again := true;
         end else
@@ -4629,13 +4622,14 @@ begin
           var stms := use[0].bl.stms;
           
           var ind := stms.IndexOf(use[0]);
-          if stms.IndexOf(e)+1 <> ind then
+          var ci := stms.IndexOf(e);
+          if ci <> ind-1 then
           begin
             
-            stms.Remove(e);
-            stms.Insert(ind-1,e);
+            stms.Insert(ind,e);
+            stms.RemoveAt(ci);
             
-            try_opt_again := true;
+            //try_opt_again := true;//Это не может открыть новую оптимизацию + создаст бесконечный цикл, если 2 переменных используются в 1 выражении
           end;
           
         end;
@@ -4802,6 +4796,8 @@ end;
 
 static function DrctStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): DrctStmBase;
 begin
+  Result := nil;
+  
   var t1 := br.ReadByte;
   var t2 := br.ReadByte;
   
@@ -4810,7 +4806,7 @@ begin
     1:
     case t2 of
       
-      1: Result := DrctSngDef.Load(br);
+      //1: ;
       
       else raise new InvalidDrctTException(t1,t2);
     end;
@@ -4869,6 +4865,43 @@ begin
     main_fname.Remove(main_fname.IndexOf('#')):
     main_fname
   );
+  
+  bw.Write(self.start_pos_def);
+  
+  bw.Write(self.SngDefConsts.Count);
+  foreach var kvp in self.SngDefConsts do
+  begin
+    bw.Write(kvp.Key);
+    
+    if kvp.Value is string(var s) then
+    begin
+      bw.Write(2);
+      bw.Write(s);
+    end else
+    if kvp.Value is real(var r) then
+    begin
+      bw.Write(3);
+      bw.Write(r);
+    end else
+      bw.Write(byte(1));
+    
+  end;
+  
+  bw.Write(self.SngDefStrs.Count);
+  foreach var kvp in self.SngDefStrs do
+  begin
+    bw.Write(kvp.Key);
+    bw.Write(kvp.Value[0]);
+    bw.Write(kvp.Value[1]);
+  end;
+  
+  bw.Write(self.SngDefNums.Count);
+  foreach var kvp in self.SngDefNums do
+  begin
+    bw.Write(kvp.Key);
+    bw.Write(kvp.Value[0]);
+    bw.Write(kvp.Value[1]);
+  end;
   
   var sbbs :=
   sbs

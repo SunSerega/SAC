@@ -111,9 +111,12 @@ type
       var UpdateKeyList: procedure := ()->
       begin
         var sb := new StringBuilder;
-        var h := 0;
+        var h := 1;
         foreach var key in n_pause_keys do
+        begin
           sb.AppendLine($'{key} : {GetKeyName(key)}');
+          h += 1;
+        end;
         KeyList.Height := Min(h*13+5, Output.Height-KeyList.Top+Output.Top);
         KeyList.Text := sb.ToString;
       end;
