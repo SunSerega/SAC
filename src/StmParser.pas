@@ -3904,19 +3904,24 @@ type
         Access := VarAccessT.read_only else
       if ss[1].ToLower.StartsWith('const') then
       begin
+        Access := VarAccessT.init_only;
+        
         ss := ss[1].SmartSplit('=',2);
-        if ss[1].ToLower <> 'const' then raise new InvalidUseOfConstDefException(nil);
+        if ss[0].ToLower <> 'const' then raise new InvalidUseOfConstDefException(nil);
         if ss.Length <> 2 then raise new InvalidUseOfConstDefException(nil);
         
         var e := Expr.FromString(ss[1]);
-        var oe := OptExprWrapper.FromExpr(e);
+        var oe :=
+          IsNum?
+          OptExprWrapper.FromExpr(e, oe->OptExprBase.AsDefinitelyNumExpr(oe, ()->raise new VarDefOtherTException(nil))):
+          OptExprWrapper.FromExpr(e, oe->OptExprBase.AsStrExpr(oe))
+        ;
+        
         bl.scr.ReplaceAllConstsFor(oe);
         var main := oe.Optimize(new HashSet<string>, new HashSet<string>).GetMain;
-        if not (oe is IOptLiteralExpr) then raise new ConstExprExpectedException(ss[1], main);
+        if not (main is IOptLiteralExpr) then raise new ConstExprExpectedException(ss[1], main);
         
         val := main.GetRes;
-        IsNum := val is real;
-        
       end else
         raise new InvalidVarAccessTypeException(nil, ss[1]);
       
