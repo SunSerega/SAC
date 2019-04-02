@@ -13,7 +13,7 @@ Sleep 1000/50 //(waits 1/50 of a second)
 Jump "#" //(Jumps to the start)
 
 ```
-but also you can do very complex scripts.
+but also multifile, recursive, etc. scripts.
 
 SAC has:
 - Powerful optimizer;
@@ -36,7 +36,6 @@ Installing:
 1. Download [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe);
 2. Place it in folder, you want SAC to be installed to;
 3. Launch it, check all modules, you want to be installed, and press OK;
-4. Restart your computer, for all icons and context menu shortcuts to be properly allocated.
 
 Some space in ProgramFiles and in Registry would be used.\
 Uninstalling would clear everything that was created when installing.
@@ -45,7 +44,6 @@ Uninstalling:
 1. Download [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe) (skip first 2 if you still have it);
 2. Place it in folder, you installed SAC to;
 3. Launch it, uncheck all and press OK.
-4. Restart your computer, for all icons and context menu shortcuts to be properly deleted.
 
 ---
 
@@ -60,12 +58,13 @@ Installing:
 	- [OperHelp.exe](http://github.com/SunSerega/SAC/raw/master/src/OperHelp.exe) - manual for operators;
 	- [DrctHelp.exe](http://github.com/SunSerega/SAC/raw/master/src/DrctHelp.exe) - manual for directives;
 	- [WK.exe](http://github.com/SunSerega/SAC/raw/master/src/WK.exe) - shows key codes;
+	- [WMP.exe](http://github.com/SunSerega/SAC/raw/master/src/WMP.exe) - shows mouse coordinates;
 2. Create "Lib" folder, next to SAC.exe, if you want to have standard lib of scripts.
 
 You can also download and launch [Config.exe](https://github.com/SunSerega/SAC/raw/master/Config.exe).\
 But instead of pressing OK - just close it.\
 This way it would unpack itself, without putting anything in ProgramFiles and Registry.\
-And the last also means that you don't need to restart computer.
+And the last also means that you wouldn't have Icon's on .sac files and wouldn't be able to execute them from folder.
 
 To start script after manual installing it would need to be:
 - Properly placed in "Lib" folder;
@@ -74,7 +73,7 @@ To start script after manual installing it would need to be:
 If you want to start editor - use the same command, just replace "SAC.exe" with "Editor.exe".
 
 Uninstalling:
-1. Just delete everything you created when installing.
+1. Just delete everything you downloaded when installing.
 
 ---
 
@@ -89,7 +88,7 @@ How to build
 2. Compile "PackAll.pas";
 3. Start "PackAll.exe".
 
-When its done - it would say "Ready".\
+When its done - it would say "Ready" in green text.\
 Then, use one of installing methods, to apply your build.
 
 </details>
@@ -114,13 +113,12 @@ How to command line
 
 If you used automatic installing method - you could chose to install "Configured launch" module.\
 If so - just press RMB on .sac file you want to execute and press "Configured launch".\
-(remember, you need to restart computer for this button to be created)\
 \
 If not - open command line (press Win+R) and enter this string, replacing things in ** with proper names:\
 `"*SAC_exe_Folder*\SAC.exe" "*ScriptFolder*\*ScriptName*.sac" "!conf"`\
 
 If you want to know allowed command line agrs list - it is shown in Configured launch.\
-Start it but just do not start the actual script.
+Start it but just don't start the actual script.
 
 ---
 
@@ -130,10 +128,6 @@ Start it but just do not start the actual script.
 <summary>
 How to feedback
 </summary>
-
-Please, try to Not put anything except issues and feature requests in issues.
-
-For other types of feedback you can use:
 
 [PABC.Net forum page of SAC](http://forum.mmcs.sfedu.ru/t/sac-scriptautoclicker/2607)\
 My email: `latchenko3@yandex.ru`\

@@ -125,7 +125,9 @@ T|MouseP						=\
 H|MousePos						=Moves mouse to specified coords
 T|MousePos						=\
 	MousePos 123 456\
-	Will Move mouse to coordinates (123; 456), counting from top left corner
+	Will Move mouse to coordinates (123; 456), counting from top left corner\
+	\
+	You can get coordinates of mouse by runing WMP.exe
 
 H|GetKey						=Finds out if key is pressed
 T|GetKey						=\

@@ -394,17 +394,6 @@ type
         System.IntPtr.Zero,
         System.IntPtr.Zero
       );
-//      var si := new System.Diagnostics.ProcessStartInfo('cmd');
-//      si.UseShellExecute := false;
-//      si.RedirectStandardInput := true;
-//      si.RedirectStandardOutput := true;
-//      var p := System.Diagnostics.Process.Start(si);
-//      var sw := p.StandardInput;
-//      sw.WriteLine;
-//      sw.WriteLine('ie4uinit.exe -ClearIconCache');
-//      sw.WriteLine('ie4uinit.exe -show');//Win10
-//      sw.WriteLine('exit');
-//      p.WaitForExit;
     end;
     
     procedure Load;
@@ -496,15 +485,15 @@ type
     
     procedure Save;
     begin
-      var rest_needed := false;
+      var explorer_update_needed := false;
       
       if Parameter.All['AssociateDotSAC'].GetCBChecked then
       begin
         var key := Registry.ClassesRoot.OpenSubKey('.sac');
         if key = nil then
-          rest_needed := true else
+          explorer_update_needed := true else
         begin
-          if not key.ExistsSubKey('ShellNew') then rest_needed := true;
+          if not key.ExistsSubKey('ShellNew') then explorer_update_needed := true;
           
           while (key <> nil) and (key.GetValue('') as string <> RegName) do
             case MessageBox.Show(string.Format(Translate('Text|reg used'), key.GetValue('')),Translate('Cap|reg used'),MessageBoxButtons.AbortRetryIgnore) of
@@ -577,7 +566,7 @@ type
         key.SetValue('', 'SAC Script');
         key.SetValue('version', integer(version));
         
-        if not key.ExistsSubKey('shell') then rest_needed := true;
+        if not key.ExistsSubKey('shell') then explorer_update_needed := true;
         var shell := key.OpenOrCreate('shell');
         shell.SetValue('','exec');
         
@@ -593,7 +582,7 @@ type
         begin
           System.IO.File.Copy('Icon.ico',ProgFilesName+'\Icon.ico', true);
           
-          if not key.ExistsSubKey('DefaultIcon') then rest_needed := true;
+          if not key.ExistsSubKey('DefaultIcon') then explorer_update_needed := true;
           var icon := key.OpenOrCreate('DefaultIcon');
           icon.SetValue('', $'"{ProgFilesName}\Icon.ico"');
           icon.Close;
@@ -604,13 +593,13 @@ type
           if shell.ExistsSubKey('DefaultIcon') then
           begin
             shell.DeleteSubKey('DefaultIcon');
-            rest_needed := true;
+            explorer_update_needed := true;
           end;
         end;
         
         if Parameter.All['AddConfLaunch'].GetCBChecked then
         begin
-          if not shell.ExistsSubKey('params_exec') then rest_needed := true;
+          if not shell.ExistsSubKey('params_exec') then explorer_update_needed := true;
           var params_exec := shell.OpenOrCreate('params_exec');
           params_exec.SetValue('', Translate('ConfLaunch'));
           var params_exec_com := params_exec.OpenOrCreate('command');
@@ -621,14 +610,14 @@ type
           if shell.ExistsSubKey('params_exec') then
           begin
             shell.DeleteSubKeyTree('params_exec');
-            rest_needed := true;
+            explorer_update_needed := true;
           end;
         
         if Parameter.All['AddEdit'].GetCBChecked then
         begin
           System.IO.File.Copy('Editor.exe',ProgFilesName+'\Editor.exe', true);
           
-          if not shell.ExistsSubKey('edit') then rest_needed := true;
+          if not shell.ExistsSubKey('edit') then explorer_update_needed := true;
           var edit := shell.OpenOrCreate('edit');
           edit.SetValue('', Translate('Edit'));
           var edit_com := edit.OpenOrCreate('command');
@@ -639,7 +628,7 @@ type
           if shell.ExistsSubKey('edit') then
           begin
             shell.DeleteSubKeyTree('edit');
-            rest_needed := true;
+            explorer_update_needed := true;
           end;
         
         shell.Close;
@@ -657,7 +646,7 @@ type
         if Registry.ClassesRoot.ExistsSubKey(RegName) then
         begin
           Registry.ClassesRoot.DeleteSubKeyTree(RegName);
-          rest_needed := true;
+          explorer_update_needed := true;
         end;
         
         var key := Registry.ClassesRoot.OpenSubKey('.sac');
@@ -668,7 +657,7 @@ type
           if val = RegName then
           begin
             Registry.ClassesRoot.DeleteSubKeyTree('.sac');
-            rest_needed := true;
+            explorer_update_needed := true;
           end;
         end;
         
@@ -713,7 +702,7 @@ type
       
       
       
-      if not rest_needed then exit;
+      if not explorer_update_needed then exit;
       UpdateExplorer;
       //MessageBox.Show(Translate('Text|NeedRestart'),Translate('Cap|NeedRestart'),MessageBoxButtons.OK);
     end;

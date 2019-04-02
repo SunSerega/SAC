@@ -22,9 +22,6 @@ Text|reg ver					=\
 	Do you want to downgrade current version?
 Cap|reg ver						=Version error
 
-Text|NeedRestart				=Now restart computer to save and apply .sac file association, icons, etc.
-Cap|NeedRestart					=Computer restart needed
-
 Text|SettingsDel				=Settings file found, delete it?
 Cap|SettingsDel					=Delete settings?
 
