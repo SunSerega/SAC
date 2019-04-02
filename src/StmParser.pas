@@ -15,7 +15,6 @@
 //ToDo Контекст ошибок
 //ToDo Сделать выбор файла в !lib_m
 //ToDo тесты для всех программ из справки
-//ToDo sb=>bl везде, чтоб было одинаково
 
 //ToDo а как будет работать получение относительного пути, если при подключении файла указать название диска?
 // - и в библиотеках проверить, если указать полный путь - наверное не надо считать относительный в библиотеке...
@@ -543,7 +542,7 @@ type
     
     
     
-    public static function FromString(sb: StmBlock; s: string; par: array of string): StmBase;
+    public static function FromString(bl: StmBlock; s: string; par: array of string): StmBase;
     
     public static function ObjToStr(o: object) :=
     OptExprBase.ObjToStr(o);
@@ -563,7 +562,7 @@ type
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBase;
     
   end;
   ExprStm = sealed class(StmBase)
@@ -579,7 +578,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; text: string);
+    public constructor(bl: StmBlock; text: string);
     
     public constructor(vname: string; e: OptExprWrapper; bl: StmBlock; scr: Script);
     begin
@@ -655,7 +654,7 @@ type
       e.Save(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): ExprStm;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): ExprStm;
     begin
       Result := new ExprStm;
       Result.vname := br.ReadString;
@@ -671,19 +670,19 @@ type
   end;
   OperStmBase = abstract class(StmBase)
     
-    public static function FromString(sb: StmBlock; par: array of string): OperStmBase;
+    public static function FromString(bl: StmBlock; par: array of string): OperStmBase;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(1));
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     
   end;
   DrctStmBase = abstract class(StmBase)
     
-    public static function FromString(sb: StmBlock; s: string; par: array of string): DrctStmBase;
+    public static function FromString(bl: StmBlock; s: string; par: array of string): DrctStmBase;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; override := nil;
     
@@ -695,7 +694,7 @@ type
       bw.Write(byte(2));
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): DrctStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): DrctStmBase;
     
   end;
   
@@ -761,7 +760,7 @@ type
     
     public procedure SaveId(bw: System.IO.BinaryWriter);
     
-    public procedure Load(br: System.IO.BinaryReader; sbs: array of StmBlock);
+    public procedure Load(br: System.IO.BinaryReader; bls: array of StmBlock);
     begin
       StartPos := br.ReadBoolean;
       
@@ -769,7 +768,7 @@ type
       self.stms := new List<StmBase>(c);
       for var i := 0 to c-1 do
       begin
-        var stm := StmBase.Load(br, sbs);
+        var stm := StmBase.Load(br, bls);
         stm.bl := self;
         stm.scr := self.scr;
         self.stms.Add(stm);
@@ -780,12 +779,12 @@ type
         if n = -2 then
         begin
           self.next := new StmBlock(self.scr);
-          self.next.Load(br, sbs);
+          self.next.Load(br, bls);
           self.next.fname := self.fname;
         end else
-        if cardinal(n) < sbs.Length then
-          self.next := sbs[n] else
-          raise new InvalidStmBlIdException(n, sbs.Length);
+        if cardinal(n) < bls.Length then
+          self.next := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
       
       self.Seal;
     end;
@@ -814,7 +813,7 @@ type
     public stoped: procedure;
     
     public LoadedFiles := new HashSet<string>;
-    public sbs := new Dictionary<string, StmBlock>;
+    public bls := new Dictionary<string, StmBlock>;
     
     public SngDefConsts := new Dictionary<string, object>;
     public SngDefNums := new Dictionary<string, (boolean, string)>;//is readonly, fname for readonly
@@ -838,21 +837,21 @@ type
     private static function GetRelativePath(p1, p2: string): string;
     begin
       
-      var sb := new StringBuilder;
+      var bl := new StringBuilder;
       var pp1 := p1.Split('\');
       var pp2 := p2.Split('\');
       
       var sc := pp1.ZipTuple(pp2).TakeWhile(t->t[0]=t[1]).Count;
-      loop pp1.Length-sc do sb += '..\';
+      loop pp1.Length-sc do bl += '..\';
       
       foreach var pp in pp2.Skip(sc) do
       begin
-        sb += pp;
-        sb += '\';
+        bl += pp;
+        bl += '\';
       end;
-      sb.Length -= 1;
+      bl.Length -= 1;
       
-      Result := sb.ToString;
+      Result := bl.ToString;
     end;
     
     public constructor(fname: string; ep: ExecParams);
@@ -864,7 +863,7 @@ type
     public procedure AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
     
     public procedure AllCheckSngDef :=
-    foreach var bl in sbs.Values do
+    foreach var bl in bls.Values do
       foreach var stm in bl.stms do
         stm.CheckSngDef;
     
@@ -894,8 +893,8 @@ type
       if settings.lib_mode then raise new CannotExecInLibModeException(nil);
       
       if not entry_point.Contains('#') then entry_point += '#';
-      if not sbs.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
-      var ec := new ExecutingContext(self, sbs[entry_point], 10000);
+      if not bls.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
+      var ec := new ExecutingContext(self, bls[entry_point], 10000);
       if start_pos_def and not ec.curr.StartPos then raise new CanOnlyStartFromStartPosException(nil);
       while ec.ExecuteNext do;
       if stoped <> nil then
@@ -946,23 +945,23 @@ type
           fname := new_main_fname;
         fname := CombinePaths(main_path, fname);
         
-        var lsbs := new StmBlock[br.ReadInt32];
-        for var i := 0 to lsbs.Length-1 do
-          lsbs[i] := new StmBlock(self);
+        var lbls := new StmBlock[br.ReadInt32];
+        for var i := 0 to lbls.Length-1 do
+          lbls[i] := new StmBlock(self);
         
-        for var i := 0 to lsbs.Length-1 do
+        for var i := 0 to lbls.Length-1 do
         begin
-          lsbs[i].fname := fname;
-          lsbs[i].lbl := '#'+br.ReadString;
-          lsbs[i].Load(br, lsbs);
+          lbls[i].fname := fname;
+          lbls[i].lbl := '#'+br.ReadString;
+          lbls[i].Load(br, lbls);
         end;
         
-        for var i := 0 to lsbs.Length-1 do
+        for var i := 0 to lbls.Length-1 do
         begin
           
-          var key := fname + lsbs[i].lbl;
-          if not self.sbs.ContainsKey(key) then
-            self.sbs.Add(key, lsbs[i]) else
+          var key := fname + lbls[i].lbl;
+          if not self.bls.ContainsKey(key) then
+            self.bls.Add(key, lbls[i]) else
             raise new DuplicateLabelNameException(nil, key);
           
         end;
@@ -975,24 +974,24 @@ type
     
     public function ToString: string; override;
     begin
-      var sb := new StringBuilder;
+      var res := new StringBuilder;
       
-      foreach var kvp: System.Linq.IGrouping<string, StmBlock> in sbs.Values.GroupBy(bl->bl.fname) do
+      foreach var kvp: System.Linq.IGrouping<string, StmBlock> in bls.Values.GroupBy(bl->bl.fname) do
       begin
-        sb += $' (file {GetRelativePath(main_path,kvp.Key)})';
-        sb += #10;
+        res += $' (file {GetRelativePath(main_path,kvp.Key)})';
+        res += #10;
         
         foreach var bl: StmBlock in kvp do
         begin
-          sb += bl.lbl;
-          sb += #10;
-          sb += bl.ToString;
-          sb += #10;
+          res += bl.lbl;
+          res += #10;
+          res += bl.ToString;
+          res += #10;
         end;
         
       end;
       
-      Result := sb.ToString;
+      Result := res.ToString;
     end;
     
   end;
@@ -1177,7 +1176,7 @@ type
     
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBlockRef;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBlockRef;
     
   end;
   StaticStmBlockRef = sealed class(StmBlockRef)
@@ -1219,17 +1218,17 @@ type
         
         if not res.Contains('#') then res += '#';
         
-        if not curr.scr.sbs.ContainsKey(res) then
+        if not curr.scr.bls.ContainsKey(res) then
         begin
           curr.scr.ReadFile(nil, res);
           curr.scr.AllCheckSngDef;
           
-          if not curr.scr.sbs.ContainsKey(res) then
+          if not curr.scr.bls.ContainsKey(res) then
             raise new LabelNotFoundException(nil, res);
           
         end;
         
-        Result := curr.scr.sbs[res];
+        Result := curr.scr.bls[res];
       end;
     end;
     
@@ -1459,7 +1458,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -1545,7 +1544,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -1632,7 +1631,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -1722,7 +1721,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2037,7 +2036,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -2135,7 +2134,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -2233,7 +2232,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 2 then raise new InsufficientStmParamCount(self.scr, 2, par);
       
@@ -2338,7 +2337,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2620,7 +2619,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2708,7 +2707,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2809,7 +2808,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2907,7 +2906,7 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
       if par.Length < 3 then raise new InsufficientStmParamCount(self.scr, 3, par);
       
@@ -2987,9 +2986,9 @@ type
     public function GetRefs: sequence of StmBlockRef :=
     new StmBlockRef[](CalledBlock);
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
@@ -3004,8 +3003,8 @@ type
     public function Simplify(nCalledBlock: StmBlockRef): StmBase;
     begin
       
-      if nCalledBlock is StaticStmBlockRef(var sbf) then
-        bl.next := sbf.bl else
+      if nCalledBlock is StaticStmBlockRef(var sbr) then
+        bl.next := sbr.bl else
       if CalledBlock=nCalledBlock then
         Result := self else
         Result := new OperJump(nCalledBlock, bl);
@@ -3029,10 +3028,10 @@ type
       CalledBlock.Save(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     begin
       var res := new OperJump;
-      res.CalledBlock := StmBlockRef.Load(br, sbs);
+      res.CalledBlock := StmBlockRef.Load(br, bls);
       Result := res;
     end;
     
@@ -3068,16 +3067,16 @@ type
     public function GetRefs: sequence of StmBlockRef :=
     new StmBlockRef[](CalledBlock1, CalledBlock2);
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientStmParamCount(sb.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientStmParamCount(bl.scr, 6, par);
       
-      if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
+      if par[2].Length <> 1 then raise new InvalidCompNameException(bl.scr, par[2]);
       case par[2][1] of
         '=': compr := equ;
         '<': compr := less;
         '>': compr := more;
-        else raise new InvalidCompNameException(sb.scr, par[2]);
+        else raise new InvalidCompNameException(bl.scr, par[2]);
       end;
       
       e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
@@ -3163,7 +3162,7 @@ type
       CalledBlock2.Save(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     begin
       var res := new OperJumpIf;
       
@@ -3181,8 +3180,8 @@ type
       
       res.e2 := OptExprWrapper.Load(br);
       
-      res.CalledBlock1 := StmBlockRef.Load(br, sbs);
-      res.CalledBlock2 := StmBlockRef.Load(br, sbs);
+      res.CalledBlock1 := StmBlockRef.Load(br, bls);
+      res.CalledBlock2 := StmBlockRef.Load(br, bls);
       
       Result := res;
     end;
@@ -3238,14 +3237,14 @@ type
       CalledBlock.SaveId(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     begin
       var res := new OperConstCall;
       var n := br.ReadInt32;
       if n <> -1 then
-        if cardinal(n) < sbs.Length then
-          res.bl := sbs[n] else
-          raise new InvalidStmBlIdException(n, sbs.Length);
+        if cardinal(n) < bls.Length then
+          res.bl := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
       Result := res;
     end;
     
@@ -3272,9 +3271,9 @@ type
     public function GetRefs: sequence of StmBlockRef :=
     new StmBlockRef[](CalledBlock);
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       CalledBlock := new DynamicStmBlockRef(new DInputSValue(par[1]));
     end;
@@ -3289,8 +3288,8 @@ type
     public function Simplify(nCalledBlock: StmBlockRef): StmBase;
     begin
       
-      if nCalledBlock is StaticStmBlockRef(var sbf) then
-        Result := new OperConstCall(sbf.bl, bl) else
+      if nCalledBlock is StaticStmBlockRef(var sbr) then
+        Result := new OperConstCall(sbr.bl, bl) else
       if CalledBlock=nCalledBlock then
         Result := self else
         Result := new OperCall(nCalledBlock, bl);
@@ -3314,10 +3313,10 @@ type
       CalledBlock.Save(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     begin
       var res := new OperCall;
-      res.CalledBlock := StmBlockRef.Load(br, sbs);
+      res.CalledBlock := StmBlockRef.Load(br, bls);
       Result := res;
     end;
     
@@ -3354,16 +3353,16 @@ type
     public function GetRefs: sequence of StmBlockRef :=
     new StmBlockRef[](CalledBlock1, CalledBlock2);
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 6 then raise new InsufficientStmParamCount(sb.scr, 6, par);
+      if par.Length < 6 then raise new InsufficientStmParamCount(bl.scr, 6, par);
       
-      if par[2].Length <> 1 then raise new InvalidCompNameException(sb.scr, par[2]);
+      if par[2].Length <> 1 then raise new InvalidCompNameException(bl.scr, par[2]);
       case par[2][1] of
         '=': compr := equ;
         '<': compr := less;
         '>': compr := more;
-        else raise new InvalidCompNameException(sb.scr, par[2]);
+        else raise new InvalidCompNameException(bl.scr, par[2]);
       end;
       
       e1 := OptExprWrapper.FromExpr(Expr.FromString(par[1]));
@@ -3449,7 +3448,7 @@ type
       CalledBlock2.Save(bw);
     end;
     
-    public static function Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
     begin
       var res := new OperCallIf;
       
@@ -3467,8 +3466,8 @@ type
       
       res.e2 := OptExprWrapper.Load(br);
       
-      res.CalledBlock1 := StmBlockRef.Load(br, sbs);
-      res.CalledBlock2 := StmBlockRef.Load(br, sbs);
+      res.CalledBlock1 := StmBlockRef.Load(br, bls);
+      res.CalledBlock2 := StmBlockRef.Load(br, bls);
       
       Result := res;
     end;
@@ -3672,9 +3671,9 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       l := new DInputNValue(par[1]);
     end;
@@ -3742,9 +3741,9 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       
       vname := par[1];
     end;
@@ -3805,9 +3804,9 @@ type
     
     
     
-    public constructor(sb: StmBlock; par: array of string);
+    public constructor(bl: StmBlock; par: array of string);
     begin
-      if par.Length < 2 then raise new InsufficientStmParamCount(sb.scr, 2, par);
+      if par.Length < 2 then raise new InsufficientStmParamCount(bl.scr, 2, par);
       otp := new DInputSValue(par[1]);
     end;
     
@@ -3934,81 +3933,81 @@ implementation
 
 {$region Single stm}
 
-constructor ExprStm.Create(sb: StmBlock; text: string);
+constructor ExprStm.Create(bl: StmBlock; text: string);
 begin
   var ss := text.SmartSplit('=', 2);
   self.vname := ss[0];
   self.e := ExprParser.OptExprWrapper.FromExpr(Expr.FromString(ss[1]));
 end;
 
-static function DrctStmBase.FromString(sb: StmBlock; s: string; par: array of string): DrctStmBase;
+static function DrctStmBase.FromString(bl: StmBlock; s: string; par: array of string): DrctStmBase;
 begin
   case s.ToLower of
     
-    '!fref': DrctFRef.Create(sb, par);
-    '!sngdef': DrctSngDef.Create(sb, par);
+    '!fref': DrctFRef.Create(bl, par);
+    '!sngdef': DrctSngDef.Create(bl, par);
     
     '!startpos':
-    if (sb.stms.Count = 0) and (sb.lbl <> '') and not sb.StartPos then
+    if (bl.stms.Count = 0) and (bl.lbl <> '') and not bl.StartPos then
     begin
-      sb.scr.start_pos_def := true;
-      sb.StartPos := true
+      bl.scr.start_pos_def := true;
+      bl.StartPos := true
     end else
-      raise new InvalidUseStartPosException(sb.scr);
+      raise new InvalidUseStartPosException(bl.scr);
     
-    else raise new UndefinedDirectiveNameException(sb, s);
+    else raise new UndefinedDirectiveNameException(bl, s);
   end;
   
   Result := nil;
 end;
 
-static function OperStmBase.FromString(sb: StmBlock; par: array of string): OperStmBase;
+static function OperStmBase.FromString(bl: StmBlock; par: array of string): OperStmBase;
 begin
   case par[0].ToLower of
     
-    'key': Result := new OperKey(sb, par);
-    'keyd': Result := new OperKeyDown(sb, par);
-    'keyu': Result := new OperKeyUp(sb, par);
-    'keyp': Result := new OperKeyPress(sb, par);
-    'mouse': Result := new OperMouse(sb, par);
-    'moused': Result := new OperMouseDown(sb, par);
-    'mouseu': Result := new OperMouseUp(sb, par);
-    'mousep': Result := new OperMousePress(sb, par);
+    'key': Result := new OperKey(bl, par);
+    'keyd': Result := new OperKeyDown(bl, par);
+    'keyu': Result := new OperKeyUp(bl, par);
+    'keyp': Result := new OperKeyPress(bl, par);
+    'mouse': Result := new OperMouse(bl, par);
+    'moused': Result := new OperMouseDown(bl, par);
+    'mouseu': Result := new OperMouseUp(bl, par);
+    'mousep': Result := new OperMousePress(bl, par);
     
-    'mousepos': Result := new OperMousePos(sb, par);
-    'getkey': Result := new OperGetKey(sb, par);
-    'getkeytrigger': Result := new OperGetKeyTrigger(sb, par);
-    'getmousepos': Result := new OperGetMousePos(sb, par);
+    'mousepos': Result := new OperMousePos(bl, par);
+    'getkey': Result := new OperGetKey(bl, par);
+    'getkeytrigger': Result := new OperGetKeyTrigger(bl, par);
+    'getmousepos': Result := new OperGetMousePos(bl, par);
     
-    'call': Result := new OperCall(sb, par);
-    'callif': Result := new OperCallIf(sb, par);
-    'jump': Result := new OperJump(sb, par);
-    'jumpif': Result := new OperJumpIf(sb, par);
+    'call': Result := new OperCall(bl, par);
+    'callif': Result := new OperCallIf(bl, par);
+    'jump': Result := new OperJump(bl, par);
+    'jumpif': Result := new OperJumpIf(bl, par);
     
     'susp': Result := new OperSusp;
     'return': Result := new OperReturn;
     'halt': Result := new OperHalt;
     
-    'sleep': Result := new OperSleep(sb, par);
-    'random': Result := new OperRandom(sb, par);
-    'output': Result := new OperOutput(sb, par);
+    'sleep': Result := new OperSleep(bl, par);
+    'random': Result := new OperRandom(bl, par);
+    'output': Result := new OperOutput(bl, par);
     
-    else raise new UndefinedOperNameException(sb, par[0]);
+    else raise new UndefinedOperNameException(bl, par[0]);
   end;
 end;
 
-static function StmBase.FromString(sb: StmBlock; s: string; par: array of string): StmBase;
+static function StmBase.FromString(bl: StmBlock; s: string; par: array of string): StmBase;
 begin
   
   if s.StartsWith('!') then
-    Result := DrctStmBase.FromString(sb, s, par) else
+    Result := DrctStmBase.FromString(bl, s, par) else
   if par[0].Contains('=') then
-    Result := ExprStm.Create(sb, s) else
-    Result := OperStmBase.FromString(sb, par);
+    Result := ExprStm.Create(bl, s) else
+    Result := OperStmBase.FromString(bl, par);
   
   if Result=nil then exit;
-  Result.bl := sb;
-  Result.scr := sb.scr;
+  Result.bl := bl;
+  Result.scr := bl.scr;
 end;
 
 {$endregion Single stm}
@@ -4065,7 +4064,7 @@ begin
       if s.StartsWith('#') then
       begin
         
-        if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
+        if last.lbl <> '' then bls.Add(last.fname+last.lbl, last);
         if skp_ar then
         begin
           last.Seal;
@@ -4079,7 +4078,7 @@ begin
         end;
         last.lbl := s;
         last.fname := ffname;
-        if sbs.ContainsKey(last.fname+last.lbl) then raise new DuplicateLabelNameException(context, s);
+        if bls.ContainsKey(last.fname+last.lbl) then raise new DuplicateLabelNameException(context, s);
         
       end else
         if (s <> '') and not skp_ar then
@@ -4090,7 +4089,7 @@ begin
           
           if stm is ICallOper then
           begin
-            if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
+            if last.lbl <> '' then bls.Add(last.fname+last.lbl, last);
             last.Seal;
             last.next := new StmBlock(self);
             last := last.next;
@@ -4103,7 +4102,7 @@ begin
     end;
   
   last.Seal;
-  if last.lbl <> '' then sbs.Add(last.fname+last.lbl, last);
+  if last.lbl <> '' then bls.Add(last.fname+last.lbl, last);
 end;
 
 constructor Script.Create(fname: string; ep: ExecParams);
@@ -4138,7 +4137,7 @@ end;
 {$region StmBlock}
 
 procedure StmBlock.SaveId(bw: System.IO.BinaryWriter) :=
-bw.Write(scr.sbs.Values.Numerate(0).First(t->t[1]=self)[0]);
+bw.Write(scr.bls.Values.Numerate(0).First(t->t[1]=self)[0]);
 
 function StmBlock.GetAllFRefs: sequence of StmBlockRef;
 begin
@@ -4167,16 +4166,16 @@ end;
 
 function StmBlock.ToString: string;
 begin
-  var sb := new StringBuilder;
+  var bl := new StringBuilder;
   
   var last_stm: StmBase;
   var curr := self;
   repeat
     
-    sb += curr.GetBodyString;
+    bl += curr.GetBodyString;
     if curr.stms.Count <> 0 then
     begin
-      sb += #10;
+      bl += #10;
       last_stm := curr.stms[curr.stms.Count-1];
     end;
     
@@ -4188,13 +4187,13 @@ begin
   begin
     
     if next=nil then
-      sb += 'Return //Const' else
-      sb += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
+      bl += 'Return //Const' else
+      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
     
-    sb += #10;
+    bl += #10;
   end;
   
-  Result := sb.ToString;
+  Result := bl.ToString;
 end;
 
 {$endregion StmBlock}
@@ -4445,7 +4444,7 @@ end;
 procedure Script.Optimize;
 begin
   
-  foreach var bl: StmBlock in sbs.Values do
+  foreach var bl: StmBlock in bls.Values do
     foreach var stm in bl.stms do
       foreach var oe in stm.GetAllExprs do
         self.ReplaceAllConstsFor(oe);
@@ -4468,7 +4467,7 @@ begin
       start_pos_def and
       (
         mini_opt or
-        sbs.Values
+        bls.Values
         .Where(bl->bl.StartPos)
         .SelectMany(bl->bl.GetAllFRefs)
         .All(ref->ref is StaticStmBlockRef)
@@ -4476,11 +4475,11 @@ begin
     
     var waiting := new HashSet<StmBlock>(
       not_all_waiting?
-      sbs.Values.Where(bl->bl.StartPos):
-      sbs.Values
+      bls.Values.Where(bl->bl.StartPos):
+      bls.Values
     );
     
-    var new_dyn_refs := sbs.Values.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
+    var new_dyn_refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
     try_opt_again := (new_dyn_refs.Count <> 0) and not dyn_refs.SequenceEqual(new_dyn_refs);
     dyn_refs := new_dyn_refs;
     
@@ -4543,15 +4542,15 @@ begin
     end;
     
     if not done.Any(bl->bl.GetAllFRefs.Any(ref->ref is DynamicStmBlockRef)) then
-      foreach var kvp in sbs.ToList do
+      foreach var kvp in bls.ToList do
         if not done.Contains(kvp.Value) then
-          sbs.Remove(kvp.Key);
+          bls.Remove(kvp.Key);
     
     {$endregion Block chaining}
     
     {$region Variable optimizations}
     
-    foreach var bl: StmBlock in sbs.Values do
+    foreach var bl: StmBlock in bls.Values do
       foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
       begin
         var n_vars_names := e.e.n_vars_names;
@@ -4730,10 +4729,10 @@ begin
     
   end;
   
-  if sbs.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
+  if bls.Values.SelectMany(bl->bl.GetAllFRefs).All(ref->ref is StaticStmBlockRef) then
     LoadedFiles := nil;
   
-  foreach var bl: StmBlock in sbs.Values do
+  foreach var bl: StmBlock in bls.Values do
     bl.Seal;
   
 end;
@@ -4766,7 +4765,7 @@ begin
   end;
 end;
 
-static function StmBlockRef.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBlockRef;
+static function StmBlockRef.Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBlockRef;
 begin
   var t := br.ReadByte;
   case t of
@@ -4777,9 +4776,9 @@ begin
       
       var n := br.ReadInt32;
       if n <> -1 then
-        if cardinal(n) < sbs.Length then
-          res.bl := sbs[n] else
-          raise new InvalidStmBlIdException(n, sbs.Length);
+        if cardinal(n) < bls.Length then
+          res.bl := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
       
       Result := res;
     end;
@@ -4790,7 +4789,7 @@ begin
   end;
 end;
 
-static function OperStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): OperStmBase;
+static function OperStmBase.Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
 begin
   var t1 := br.ReadByte;
   var t2 := br.ReadByte;
@@ -4845,12 +4844,12 @@ begin
     4:
     case t2 of
       
-      1: Result := OperJump.Load(br, sbs);
-      2: Result := OperJumpIf.Load(br, sbs);
-      3: Result := OperCall.Load(br, sbs);
-      4: Result := OperCallIf.Load(br, sbs);
+      1: Result := OperJump.Load(br, bls);
+      2: Result := OperJumpIf.Load(br, bls);
+      3: Result := OperCall.Load(br, bls);
+      4: Result := OperCallIf.Load(br, bls);
       
-      $80 or 3: Result := OperConstCall.Load(br, sbs);
+      $80 or 3: Result := OperConstCall.Load(br, bls);
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -4883,7 +4882,7 @@ begin
   
 end;
 
-static function DrctStmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): DrctStmBase;
+static function DrctStmBase.Load(br: System.IO.BinaryReader; bls: array of StmBlock): DrctStmBase;
 begin
   Result := nil;
   
@@ -4905,14 +4904,14 @@ begin
   
 end;
 
-static function StmBase.Load(br: System.IO.BinaryReader; sbs: array of StmBlock): StmBase;
+static function StmBase.Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBase;
 begin
   
   var t := br.ReadByte;
   case t of
-    0: Result := ExprStm.Load(br, sbs);
-    1: Result := OperStmBase.Load(br, sbs);
-    2: Result := DrctStmBase.Load(br, sbs);
+    0: Result := ExprStm.Load(br, bls);
+    1: Result := OperStmBase.Load(br, bls);
+    2: Result := DrctStmBase.Load(br, bls);
     else raise new InvalidStmTException(t);
   end;
   
@@ -4929,7 +4928,7 @@ begin
     repeat
       nopt := true;
       
-      var refs := sbs.Values.SelectMany(bl->bl.GetAllFRefs).Cast&<DynamicStmBlockRef>.Where(ref->ref <> nil).Select(ref->ref.s).ToList;
+      var refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).Cast&<DynamicStmBlockRef>.Where(ref->ref <> nil).Select(ref->ref.s).ToList;
       foreach var ref: InputSValue in refs do
       begin
         var inp := ref.Optimize(new HashSet<string>,new HashSet<string>);
@@ -4995,15 +4994,15 @@ begin
     bw.Write(GetRelativePath(main_path, kvp.Value[1]));
   end;
   
-  var sbbs :=
-  sbs
+  var blgs :=
+  bls
   .Select(kvp->(kvp.Key.Split(new char[]('#'),2),kvp.Value))
   .GroupBy(
     t->t[0][0],
     t->(t[0][1],t[1])
   ).ToList;
-  bw.Write(sbbs.Count);
-  foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in sbbs do
+  bw.Write(blgs.Count);
+  foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in blgs do
   begin
     bw.Write(GetRelativePath(main_path, kvp.Key));
     var l := kvp.ToList;
