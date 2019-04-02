@@ -383,18 +383,28 @@ type
       br.BaseStream.Position := 0;
     end;
     
+    public static procedure SHChangeNotify(wEventId, uFlags: cardinal; dwItem1, dwItem2: System.IntPtr);
+    external 'shell32.dll';
+    
     static procedure UpdateExplorer;
     begin
-      var si := new System.Diagnostics.ProcessStartInfo('cmd');
-      si.UseShellExecute := false;
-      si.RedirectStandardInput := true;
-      si.RedirectStandardOutput := true;
-      var p := System.Diagnostics.Process.Start(si);
-      var sw := p.StandardInput;
-      sw.WriteLine('ie4uinit.exe -ClearIconCache');
-      sw.WriteLine('ie4uinit.exe -show');//Win10
-      sw.WriteLine('exit');
-      p.WaitForExit;
+      SHChangeNotify(
+        $08000000,
+        $0,
+        System.IntPtr.Zero,
+        System.IntPtr.Zero
+      );
+//      var si := new System.Diagnostics.ProcessStartInfo('cmd');
+//      si.UseShellExecute := false;
+//      si.RedirectStandardInput := true;
+//      si.RedirectStandardOutput := true;
+//      var p := System.Diagnostics.Process.Start(si);
+//      var sw := p.StandardInput;
+//      sw.WriteLine;
+//      sw.WriteLine('ie4uinit.exe -ClearIconCache');
+//      sw.WriteLine('ie4uinit.exe -show');//Win10
+//      sw.WriteLine('exit');
+//      p.WaitForExit;
     end;
     
     procedure Load;

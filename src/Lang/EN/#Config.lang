@@ -29,7 +29,7 @@ Text|SettingsDel				=Settings file found, delete it?
 Cap|SettingsDel					=Delete settings?
 
 Text|LibDel						=\
-	After deleting standard Lib entries, somethings left. Maybe it's your script and maybe you still need them.\
+	After deleting standard Lib entries, somethings left. Maybe it's your scripts and maybe you still need them.\
 	Delete whole "Lib" folder?
 Cap|LibDel						=Lib not empty
 
