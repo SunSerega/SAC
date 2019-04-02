@@ -3,9 +3,6 @@
 //ToDo Функции округления чисел (Floor, Round, Ceil)
 //ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
 
-//ToDo OptExpr пуе_var_types_string
-// - и убрать все +%Num и т.п. Вся дебаг инфа должна быть в комментариях
-
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
 // - наверное всё же контекст ошибок придётся сделать для этого
 
@@ -2503,16 +2500,8 @@ type
       
     end;
     
-    public function ToString(nvn, svn, ovn: array of string): string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      sb += '(';
-      sb += nvn[id];
-      sb += '+%Num)';
-      
-      Result := sb.ToString;
-    end;
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
+    nvn[id];
     
   end;
   OptSVarExpr = sealed class(OptSExprBase, IOptVarExpr)
@@ -2549,16 +2538,8 @@ type
       
     end;
     
-    public function ToString(nvn, svn, ovn: array of string): string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      sb += '(';
-      sb += svn[id];
-      sb += '+%Str)';
-      
-      Result := sb.ToString;
-    end;
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
+    svn[id];
     
   end;
   OptOVarExpr = sealed class(OptOExprBase, IOptVarExpr)

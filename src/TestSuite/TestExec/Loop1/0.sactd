@@ -2,10 +2,10 @@
 #ExpOptCode
  (file Main.sac)
 \#
-i=(i+1)
-Output ("iteration "+Str(i))
+i=(i+1) Objs={i}
+Output ("iteration "+Str(i)) Objs={i}
 Susp //Const
-JumpIf i < 10 "Main.sac\#" null
+JumpIf i < 10 "Main.sac\#" null Objs={i}
 
 #ExpOtp
 iteration 1

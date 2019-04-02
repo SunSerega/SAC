@@ -3,17 +3,15 @@
 //ToDo оператор Assert
 //ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
 
-//ToDo а что будет если присвоить константе null? протестить
-
 //ToDo в каждом операторе надо хранить имя начального файла
 // - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
 // - вообще это надо засунуть в контекст ошибок. Это не костыль, ибо ReadOnly переменные тоже для ошибок существуют
-// - когда будет готово - добавить проверку и в ExecutingContext.SetVar . Это важно, но не смертельно, так что можно и подождать контекста ошибок
+// - когда будет готово - добавить ReadOnly проверку и в ExecutingContext.SetVar . Это важно, но не смертельно, так что можно и подождать контекста ошибок
 
 
 
 //ToDo Контекст ошибок
-//ToDo Сделать выбор файла в !lib_m
+//ToDo Сделать выбор файла куда компилировать в !lib_m
 //ToDo тесты для всех программ из справки
 
 //ToDo а как будет работать получение относительного пути, если при подключении файла указать название диска?
@@ -564,6 +562,61 @@ type
     
     public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBase;
     
+    
+    
+    public static procedure AddVarTypesComments(res: StringBuilder; oes: sequence of OptExprWrapper);
+    begin
+      var n_vars_names := oes.SelectMany(oe->oe.n_vars_names).ToList;
+      var s_vars_names := oes.SelectMany(oe->oe.s_vars_names).ToList;
+      var o_vars_names := oes.SelectMany(oe->oe.o_vars_names).ToList;
+      
+      if n_vars_names.Count<>0 then
+      begin
+        res += ' Nums={';
+        
+        res += n_vars_names[0];
+        foreach var vname in n_vars_names.Skip(1) do
+        begin
+          res += ', ';
+          res += vname;
+        end;
+        
+        res += '}';
+      end;
+      
+      if s_vars_names.Count<>0 then
+      begin
+        res += ' Strs={';
+        
+        res += s_vars_names[0];
+        foreach var vname in s_vars_names.Skip(1) do
+        begin
+          res += ', ';
+          res += vname;
+        end;
+        
+        res += '}';
+      end;
+      
+      if o_vars_names.Count<>0 then
+      begin
+        res += ' Objs={';
+        
+        res += o_vars_names[0];
+        foreach var vname in o_vars_names.Skip(1) do
+        begin
+          res += ', ';
+          res += vname;
+        end;
+        
+        res += '}';
+      end;
+      
+    end;
+    
+    public static procedure AddVarTypesComments(res: StringBuilder; params oes: array of OptExprWrapper) :=
+    AddVarTypesComments(res, oes.AsEnumerable);
+    
   end;
   ExprStm = sealed class(StmBase)
     
@@ -664,8 +717,18 @@ type
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[](Calc);
     
-    public function ToString: string; override :=
-    (e.GetMain is IOptLiteralExpr)?$'{vname}={e} //Const':$'{vname}={e}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += vname;
+      res += '=';
+      res += e.ToString;
+      
+      AddVarTypesComments(res, e);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperStmBase = abstract class(StmBase)
@@ -1517,8 +1580,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'KeyD {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'KeyD ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperKeyUp = sealed class(OperStmBase)
@@ -1603,8 +1675,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'KeyU {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'KeyU ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperKeyPress = sealed class(OperStmBase)
@@ -1690,8 +1771,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'KeyP {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'KeyP ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperKey = sealed class(OperStmBase)
@@ -1786,8 +1876,19 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'Key {kk} {dp}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Key ';
+      res += kk.ToString;
+      res += ' ';
+      res += dp.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs()+dp.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   
@@ -2097,8 +2198,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'MouseD {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'MouseD ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperMouseUp = sealed class(OperStmBase)
@@ -2195,8 +2305,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'MouseU {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'MouseU ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperMousePress = sealed class(OperStmBase)
@@ -2293,8 +2412,17 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'MouseP {kk}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'MouseP ';
+      res += kk.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperMouse = sealed class(OperStmBase)
@@ -2402,8 +2530,19 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'Mouse {kk} {dp}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Mouse ';
+      res += kk.ToString;
+      res += ' ';
+      res += dp.ToString;
+      
+      AddVarTypesComments(res, kk.GetAllExprs()+dp.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   
@@ -2677,8 +2816,19 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'MousePos {x} {y}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'MousePos ';
+      res += x.ToString;
+      res += ' ';
+      res += y.ToString;
+      
+      AddVarTypesComments(res, x.GetAllExprs()+y.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperGetKey = sealed class(OperStmBase)
@@ -2778,8 +2928,19 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'GetKey {kk} {vname}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'GetKey ';
+      res += kk.ToString;
+      res += ' ';
+      res += vname;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperGetKeyTrigger = sealed class(OperStmBase)
@@ -2879,8 +3040,19 @@ type
       scr.SupprIO=nil?Calc:CalcSuppr
     );
     
-    public function ToString: string; override :=
-    $'GetKeyTrigger {kk} {vname}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'GetKeyTrigger ';
+      res += kk.ToString;
+      res += ' ';
+      res += vname;
+      
+      AddVarTypesComments(res, kk.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperGetMousePos = sealed class(OperStmBase)
@@ -3041,8 +3213,17 @@ type
       self.Calc
     );
     
-    public function ToString: string; override :=
-    $'Jump {CalledBlock.ToString}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Jump ';
+      res += CalledBlock.ToString;
+      
+      AddVarTypesComments(res, CalledBlock.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperJumpIf = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
@@ -3202,8 +3383,25 @@ type
       end;
     end;
     
-    public function ToString: string; override :=
-    $'JumpIf {e1} {GetComprStr} {e2} {CalledBlock1} {CalledBlock2}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'JumpIf ';
+      res += e1.ToString;
+      res += ' ';
+      res += GetComprStr;
+      res += ' ';
+      res += e2.ToString;
+      res += ' ';
+      res += CalledBlock1.ToString;
+      res += ' ';
+      res += CalledBlock2.ToString;
+      
+      AddVarTypesComments(res, Seq(e1,e2) + CalledBlock1.GetAllExprs + CalledBlock2.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   
@@ -3326,8 +3524,17 @@ type
       self.Calc
     );
     
-    public function ToString: string; override :=
-    $'Call {CalledBlock}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Call ';
+      res += CalledBlock.ToString;
+      
+      AddVarTypesComments(res, CalledBlock.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperCallIf = sealed class(OperStmBase, ICallOper, IFileRefStm)
@@ -3488,8 +3695,25 @@ type
       end;
     end;
     
-    public function ToString: string; override :=
-    $'CallIf {e1} {GetComprStr} {e2} {CalledBlock1} {CalledBlock2}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'CallIf ';
+      res += e1.ToString;
+      res += ' ';
+      res += GetComprStr;
+      res += ' ';
+      res += e2.ToString;
+      res += ' ';
+      res += CalledBlock1.ToString;
+      res += ' ';
+      res += CalledBlock2.ToString;
+      
+      AddVarTypesComments(res, Seq(e1,e2) + CalledBlock1.GetAllExprs + CalledBlock2.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   
@@ -3728,8 +3952,17 @@ type
       self.Calc
     );
     
-    public function ToString: string; override :=
-    $'Sleep {l}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Sleep ';
+      res += l.ToString;
+      
+      AddVarTypesComments(res, l.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   OperRandom = sealed class(OperStmBase)
@@ -3856,8 +4089,17 @@ type
       self.Calc
     );
     
-    public function ToString: string; override :=
-    $'Output {otp}';
+    public function ToString: string; override;
+    begin
+      var res := new StringBuilder;
+      
+      res += 'Output ';
+      res += otp.ToString;
+      
+      AddVarTypesComments(res, otp.GetAllExprs);
+      
+      Result := res.ToString;
+    end;
     
   end;
   

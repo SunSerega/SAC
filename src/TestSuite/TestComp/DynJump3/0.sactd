@@ -10,13 +10,13 @@ MousePos 398 509 //Const
 MouseP 1 //Const
 Sleep 200 //Const
 GetKey 160 need_cont //Const
-JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"
+JumpIf need_cont = 1 "Main.sac\#loop" "Main.sac\#break" Nums={need_cont}
 
 \#loop
 MouseP 1 //Const
 Sleep 200 //Const
 GetKey 160 need_cont //Const
-JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"
+JumpIf need_cont = 1 "Main.sac\#loop" "Main.sac\#break" Nums={need_cont}
 
 \#break
 Susp //Const
@@ -28,4 +28,4 @@ MousePos 398 509 //Const
 MouseP 1 //Const
 Sleep 200 //Const
 GetKey 160 need_cont //Const
-JumpIf (need_cont+%Num) = 1 "Main.sac\#loop" "Main.sac\#break"
+JumpIf need_cont = 1 "Main.sac\#loop" "Main.sac\#break" Nums={need_cont}

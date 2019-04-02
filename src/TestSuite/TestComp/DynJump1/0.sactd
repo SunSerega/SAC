@@ -8,8 +8,8 @@ GetKey 1 n //Const
 Call "Main.sac\#lbl1" //Const
 Output "test1" //Const
 Output "test2" //Const
-Jump Str((n+%Num))
+Jump Str(n) Nums={n}
 
 \#lbl1
 Output "test2" //Const
-Jump Str(n)
+Jump Str(n) Objs={n}
