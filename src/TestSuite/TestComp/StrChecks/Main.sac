@@ -1,0 +1,21 @@
+
+!StartPos
+GetKey 1 vn
+JumpIf vn = 0 "#vo_num" "#vo_str"
+
+ =============================================
+
+#vo_num
+vo=3
+JumpIf vn = 0 "#Tests" "#"
+
+ =============================================
+
+#vo_str
+vo="d"
+JumpIf vn = 0 "#Tests" "#"
+
+ =============================================
+
+#Tests
+Output Length(vo)
