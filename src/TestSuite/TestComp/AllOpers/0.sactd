@@ -1,0 +1,73 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos //Const
+cn=5
+cs="abc"
+co=null
+GetKey 1 vn //Const
+vs=Str(vn) Nums={vn}
+JumpIf vn = 0 "Main.sac\#vo_num" "Main.sac\#vo_str" Nums={vn}
+
+\#vo_num
+vo=3
+JumpIf vn = 0 "Main.sac\#Opers" "Main.sac\#" Objs={vn}
+
+\#vo_str
+vo="d"
+JumpIf vn = 0 "Main.sac\#Opers" "Main.sac\#" Objs={vn}
+
+\#Opers
+Key cn co NumChecks={cn, co} Nums={cn, co}
+Key vn vo NumChecks={vn, vo} Nums={vn, vo}
+KeyD cn Nums={cn}
+KeyD vn Nums={vn}
+KeyD co Nums={co}
+KeyD vo Nums={vo}
+KeyU cn Nums={cn}
+KeyU vn Nums={vn}
+KeyU co Nums={co}
+KeyU vo Nums={vo}
+KeyP cn Nums={cn}
+KeyP vn Nums={vn}
+KeyP co Nums={co}
+KeyP vo Nums={vo}
+Mouse cn co Nums={cn, co}
+Mouse vn vo Nums={vn, vo}
+MouseD cn Nums={cn}
+MouseD vn Nums={vn}
+MouseD co Nums={co}
+MouseD vo Nums={vo}
+MouseU cn Nums={cn}
+MouseU vn Nums={vn}
+MouseU co Nums={co}
+MouseU vo Nums={vo}
+MouseP cn Nums={cn}
+MouseP vn Nums={vn}
+MouseP co Nums={co}
+MouseP vo Nums={vo}
+MousePos cn co Nums={cn, co}
+MousePos vn vo Nums={vn, vo}
+GetKey cn to Nums={cn}
+GetKey vn to Nums={vn}
+GetKey co to Nums={co}
+GetKey vo to Nums={vo}
+GetKeyTrigger cn to Nums={cn}
+GetKeyTrigger vn to Nums={vn}
+GetKeyTrigger co to Nums={co}
+GetKeyTrigger vo to Nums={vo}
+GetMousePos to to //Const
+Sleep cn Nums={cn}
+Sleep vn Nums={vn}
+Sleep co Nums={co}
+Sleep vo Nums={vo}
+Random to //Const
+Output Str(cs) Objs={cs}
+Output Str(vs) Objs={vs}
+Output Str(cn) Nums={cn}
+Output Str(vn) Nums={vn}
+Output Str(co) Nums={co}
+Output Str(vo) Nums={vo}
+Susp //Const
+Halt //Const

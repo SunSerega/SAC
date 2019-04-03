@@ -3605,8 +3605,8 @@ function OptExprWrapper.Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   
-  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
-  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
+  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
   
   var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
@@ -3624,6 +3624,7 @@ begin
     if asvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     anvn.Add(vname);
+    nNumChecks.Remove(vname);
   end;
   
   foreach var vname in gsvn do
@@ -3631,6 +3632,7 @@ begin
     if anvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     asvn.Add(vname);
+    nStrChecks.Remove(vname);
   end;
   
   Main.DeduseVarsTypes(
@@ -3640,6 +3642,18 @@ begin
     true, true,
     nNumChecks, nStrChecks
   );
+  
+  foreach var vname in nNumChecks.Keys do
+  begin
+    gnvn.Add(vname);
+    gsvn.Remove(vname);
+  end;
+  
+  foreach var vname in nStrChecks.Keys do
+  begin
+    gnvn.Remove(vname);
+    gsvn.Add(vname);
+  end;
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
   var s_vars := ArrFill(lsvn.Count, '');
@@ -3654,6 +3668,8 @@ begin
   
   if Main.IsSame(self.GetMain) then
   begin
+    self.NumChecks := nNumChecks;
+    self.StrChecks := nStrChecks;
     Result := self;
     exit;
   end else
@@ -3695,6 +3711,9 @@ begin
   var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   
+  foreach var vname in gnvn do nNumChecks.Remove(vname);
+  foreach var vname in gsvn do nStrChecks.Remove(vname);
+  
   var lnvn := new HashSet<string>;
   var lsvn := new HashSet<string>;
   var lovn := new HashSet<string>;
@@ -3706,10 +3725,19 @@ begin
     nNumChecks, nStrChecks
   );
   
-  //ToDo вообще криво как то, DeduseVarsTypes создаёт контекст для всего из g_vn, а тут его сразу удаляет.
-  //А зачем его вообще там создаёт?
-  foreach var vname in gnvn do nNumChecks.Remove(vname);
-  foreach var vname in gsvn do nStrChecks.Remove(vname);
+  foreach var vname in nNumChecks.Keys do
+  begin
+    gnvn.Add(vname);
+    gsvn.Remove(vname);
+    govn.Remove(vname);
+  end;
+  
+  foreach var vname in nStrChecks.Keys do
+  begin
+    gnvn.Remove(vname);
+    gsvn.Add(vname);
+    govn.Remove(vname);
+  end;
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
   var s_vars := ArrFill(lsvn.Count, '');
@@ -3724,6 +3752,8 @@ begin
   
   if Main.IsSame(self.GetMain) then
   begin
+    self.NumChecks := nNumChecks;
+    self.StrChecks := nStrChecks;
     Result := self;
     exit;
   end else

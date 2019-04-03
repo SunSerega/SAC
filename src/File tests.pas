@@ -19,10 +19,10 @@ begin
 //  writeln(s);
 //  exit;
   
-  s.otp += s->writeln(s);
-  s.susp_called += procedure->writeln('%susp called');
-  s.stoped += procedure->writeln('%stoped');
-  s.Execute;
+//  s.otp += s->writeln(s);
+//  s.susp_called += procedure->writeln('%susp called');
+//  s.stoped += procedure->writeln('%stoped');
+//  s.Execute;
   readln;
 end.
 

@@ -9,6 +9,10 @@ uses System.Drawing;
 uses MiscData;
 uses LocaleData;
 
+//ToDo issue:
+// - #1814
+// - #1900
+
 
 
 ///Result=True когда времени не хватило
@@ -23,7 +27,7 @@ begin
       p;
     except
       on e: System.Threading.ThreadAbortException do ;
-      on e: Exception do err := e;
+      on e2: Exception do err := e2; // ToDo #1900
     end);
   var stop_thr := new System.Threading.Thread(()->
     begin
@@ -249,9 +253,9 @@ type
         
       except
         on e: TesterException do raise new TesterException(e.Message);
-        on e: Exception do
+        on e2: Exception do // ToDo #1900
         begin
-          handle_exc(e);//ToDo #1814
+          handle_exc(e2); //ToDo #1814
         end;
       end;
     end;
@@ -381,9 +385,9 @@ type
         
       except
         on e: TesterException do raise new TesterException(e.Message);
-        on e: Exception do
+        on e2: Exception do // ToDo #1900
         begin
-          handle_exc(e);//ToDo #1814
+          handle_exc(e2); //ToDo #1814
         end;
       end;
     end;

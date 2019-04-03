@@ -1,0 +1,107 @@
+!StartPos
+
+cn=5
+cs="abc"
+co=null
+
+GetKey 1 vn
+vs=Str(vn)
+
+JumpIf vn = 0 "#vo_num" "#vo_str"
+
+ =============================================
+
+#vo_num
+vo=3
+JumpIf vn = 0 "#Opers" "#"
+
+ =============================================
+
+#vo_str
+vo="d"
+JumpIf vn = 0 "#Opers" "#"
+
+ =============================================
+
+#Opers
+
+
+
+Key cn co
+Key vn vo
+
+KeyD cn
+KeyD vn
+KeyD co
+KeyD vo
+
+KeyU cn
+KeyU vn
+KeyU co
+KeyU vo
+
+KeyP cn
+KeyP vn
+KeyP co
+KeyP vo
+
+
+
+Mouse cn co
+Mouse vn vo
+
+MouseD cn
+MouseD vn
+MouseD co
+MouseD vo
+
+MouseU cn
+MouseU vn
+MouseU co
+MouseU vo
+
+MouseP cn
+MouseP vn
+MouseP co
+MouseP vo
+
+
+
+MousePos cn co
+MousePos vn vo
+
+GetKey cn to
+GetKey vn to
+GetKey co to
+GetKey vo to
+
+GetKeyTrigger cn to
+GetKeyTrigger vn to
+GetKeyTrigger co to
+GetKeyTrigger vo to
+
+GetMousePos to to
+
+
+
+Sleep cn
+Sleep vn
+Sleep co
+Sleep vo
+
+Random to
+
+Output cs
+Output vs
+Output cn
+Output vn
+Output co
+Output vo
+
+
+
+Susp
+
+Halt
+
+

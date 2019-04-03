@@ -566,9 +566,45 @@ type
     
     public static procedure AddVarTypesComments(res: StringBuilder; oes: sequence of OptExprWrapper);
     begin
+      
+      var NumChecks := oes.SelectMany(oe->oe.NumChecks.Keys).ToList;
+      var StrChecks := oes.SelectMany(oe->oe.StrChecks.Keys).ToList;
+      
       var n_vars_names := oes.SelectMany(oe->oe.n_vars_names).ToList;
       var s_vars_names := oes.SelectMany(oe->oe.s_vars_names).ToList;
       var o_vars_names := oes.SelectMany(oe->oe.o_vars_names).ToList;
+      
+      
+      
+      if NumChecks.Count<>0 then
+      begin
+        res += ' NumChecks={';
+        
+        res += NumChecks[0];
+        foreach var vname in NumChecks.Skip(1) do
+        begin
+          res += ', ';
+          res += vname;
+        end;
+        
+        res += '}';
+      end;
+      
+      if StrChecks.Count<>0 then
+      begin
+        res += ' StrChecks={';
+        
+        res += StrChecks[0];
+        foreach var vname in StrChecks.Skip(1) do
+        begin
+          res += ', ';
+          res += vname;
+        end;
+        
+        res += '}';
+      end;
+      
+      
       
       if n_vars_names.Count<>0 then
       begin
@@ -4381,70 +4417,6 @@ end;
 
 {$region Misc Impl}
 
-{$region StmBlock}
-
-procedure StmBlock.SaveId(bw: System.IO.BinaryWriter) :=
-bw.Write(scr.bls.Values.Numerate(0).First(t->t[1]=self)[0]);
-
-function StmBlock.GetAllFRefs: sequence of StmBlockRef;
-begin
-  foreach var op in stms do
-    if op is IFileRefStm(var frs) then
-      yield sequence frs.GetRefs;
-end;
-
-function StmBlock.EnumrNextStms: sequence of StmBase;
-begin
-  if stms.Count = 0 then
-  begin
-    if next=nil then exit;
-    if next=self then exit;
-    yield sequence next.EnumrNextStms;
-    exit;
-  end;
-  
-  yield sequence stms;
-  if stms[stms.Count-1] is IJumpCallOper then
-    yield nil else
-  if next <> nil then
-    yield sequence next.EnumrNextStms;
-  
-end;
-
-function StmBlock.ToString: string;
-begin
-  var bl := new StringBuilder;
-  
-  var last_stm: StmBase;
-  var curr := self;
-  repeat
-    
-    bl += curr.GetBodyString;
-    if curr.stms.Count <> 0 then
-    begin
-      bl += #10;
-      last_stm := curr.stms[curr.stms.Count-1];
-    end;
-    
-    curr := curr.next;
-    if curr=nil then break;
-  until curr.lbl <> '';
-  
-  if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
-  begin
-    
-    if next=nil then
-      bl += 'Return //Const' else
-      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
-    
-    bl += #10;
-  end;
-  
-  Result := bl.ToString;
-end;
-
-{$endregion StmBlock}
-
 {$region ExecutingContext}
 
 function ExecutingContext.ExecuteNext: boolean;
@@ -4518,9 +4490,71 @@ end;
 
 {$endregion StmExpr}
 
-{$endregion Misc Impl}
+{$region StmBlock}
 
-{$region Script optimization}
+procedure StmBlock.SaveId(bw: System.IO.BinaryWriter) :=
+bw.Write(scr.bls.Values.Numerate(0).First(t->t[1]=self)[0]);
+
+function StmBlock.GetAllFRefs: sequence of StmBlockRef;
+begin
+  foreach var op in stms do
+    if op is IFileRefStm(var frs) then
+      yield sequence frs.GetRefs;
+end;
+
+function StmBlock.EnumrNextStms: sequence of StmBase;
+begin
+  if stms.Count = 0 then
+  begin
+    if next=nil then exit;
+    if next=self then exit;
+    yield sequence next.EnumrNextStms;
+    exit;
+  end;
+  
+  yield sequence stms;
+  if stms[stms.Count-1] is IJumpCallOper then
+    yield nil else
+  if next <> nil then
+    yield sequence next.EnumrNextStms;
+  
+end;
+
+function StmBlock.ToString: string;
+begin
+  var bl := new StringBuilder;
+  
+  var last_stm: StmBase;
+  var curr := self;
+  repeat
+    
+    bl += curr.GetBodyString;
+    if curr.stms.Count <> 0 then
+    begin
+      bl += #10;
+      last_stm := curr.stms[curr.stms.Count-1];
+    end;
+    
+    curr := curr.next;
+    if curr=nil then break;
+  until curr.lbl <> '';
+  
+  if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
+  begin
+    
+    if next=nil then
+      bl += 'Return //Const' else
+      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
+    
+    bl += #10;
+  end;
+  
+  Result := bl.ToString;
+end;
+
+{$endregion StmBlock}
+
+{$region Script}
 
 procedure Script.AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
 begin
@@ -4560,6 +4594,12 @@ begin
   oe.ReplaceVar(c.Key, le, new string[0], new string[0], new string[0]);
   
 end;
+
+{$endregion Script}
+
+{$endregion Misc Impl}
+
+{$region Script optimization}
 
 type
   GBCResT = (
@@ -4690,6 +4730,8 @@ end;
 
 procedure Script.Optimize;
 begin
+//  writeln(self);
+//  writeln('-'*50);
   
   foreach var bl: StmBlock in bls.Values do
     foreach var stm in bl.stms do
@@ -4706,6 +4748,11 @@ begin
   while try_opt_again or mini_opt do
   begin
     mini_opt := try_opt_again;
+    
+//    writeln('opt');
+//    writeln(self);
+//    writeln('-'*50);
+////    Sleep(1000);
     
     {$region Init}
     
@@ -4871,6 +4918,8 @@ begin
         
         {$endregion nue}
         
+        //Start checking
+        
         {$region No usages}
         if usages.Count = 0 then
         begin
@@ -4894,7 +4943,7 @@ begin
             end;
             
           end else
-          if bl.next.next <> bl.next then
+          if (bl.next<>nil) and (bl.next.next <> bl.next) then
           begin
             bl.stms.Remove(e);
             bl.next.stms.Insert(0, e);
