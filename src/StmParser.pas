@@ -2679,6 +2679,8 @@ type
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn, svn, ovn);
     
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2745,6 +2747,8 @@ type
     
     public function FinalOptimize(nvn, svn, ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn, svn, ovn);
+    
+    public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -4845,17 +4849,17 @@ begin
     {$region Variable optimizations}
     
     foreach var bl: StmBlock in bls.Values do
-      foreach var e: ExprStm in bl.stms.Select(stm->stm as ExprStm).Where(stm-> stm<>nil).ToList do
+      foreach var e: ExprStm in bl.stms.OfType&<ExprStm>.ToList do
       begin
-        var n_vars_names := e.e.n_vars_names;
-        var s_vars_names := e.e.s_vars_names;
-        var o_vars_names := e.e.o_vars_names;
+        var params_names := new HashSet<string>;
+        params_names += e.e.n_vars_names;
+        params_names += e.e.s_vars_names;
+        params_names += e.e.o_vars_names;
         
         {$region usages}
         
         var usages := new List<(StmBase, OptExprWrapper)>;
-        var prf := false;//param rewriter found
-        var uiapr := -1;//usages index after param rewriter
+        var pri := -1;//param rewriter index // this is index in bl.stms array
         
         foreach var stm in
           bl.stms
@@ -4868,20 +4872,15 @@ begin
             .Where(e2-> e2<>nil )
             .Select(e2->(stm, e2));
           
-          if not prf then
-            usages.AddRange(cu) else
-            if cu.Any then
-            begin
-              uiapr := bl.stms.IndexOf(stm);
-              break;
-            end;
+          usages.AddRange(cu);
           
           if stm.DoesRewriteVar(e.vname) then break;
           
-          prf := prf or
-            n_vars_names.Any(vname->stm.DoesRewriteVar(vname)) or
-            s_vars_names.Any(vname->stm.DoesRewriteVar(vname)) or
-            o_vars_names.Any(vname->stm.DoesRewriteVar(vname));
+          if params_names.Any(vname->stm.DoesRewriteVar(vname)) then
+          begin
+            pri := bl.stms.IndexOf(stm);
+            break;
+          end;
           
         end;
         
@@ -4889,7 +4888,7 @@ begin
         
         {$region nue}
         
-        //next usage exists (в следующих блоках)
+        //next usage (could) exist (in next blocks)
         var nue := false;
         
         if bl.next = nil then
@@ -4924,23 +4923,21 @@ begin
         if usages.Count = 0 then
         begin
           
+          if pri <> -1 then
+          begin
+            var ci := bl.stms.IndexOf(e);
+            if ci<>pri-1 then
+            begin
+              bl.stms.Insert(pri, e);
+              bl.stms.RemoveAt(ci);
+              //try_opt_again := true; // This can't open new opt posability
+            end;
+          end else
           if not nue then
           begin
             
-            if uiapr=-1 then
-            begin
-              bl.stms.Remove(e);
-              try_opt_again := true;
-            end else
-            begin
-              var ci := bl.stms.IndexOf(e);
-              if ci<>uiapr-1 then
-              begin
-                bl.stms.Insert(uiapr, e);
-                bl.stms.RemoveAt(ci);
-                //try_opt_again := true;//Это не может открыть новую оптимизацию
-              end;
-            end;
+            bl.stms.Remove(e);
+            try_opt_again := true;
             
           end else
           if (bl.next<>nil) and (bl.next.next <> bl.next) then
@@ -4961,14 +4958,14 @@ begin
           foreach var use in usages do
             use[1].ReplaceVar(e.vname, e.e);
           
-          if uiapr<>-1 then
+          if pri<>-1 then
           begin
             var ci := bl.stms.IndexOf(e);
-            if ci<>uiapr-1 then
+            if ci<>pri-1 then
             begin
-              bl.stms.Insert(uiapr, e);
+              bl.stms.Insert(pri, e);
               bl.stms.RemoveAt(ci);
-              //try_opt_again := true;//Это не может открыть новую оптимизацию
+              //try_opt_again := true; // This can't open new opt posability
             end;
           end else
           if nue then
@@ -4990,7 +4987,7 @@ begin
         {$endregion IOptSimpleExpr}
         
         {$region Only 1 use}
-        if (usages.Count = 1) and (uiapr = -1) and allow_final_opt.Contains(bl) and not nue then
+        if (usages.Count = 1) and (pri = -1) and allow_final_opt.Contains(bl) and not nue then
         begin
           bl.stms.Remove(e);
           
@@ -5013,7 +5010,7 @@ begin
             stms.Insert(ind,e);
             stms.RemoveAt(ci);
             
-            //try_opt_again := true;//Это не может открыть новую оптимизацию + создаст бесконечный цикл, если 2 переменных используются в 1 выражении
+            //try_opt_again := true; // This can't open new opt posability + would create inf loop in optimizer, if 2 var's are used in same expr
           end;
           
         end;

@@ -1,0 +1,6 @@
+
+GetKey 1 n0
+n1=n0
+KeyD 3
+GetKey 3 n0
+KeyD n1 //n1=... не должно переместить за второй GetKey

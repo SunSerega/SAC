@@ -1,0 +1,10 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+GetKey 1 n0 //Const
+KeyD 3 //Const
+n1=n0 Nums={n0}
+GetKey 3 n0 //Const
+KeyD n1 Nums={n1}
+Return //Const
