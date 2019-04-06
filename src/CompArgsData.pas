@@ -1,5 +1,8 @@
 ﻿unit CompArgsData;
 
+//ToDo проверить issue
+// - #???1 (http://forum.mmcs.sfedu.ru/t/versiya-pascalabc-net-3-4/2303/178?u=sun_serega)
+
 interface
 
 {$reference System.Windows.Forms.dll}
@@ -214,7 +217,7 @@ begin
       end;
       
     except
-      on _CompArgException do;
+      on e2: _CompArgException do; //ToDo #???1
     end;
     
     ArgBox.UpdatePosAll;
