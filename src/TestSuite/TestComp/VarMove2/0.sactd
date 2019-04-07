@@ -7,5 +7,5 @@ n=(n+1) Nums={n}
 Jump "Main.sac\#lbl1" //Const
 
 \#lbl1
-KeyP n Nums={n}
+KeyP n NumChecks={n} Nums={n}
 Jump "Main.sac\#lbl1" //Const

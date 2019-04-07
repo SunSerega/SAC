@@ -2606,6 +2606,8 @@ type
     public function GetMain: OptExprBase; abstract;
     public procedure SetMain(Main: OptExprBase); abstract;
     
+    protected function GetOptInst(Main: IOptExpr; NumChecks, StrChecks: Dictionary<string, ExprContextArea>): OptExprWrapper;
+    
     public function Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
     
     public function FinalOptimize(gnvn, gsvn, govn: HashSet<string>): OptExprWrapper;
@@ -3601,6 +3603,19 @@ end;
 
 {$region Wrapper converters}
 
+function OptExprWrapper.GetOptInst(Main: IOptExpr; NumChecks, StrChecks: Dictionary<string, ExprContextArea>): OptExprWrapper;
+begin
+  
+  if self.NumChecks.SequenceEqual(NumChecks) and self.StrChecks.SequenceEqual(StrChecks) and Main.IsSame(self.GetMain) then
+    Result := self else
+  if Main is OptNExprBase then
+    Result := new OptNExprWrapper(Main as OptNExprBase) else
+  if Main is OptSExprBase then
+    Result := new OptSExprWrapper(Main as OptSExprBase) else
+    Result := new OptOExprWrapper(Main as OptOExprBase);
+  
+end;
+
 function OptExprWrapper.Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
@@ -3666,18 +3681,8 @@ begin
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  if Main.IsSame(self.GetMain) then
-  begin
-    self.NumChecks := nNumChecks;
-    self.StrChecks := nStrChecks;
-    Result := self;
-    exit;
-  end else
-  if Main is OptNExprBase then
-    Result := new OptNExprWrapper(Main as OptNExprBase) else
-  if Main is OptSExprBase then
-    Result := new OptSExprWrapper(Main as OptSExprBase) else
-    Result := new OptOExprWrapper(Main as OptOExprBase);
+  Result := GetOptInst(Main, nNumChecks,nStrChecks);
+  if Result=self then exit;
   
   
   
@@ -3750,18 +3755,8 @@ begin
   Main := Main.FinalFixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize;
   
-  if Main.IsSame(self.GetMain) then
-  begin
-    self.NumChecks := nNumChecks;
-    self.StrChecks := nStrChecks;
-    Result := self;
-    exit;
-  end else
-  if Main is OptNExprBase then
-    Result := new OptNExprWrapper(Main as OptNExprBase) else
-  if Main is OptSExprBase then
-    Result := new OptSExprWrapper(Main as OptSExprBase) else
-    Result := new OptOExprWrapper(Main as OptOExprBase);
+  Result := GetOptInst(Main, nNumChecks,nStrChecks);
+  if Result=self then exit;
   
   
   
