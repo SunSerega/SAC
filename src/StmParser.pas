@@ -2905,9 +2905,10 @@ type
       vname := par[2];
     end;
     
-    public constructor(kk: InputNValue; bl: StmBlock);
+    public constructor(kk: InputNValue; vname: string; bl: StmBlock);
     begin
       self.kk := kk;
+      self.vname := vname;
       self.bl := bl;
       self.scr := bl.scr;
     end;
@@ -2926,7 +2927,7 @@ type
       end else
       if kk=nkk then
         Result := self else
-        Result := new OperGetKey(nkk, bl);
+        Result := new OperGetKey(nkk, vname, bl);
       
       nvn.Add(vname);
       svn.Remove(vname);
@@ -3017,9 +3018,10 @@ type
       vname := par[2];
     end;
     
-    public constructor(kk: InputNValue; bl: StmBlock);
+    public constructor(kk: InputNValue; vname: string; bl: StmBlock);
     begin
       self.kk := kk;
+      self.vname := vname;
       self.bl := bl;
       self.scr := bl.scr;
     end;
@@ -3038,7 +3040,7 @@ type
       end else
       if kk=nkk then
         Result := self else
-        Result := new OperGetKeyTrigger(nkk, bl);
+        Result := new OperGetKeyTrigger(nkk, vname, bl);
       
       nvn.Add(vname);
       svn.Remove(vname);

@@ -9,7 +9,7 @@ begin
   ep.SupprIO := true;
   
   //var s := new Script('Lib\examples\Basic operators\main.sac');
-  var s := new Script('TestSuite\TestComp\VarMove2\Main.sac', ep);
+  var s := new Script('TestSuite/TestComp/AllOpers\Main.sac', ep);
   
   //SaveObj('test.bin',s);
   
