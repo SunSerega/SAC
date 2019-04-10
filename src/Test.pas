@@ -157,7 +157,7 @@ type
     
     
     
-    function TemplatedCompile: Script;
+    function TemplatedCompile: array of Script;
     const TimeToComp=2000;
     begin
       var handle_exc: Exception->() := e->//ToDo #1814
@@ -199,17 +199,23 @@ type
       
       try
         
+        {$region compile}
+        
+        var ep := new ExecParams;
+        ep.SupprIO := true;
         var s: Script;
         if TimedExecute(
           ()->
           begin
-            var ep := new ExecParams;
-            ep.SupprIO := true;
             s := new Script(curr_dir + '\' + main_fname, ep);
           end,
           TimeToComp
         ) then
           raise new TesterException($'{curr_dir}: Error, compiling took too long!{#10}');
+        
+        {$endregion compile}
+        
+        {$region Test code}
         
         var opt_code := s.ToString.Replace('#', '\#').TrimEnd(#10);
         if exp_opt_code=nil then
@@ -232,8 +238,12 @@ type
             
           end;
         
+        {$endregion Test code}
+        
+        {$region Test multiple s.Optimize}
+        
         if TimedExecute(
-          procedure->loop 10 do s.Optimize,
+          s.Optimize * 10,
           TimeToComp
         ) then
           raise new TesterException($'{curr_dir}: Error, optimizing took too long!{#10}');
@@ -246,11 +256,29 @@ type
             
           end;
         
-        Result := s;
+        {$endregion Test multiple s.Optimize}
+        
+        {$region Test serialization}
+        
+        var temp_str := new System.IO.MemoryStream;
+        s.Serialize(temp_str);
+        temp_str.Position := 0;
+        var s2 := Script.LoadNew(System.IO.Path.GetFullPath(curr_dir + '\' + main_fname), temp_str, ep);
+        
+        opt_code := s2.ToString.Replace('#', '\#').TrimEnd(#10);
+        if opt_code <> exp_opt_code then
+          case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'exp:'#10 + exp_opt_code + #10#10#10'got:'#10 + opt_code + #10, $'Wrong code after serializing', MessageBoxButtons.OKCancel) of
+            
+            DialogResult.Cancel: Halt;
+            
+          end;
+        
+        {$endregion Test serialization}
         
         if exp_comp_err<>nil then
           raise new TesterException($'{curr_dir}: Error, expected error not found{#10}');
         
+        Result := Arr(s,s2);
       except
         on e: TesterException do raise new TesterException(e.Message);
         on e2: Exception do // ToDo #1900
@@ -402,8 +430,24 @@ type
       
       LoadSettings;
       
-      var s := TemplatedCompile;
-      TemplatedExecute(s);
+      {$ifdef SingleThread}
+      foreach var s in TemplatedCompile do
+        TemplatedExecute(s);
+      {$else SingleThread}
+      System.Threading.Tasks.Parallel.Invoke(
+        TemplatedCompile.ConvertAll(s->
+        begin
+          var res: Action0 := ()->
+          try
+            self.TemplatedExecute(s);
+          except
+            on e: TesterException do writeln(e.Message);
+            on e: Exception do writeln($'Exception in {dir}: {_ObjectToString(e)}');
+          end;
+          Result := res;
+        end)
+      );
+      {$endif SingleThread}
       
       {$ifdef WriteDone}
       write($'DONE: {dir}{#10}');
@@ -420,15 +464,18 @@ begin
   try
     CurrLocale := LangList[0];
     
+//    CompTester.Create.Test('TestSuite\TestExec\MultFile2');
+//    Halt;
+    
     {$ifdef SingleThread}
     CompTester.Create.Test;
     ExecTester.Create.Test;
-    {$else}
+    {$else SingleThread}
     System.Threading.Tasks.Parallel.Invoke(
       CompTester.Create.Test,
       ExecTester.Create.Test
     );
-    {$endif}
+    {$endif SingleThread}
     
     Writeln('Done testing');
     if not System.Console.IsOutputRedirected then ReadlnString('Press Enter to exit');

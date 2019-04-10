@@ -416,6 +416,12 @@ type
     inherited Create(source, $'Invalid var access T');
     
   end;
+  CannotLoadAddSerializedScript = class(LoadException)
+    
+    public constructor(source: object) :=
+    inherited Create(source, $'Cannot add deserialized script, because it wasn''t serialized in lib mode');
+    
+  end;
   
   {$endregion Load}
   
@@ -920,7 +926,7 @@ type
     public SngDefNums := new Dictionary<string, (boolean, string)>;//is readonly, fname for readonly
     public SngDefStrs := new Dictionary<string, (boolean, string)>;
     
-    private function ReadFile(context: object; lbl: string): boolean;
+    {$region Utility}
     
     private static function CombinePaths(p1, p2: string): string;
     begin
@@ -955,11 +961,21 @@ type
       Result := bl.ToString;
     end;
     
+    {$endregion Utility}
+    
+    {$region Script from text file}
+    
+    private function ReadFile(context: object; lbl: string): boolean;
+    
     public constructor(fname: string; ep: ExecParams);
     
     //ToDo #1502
 //    public constructor(fname: string) :=
 //    Create(fname, new ExecParams);
+    
+    {$endregion Script from text file}
+    
+    {$region Optimizing}
     
     public procedure AddSngDef(vname: string; IsNum: boolean; val: object; Access: VarAccessT; fname: string);
     
@@ -986,6 +1002,10 @@ type
     
     public procedure Optimize;
     
+    {$endregion Optimizing}
+    
+    {$region Executing}
+    
     public procedure Execute :=
     Execute(read_start_lbl_name);
     
@@ -1002,14 +1022,42 @@ type
         stoped;
     end;
     
-    public procedure Save(str: System.IO.Stream);
+    {$endregion Executing}
     
-    public procedure Load(main_path: string; br: System.IO.BinaryReader);
+    {$region Binary serialization}
+    
+    public procedure SaveContent(bw: System.IO.BinaryWriter);
+    
+    public procedure SaveLib(fname: string);
     begin
+      if not settings.lib_mode then raise new CannotSerializeInExecModeException(nil);
       
+      var str := System.IO.File.Create(fname);
+      
+      var sw := new System.IO.StreamWriter(str);
+      sw.Write('!PreComp=');
+      sw.Flush;
+      
+      var bw := new System.IO.BinaryWriter(str);
+      bw.Write(true);
+      
+      SaveContent(bw);
+      
+      str.Close;
+    end;
+    
+    public procedure Serialize(str: System.IO.Stream);
+    begin
+      var bw := new System.IO.BinaryWriter(str);
+      bw.Write(false);
+      SaveContent(bw);
+    end;
+    
+    private procedure LoadContent(virtual_path: string; br: System.IO.BinaryReader);
+    begin
       var prev_main_fname := br.ReadString;
-      var new_main_fname := main_path.Split('\').Last;
-      main_path := System.IO.Path.GetDirectoryName(main_path);
+      var new_main_fname := virtual_path.Split('\').Last;
+      var load_path := System.IO.Path.GetDirectoryName(virtual_path);
       
       self.start_pos_def := br.ReadBoolean;
       
@@ -1027,7 +1075,7 @@ type
       begin
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
-        var fname := CombinePaths(main_path, br.ReadString);
+        var fname := CombinePaths(load_path, br.ReadString);
         self.SngDefStrs.Add(vname, (is_readonly, fname));
       end;
       
@@ -1035,43 +1083,72 @@ type
       begin
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
-        var fname := CombinePaths(main_path, br.ReadString);
+        var fname := CombinePaths(load_path, br.ReadString);
         self.SngDefNums.Add(vname, (is_readonly, fname));
       end;
+      
+      var lbls := new StmBlock[br.ReadInt32];
+      for var i := 0 to lbls.Length-1 do
+        lbls[i] := new StmBlock(self);
       
       loop br.ReadInt32 do
       begin
         var fname := br.ReadString;
         if fname = prev_main_fname then
           fname := new_main_fname;
-        fname := CombinePaths(main_path, fname);
+        fname := CombinePaths(load_path, fname);
         
-        var lbls := new StmBlock[br.ReadInt32];
-        for var i := 0 to lbls.Length-1 do
-          lbls[i] := new StmBlock(self);
-        
-        for var i := 0 to lbls.Length-1 do
+        loop br.ReadInt32 do
         begin
+          var i := br.ReadInt32;
           lbls[i].fname := fname;
           lbls[i].lbl := '#'+br.ReadString;
           lbls[i].Load(br, lbls);
         end;
         
-        for var i := 0 to lbls.Length-1 do
-        begin
-          
-          var key := fname + lbls[i].lbl;
-          if not self.bls.ContainsKey(key) then
-            self.bls.Add(key, lbls[i]) else
-            raise new DuplicateLabelNameException(nil, key);
-          
-        end;
+      end;
+      
+      for var i := 0 to lbls.Length-1 do
+      begin
+        
+        var key := lbls[i].fname + lbls[i].lbl;
+        if not self.bls.ContainsKey(key) then
+          self.bls.Add(key, lbls[i]) else
+          raise new DuplicateLabelNameException(nil, key);
         
       end;
       
       self.Optimize;
-      
     end;
+    
+    public procedure LoadAdd(virtual_path: string; br: System.IO.BinaryReader);
+    begin
+      if not br.ReadBoolean then raise new CannotLoadAddSerializedScript(nil);
+      LoadContent(virtual_path, br);
+    end;
+    
+    public static function LoadNew(virtual_path: string; str: System.IO.Stream; ep: ExecParams): Script;
+    begin
+      Result := new Script;
+      Result.settings := ep;
+      if ep.SupprIO then
+        Result.SupprIO := new SuppressedIOData;
+      
+      Result.read_start_lbl_name := virtual_path;
+      if Result.read_start_lbl_name.Contains('#') then
+        Result.main_path := Result.read_start_lbl_name.Remove(Result.read_start_lbl_name.IndexOf('#')) else
+        Result.main_path := Result.read_start_lbl_name;
+      Result.main_path := System.IO.Path.GetDirectoryName(Result.main_path);
+      
+      var br := new System.IO.BinaryReader(str);
+      br.ReadBoolean; // both libs and non-libs can be loaded this way
+      
+      Result.LoadContent(virtual_path, br);
+    end;
+    
+    {$endregion Binary serialization}
+    
+    {$region Decompiling}
     
     public function ToString: string; override;
     begin
@@ -1094,6 +1171,8 @@ type
       
       Result := res.ToString;
     end;
+    
+    {$endregion Decompiling}
     
   end;
 
@@ -1792,7 +1871,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(1));
-      bw.Write(byte(3));
+      bw.Write(byte(4));
       kk.Save(bw);
     end;
     
@@ -3485,7 +3564,7 @@ type
       var n := br.ReadInt32;
       if n <> -1 then
         if cardinal(n) < bls.Length then
-          res.bl := bls[n] else
+          res.CalledBlock := bls[n] else
           raise new InvalidStmBlIdException(n, bls.Length);
       Result := res;
     end;
@@ -4330,7 +4409,7 @@ begin
     begin
       str.Position := buff.Length;
       var br := new System.IO.BinaryReader(str);
-      self.Load(ffname, br);
+      self.LoadAdd(ffname, br);
       exit;
     end;
     
@@ -4412,7 +4491,7 @@ begin
     main_path := read_start_lbl_name.Remove(read_start_lbl_name.IndexOf('#')) else
     main_path := read_start_lbl_name;
   
-  main_path := main_path.Remove(main_path.LastIndexOf('\'));
+  main_path := System.IO.Path.GetDirectoryName(main_path);
   ReadFile(nil, read_start_lbl_name);
   AllCheckSngDef;
   
@@ -5214,9 +5293,8 @@ begin
   
 end;
 
-procedure Script.Save(str: System.IO.Stream);
+procedure Script.SaveContent(bw: System.IO.BinaryWriter);
 begin
-  if not settings.lib_mode then raise new CannotSerializeInExecModeException(nil);
   
   if LoadedFiles <> nil then
   begin
@@ -5225,7 +5303,7 @@ begin
     repeat
       nopt := true;
       
-      var refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).Cast&<DynamicStmBlockRef>.Where(ref->ref <> nil).Select(ref->ref.s).ToList;
+      var refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).OfType&<DynamicStmBlockRef>.Select(ref->ref.s).ToList;
       foreach var ref: InputSValue in refs do
       begin
         var inp := ref.Optimize(new HashSet<string>,new HashSet<string>);
@@ -5240,12 +5318,6 @@ begin
     until nopt;
     
   end;
-  
-  var sw := new System.IO.StreamWriter(str);
-  sw.Write('!PreComp=');
-  sw.Flush;
-  
-  var bw := new System.IO.BinaryWriter(str);
   
   var main_fname := read_start_lbl_name.Substring(read_start_lbl_name.LastIndexOf('\')+1);
   bw.Write(
@@ -5291,6 +5363,8 @@ begin
     bw.Write(GetRelativePath(main_path, kvp.Value[1]));
   end;
   
+  bw.Write(bls.Count);
+  
   var blgs :=
   bls
   .Select(kvp->(kvp.Key.Split(new char[]('#'),2),kvp.Value))
@@ -5299,6 +5373,7 @@ begin
     t->(t[0][1],t[1])
   ).ToList;
   bw.Write(blgs.Count);
+  
   foreach var kvp: System.Linq.IGrouping<string, (string, StmBlock)> in blgs do
   begin
     bw.Write(GetRelativePath(main_path, kvp.Key));
@@ -5306,13 +5381,12 @@ begin
     bw.Write(l.Count);
     foreach var t in l do
     begin
+      t[1].SaveId(bw);
       bw.Write(t[0]);
       t[1].Save(bw);
     end;
   end;
   
-  //str.Flush;
-  str.Close;
 end;
 
 {$endregion Save/Load}

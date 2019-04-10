@@ -4166,6 +4166,9 @@ begin
     2: Result := new OptFunc_Num(br, nv, sv, ov);
     3: Result := new OptFunc_KeyCode(br, nv, sv, ov);
     4: Result := new OptFunc_DeflyNum(br, nv, sv, ov);
+    7: Result := new OptFunc_Floor(br, nv, sv, ov);
+    8: Result := new OptFunc_Round(br, nv, sv, ov);
+    9: Result := new OptFunc_Ceil(br, nv, sv, ov);
     
     5: Result := new OptFunc_Str(br, nv, sv, ov);
     6: Result := new OptFunc_CutStr(br, nv, sv, ov);
