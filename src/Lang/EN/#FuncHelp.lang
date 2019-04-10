@@ -47,6 +47,39 @@ T|KeyCode					=\
 	But KeyD KeyCode("LShift") would press only LShift
 
 
+H|Floor						=Rounds a number to nearest integer, which is <= input number
+T|Floor						=\
+	Output Floor(1.0) //1.0\
+	Output Floor(1.3) //1.0\
+	Output Floor(1.5) //1.0\
+	Output Floor(1.8) //1.0\
+	Output Floor(2.0) //2.0\
+	\
+	Floor rounds a number to nearest integer, which is <= input number
+
+
+H|Round						=Rounds a number to nearest integer
+T|Round						=\
+	Output Round(1.0) //1.0\
+	Output Round(1.3) //1.0\
+	Output Round(1.5) //2.0\
+	Output Round(1.8) //2.0\
+	Output Round(2.0) //2.0\
+	\
+	Round rounds a number to nearest integer
+
+
+H|Ceil						=Rounds a number to nearest integer, which is >= input number
+T|Ceil						=\
+	Output Ceil(1.0) //1.0\
+	Output Ceil(1.3) //2.0\
+	Output Ceil(1.5) //2.0\
+	Output Ceil(1.8) //2.0\
+	Output Ceil(2.0) //2.0\
+	\
+	Ceil rounds a number to nearest integer, which is >= input number
+
+
 %1=
 
 

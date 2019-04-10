@@ -1,6 +1,6 @@
 ﻿unit ExprParser;
 //ToDo Контекст ошибок
-//ToDo Функции округления чисел (Floor, Round, Ceil)
+//ToDo тесты всех функций
 //ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
@@ -3415,6 +3415,144 @@ type
     new OptFunc_DeflyNum(par, ifnot);
     
   end;
+  OptFunc_Floor = sealed class(OptNFuncExpr)
+    
+    public procedure CheckParams; override :=
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
+      typeof(real)
+    );
+  
+    public procedure Calc;
+    begin
+      var pr := par[0].GetRes;
+      if pr is real then
+        self.res := System.Math.Floor(real(pr)) else
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(real), pr?.GetType);
+    end;
+    
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
+    begin
+      yield sequence inhgc;
+      yield Action0(self.Calc);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(byte(7));
+      inherited Save(bw);
+    end;
+    
+    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object) :=
+    inherited Create(br, 'Floor', nvn, svn, ovn);
+    
+    public constructor(par: array of OptExprBase);
+    begin
+      self.par := par;
+      self.name := 'Floor';
+      CheckParams;
+    end;
+    
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Floor(par);
+    
+  end;
+  OptFunc_Round = sealed class(OptNFuncExpr)
+    
+    public procedure CheckParams; override :=
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
+      typeof(real)
+    );
+  
+    public procedure Calc;
+    begin
+      var pr := par[0].GetRes;
+      if pr is real then
+        self.res := System.Math.Round(real(pr)) else
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(real), pr?.GetType);
+    end;
+    
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
+    begin
+      yield sequence inhgc;
+      yield Action0(self.Calc);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(byte(8));
+      inherited Save(bw);
+    end;
+    
+    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object) :=
+    inherited Create(br, 'Round', nvn, svn, ovn);
+    
+    public constructor(par: array of OptExprBase);
+    begin
+      self.par := par;
+      self.name := 'Round';
+      CheckParams;
+    end;
+    
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Round(par);
+    
+  end;
+  OptFunc_Ceil = sealed class(OptNFuncExpr)
+    
+    public procedure CheckParams; override :=
+    CheckParamsBase;
+    
+    public function GetTps: array of System.Type; override :=
+    new System.Type[](
+      typeof(real)
+    );
+  
+    public procedure Calc;
+    begin
+      var pr := par[0].GetRes;
+      if pr is real then
+        self.res := System.Math.Ceiling(real(pr)) else
+        raise new InvalidFuncParamTypesException(self, self.name, 0, typeof(real), pr?.GetType);
+    end;
+    
+    function inhgc := inherited GetCalc;
+    public function GetCalc: sequence of Action0; override;
+    begin
+      yield sequence inhgc;
+      yield Action0(self.Calc);
+    end;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(5));
+      bw.Write(byte(9));
+      inherited Save(bw);
+    end;
+    
+    public constructor(br: System.IO.BinaryReader; nvn: array of real; svn: array of string; ovn: array of object) :=
+    inherited Create(br, 'Ceil', nvn, svn, ovn);
+    
+    public constructor(par: array of OptExprBase);
+    begin
+      self.par := par;
+      self.name := 'Ceil';
+      CheckParams;
+    end;
+    
+    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    new OptFunc_Ceil(par);
+    
+  end;
   
   OptFunc_Str = sealed class(OptSFuncExpr)
     
@@ -3864,6 +4002,9 @@ type
       FuncTypes.Add('num', par->new OptFunc_Num(par));
       FuncTypes.Add('keycode', par->new OptFunc_KeyCode(par));
       FuncTypes.Add('deflynum', par->new OptFunc_DeflyNum(par));
+      FuncTypes.Add('floor', par->new OptFunc_Floor(par));
+      FuncTypes.Add('round', par->new OptFunc_Round(par));
+      FuncTypes.Add('ceil', par->new OptFunc_Ceil(par));
       
       FuncTypes.Add('str', par->new OptFunc_Str(par));
       FuncTypes.Add('cutstr', par->new OptFunc_CutStr(par));

@@ -27,6 +27,7 @@ begin
   
   if res<>nil then
     Result := res[1] else
+  if key.Length=1 then
     case key[1] of
       'A'..'Z': Result := word(key[1]);
       '0'..'9': Result := word(key[1]);
@@ -38,8 +39,8 @@ begin
           if res2=nil then raise new KeyDataNotFoundException(key);
           Result := res2[1];
         end;
-    end;
-  
+    end else
+    raise new KeyDataNotFoundException(key);
 end;
 
 function GetKeyName(key: byte): string;
