@@ -1060,7 +1060,7 @@ type
       var new_main_fname := virtual_path.Split('\').Last;
       var load_path := System.IO.Path.GetDirectoryName(virtual_path);
       
-      self.start_pos_def := br.ReadBoolean;
+      self.start_pos_def := br.ReadBoolean or self.start_pos_def;
       
       loop br.ReadInt32 do
       begin
