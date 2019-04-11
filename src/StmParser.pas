@@ -1,8 +1,6 @@
 ﻿unit StmParser;
-//ToDo я видел очень странный ExpOptCode в каком то тесте, лучше пересмотреть все
 
 //ToDo оператор Assert
-//ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
 
 //ToDo в каждом операторе надо хранить имя начального файла
 // - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
@@ -1065,11 +1063,13 @@ type
       loop br.ReadInt32 do
       begin
         var vname := br.ReadString;
+        var val: object;
         case br.ReadByte of
-          1: self.SngDefConsts.Add(vname, nil);
-          2: self.SngDefConsts.Add(vname, br.ReadString);
-          3: self.SngDefConsts.Add(vname, br.ReadDouble);
+          1: val := nil;
+          2: val := br.ReadString;
+          3: val := br.ReadDouble;
         end;
+        AddSngDef(vname, val is real, val, VarAccessT.init_only, nil);
       end;
       
       loop br.ReadInt32 do
@@ -1077,7 +1077,7 @@ type
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
         var fname := CombinePaths(load_path, br.ReadString);
-        self.SngDefStrs.Add(vname, (is_readonly, fname));
+        AddSngDef(vname,false,nil,is_readonly?VarAccessT.read_only:VarAccessT.none,fname);
       end;
       
       loop br.ReadInt32 do
@@ -1085,7 +1085,7 @@ type
         var vname := br.ReadString;
         var is_readonly := br.ReadBoolean;
         var fname := CombinePaths(load_path, br.ReadString);
-        self.SngDefNums.Add(vname, (is_readonly, fname));
+        AddSngDef(vname,true,nil,is_readonly?VarAccessT.read_only:VarAccessT.none,fname);
       end;
       
       var lbls := new StmBlock[br.ReadInt32];
@@ -4483,8 +4483,12 @@ begin
     self.SupprIO := new SuppressedIOData;
   
   var sc_sz := System.Windows.Forms.Screen.PrimaryScreen.WorkingArea.Size;
-  AddSngDef('WW', true, real(sc_sz.Width),  VarAccessT.init_only, nil);
-  AddSngDef('WH', true, real(sc_sz.Height), VarAccessT.init_only, nil);
+  
+  if not settings.lib_mode then
+  begin
+    AddSngDef('WW', true, real(sc_sz.Width),  VarAccessT.init_only, nil);
+    AddSngDef('WH', true, real(sc_sz.Height), VarAccessT.init_only, nil);
+  end;
   
   read_start_lbl_name := System.IO.Path.GetFullPath(fname);
   
@@ -4650,9 +4654,9 @@ begin
   if Access=VarAccessT.init_only then
   begin
     if
-      SngDefConsts.ContainsKey(vname) or
       SngDefNums.ContainsKey(vname) or
-      SngDefStrs.ContainsKey(vname)
+      SngDefStrs.ContainsKey(vname) or
+      (SngDefConsts.ContainsKey(vname) and not SngDefConsts[vname].Equals(val))
     then raise new CannotOverrideConstException(nil);//ToDo надо отдельное исключение, потому что это не совсем отражает проблему
     
     SngDefConsts[vname] := val;
@@ -4923,10 +4927,11 @@ begin
       end;
     end;
     
-    if not done.Any(bl->bl.GetAllFRefs.Any(ref->ref is DynamicStmBlockRef)) then
-      foreach var kvp in bls.ToList do
-        if not done.Contains(kvp.Value) then
-          bls.Remove(kvp.Key);
+    if not settings.lib_mode then
+      if not done.Any(bl->bl.GetAllFRefs.Any(ref->ref is DynamicStmBlockRef)) then
+        foreach var kvp in bls.ToList do
+          if not done.Contains(kvp.Value) then
+            bls.Remove(kvp.Key);
     
     {$endregion Block chaining}
     

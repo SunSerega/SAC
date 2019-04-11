@@ -55,7 +55,19 @@ type
         end
       );
       
-      {$endregion script}
+      {$endregion Script}
+      
+      {$region Lib mode}
+      
+      if ep.lib_mode then
+      begin
+        var sfd := new System.Windows.Forms.SaveFileDialog;
+        sfd.Filter := Translate('PreCompFileFilter');
+        if sfd.ShowDialog = System.Windows.Forms.DialogResult.OK then scr.SaveLib(sfd.FileName);
+        Halt;
+      end;
+      
+      {$endregion Lib mode}
       
       {$region Form}
       
