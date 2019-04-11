@@ -8,7 +8,8 @@ NoLibHelp						=\
 	You can also specify arguments, after .sac file name\
 	Here is list of them:\
 	"!conf" - will start program to help add arguments\
-	"!debug" - will start script with debug (slower, but more info)\
+	"!lib_m" - script wouldn't start executing, but this would allow you to save multifile script to single .sac file\
+	"!susp" - in this (suppressed) mode clicker command's aren't influencing keyboard and mouse, usefull for debug\
 	Thats all for now, press Enter to exit
 
 LibView|CurrLib					=Folder: "{0}"

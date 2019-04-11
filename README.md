@@ -18,7 +18,7 @@ but also multifile, recursive, etc. scripts.
 SAC has:
 - Powerful optimizer;
 - Multifile scripts;
-- Dynamic lib's;
+- Abylity to precompil multifile scripts to single binary file;
 - Operators that allows for non-linear scripts (like Call[If] ).
 
 ---

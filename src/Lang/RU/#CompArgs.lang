@@ -9,7 +9,7 @@ RunWithNewArgs				=Запустить
 	Но вы можете скопировать программу содержащую !conf, для дальнейшего использования
 
 !debug descr					=\
-	*я пока не знаю что сделаю с этим, пока что оно не работает*
+	*зарезервировано*
 
 !lib_m descr					=\
 	lib mode - режим генерации библиотеки\
@@ -19,9 +19,9 @@ RunWithNewArgs				=Запустить
 	Тогда весь код из библиотеки попадёт в скрипт к которому вы её прикрепили
 
 !supr descr					=\
-	supressed mode\
-	In this mode - all the clicker command's, Susp and Halt are supressed\
-	You can't send nor resive key/mouse event's\
-	But if you try to send event - it would save, so you can read it later\
-	Usefull for debug
+	изолированный (supressed) режим\
+	В этом режиме - все команды-кликеры а так же Susp и Halt изолированы\
+	Вы не сможете посылать и получать эвенты клавиатуры и мышки\
+	Но если вы пошлёте какой то эвент - он сохранится, так что всё сможете получить его позже\
+	Полезно для дебага
 

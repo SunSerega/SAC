@@ -9,7 +9,7 @@ RunWithNewArgs				=Run
 	But you can copy command that includes !conf, for feture use
 
 !debug descr					=\
-	*idk what this shoud do, so, reserved*
+	*reserved*
 
 !lib_m descr					=\
 	lib mode\
