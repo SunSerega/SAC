@@ -10,15 +10,12 @@
 
 
 //ToDo Контекст ошибок
-//ToDo тесты для всех программ из справки
+//ToDo тесты для всех скриптов из справки
 
 //ToDo а как будет работать получение относительного пути, если при подключении файла указать название диска?
 // - и в библиотеках проверить, если указать полный путь - наверное не надо считать относительный в библиотеке...
 
 //ToDo операторы ReadText и Alert, работающие через месседж боксы
-
-//ToDo Удалять Call null
-// - А Jump null можно заменять на Return
 
 //ToDo Directives: !NoOpt/!Opt
 
@@ -4749,11 +4746,11 @@ begin
         exit;
       end else
       begin
-        
         var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
-        if opt <> nil then
-          stm_lst += opt;
         
+        if (opt is OperConstCall(var cc)) and (cc.CalledBlock=nil) then opt := nil;
+        
+        if opt <> nil then stm_lst += opt;
       end;
     
     

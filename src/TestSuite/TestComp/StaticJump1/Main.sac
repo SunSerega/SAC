@@ -1,0 +1,13 @@
+Return
+
+#1
+Output 1
+Call null
+Output 2
+Return
+
+#2
+Output 1
+Jump null
+Output 2
+Return

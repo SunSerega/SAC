@@ -1,0 +1,14 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+Return //Const
+
+\#1
+Output "1" //Const
+Output "2" //Const
+Return //Const
+
+\#2
+Output "1" //Const
+Return //Const
