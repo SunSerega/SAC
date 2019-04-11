@@ -1,0 +1,53 @@
+!StartPos
+
+cn=5
+cs="RShift"
+co=null
+
+GetKey 1 vn
+vs=Str(vn)
+
+JumpIf vn = 0 "#vo_str" "#vo_num"
+
+ =============================================
+
+#vo_num
+vo=3
+JumpIf vn = 0 "#Funcs" "#"
+
+ =============================================
+
+#vo_str
+vo="ArrowRight"
+JumpIf vn = 0 "#Funcs" "#"
+
+ =============================================
+
+#Funcs
+
+
+
+Output "Consts:"
+
+Output "Length  : 3="+Length("abc")
+Output "Num     : (0,5,7)=("+Num(null)+","+Num("5")+","+Num(7)+")"
+Output "KeyCode : (160,192,192)=("+KeyCode("LShift")+","+KeyCode("~")+","+KeyCode("Ё")+")"
+Output "Floor   : (1,1,1,1,2)=("+Floor(1.0)+","+Floor(1.3)+","+Floor(1.5)+","+Floor(1.8)+","+Floor(2.0)+")"
+Output "Round   : (1,1,2,2,2)=("+Round(1.0)+","+Round(1.3)+","+Round(1.5)+","+Round(1.8)+","+Round(2.0)+")"
+Output "Ceil    : (1,2,2,2,2)=("+Ceil(01.0)+","+Ceil(01.3)+","+Ceil(01.5)+","+Ceil(01.8)+","+Ceil(02.0)+")"
+
+Output "Str     : (,5,def)=("+Str(null)+","+Str(5)+","+Str("def")+")"
+Output "CutStr  : (cde,cde)=("+CutStr("abcdef",2,4)+","+"abcdef"[2..4]+")"
+
+
+
+Output "Vars:"
+
+Output "Length  : (6,1,10)=("+Length(cs)+","+Length(vs)+","+Length(vo)+")"
+Output "Num     : (5,0,0,0)=("+Num(cn)+","+Num(co)+","+Num(vn)+","+Num(vs)+")"
+Output "KeyCode : (161,39)=("+KeyCode(cs)+","+KeyCode(vo)+")"
+
+Output "Str     : (5,RShift,,0,0,ArrowRight)=("+Str(cn)+","+Str(cs)+","+Str(co)+","+Str(vn)+","+Str(vs)+","+Str(vo)+")"
+Output "CutStr  : (hif,row)=("+CutStr(cs,2,4)+","+vo[2..4]+")"
+
+

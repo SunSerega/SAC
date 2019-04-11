@@ -1,0 +1,55 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos //Const
+cn=5
+cs="RShift"
+co=null
+GetKey 1 vn //Const
+vs=Str(vn) Nums={vn}
+JumpIf vn = 0 "Main.sac\#vo_str" "Main.sac\#vo_num" Nums={vn}
+
+\#vo_num
+vo=3
+JumpIf vn = 0 "Main.sac\#Funcs" "Main.sac\#" Objs={vn}
+
+\#vo_str
+vo="ArrowRight"
+JumpIf vn = 0 "Main.sac\#Funcs" "Main.sac\#" Objs={vn}
+
+\#Funcs
+Output "Consts:" //Const
+Output "Length  : 3=3" //Const
+Output "Num     : (0,5,7)=(0,5,7)" //Const
+Output "KeyCode : (160,192,192)=(160,192,192)" //Const
+Output "Floor   : (1,1,1,1,2)=(1,1,1,1,2)" //Const
+Output "Round   : (1,1,2,2,2)=(1,1,2,2,2)" //Const
+Output "Ceil    : (1,2,2,2,2)=(1,2,2,2,2)" //Const
+Output "Str     : (,5,def)=(,5,def)" //Const
+Output "CutStr  : (cde,cde)=(cde,cde)" //Const
+Output "Vars:" //Const
+Output ("Length  : (6,1,10)=("+Str(Length(cs))+","+Str(Length(vs))+","+Str(Length(vo))+")") StrChecks={cs, vs, vo} Strs={cs, vs, vo}
+Output ("Num     : (5,0,0,0)=("+Str(Num(cn))+","+Str(Num(co))+","+Str(Num(vn))+","+Str(Num(vs))+")") Strs={vs} Objs={cn, co, vn}
+Output ("KeyCode : (161,39)=("+Str(KeyCode(cs))+","+Str(KeyCode(vo))+")") Strs={cs, vo}
+Output ("Str     : (5,RShift,,0,0,ArrowRight)=("+Str(cn)+","+cs+","+Str(co)+","+Str(vn)+","+vs+","+vo+")") Strs={cs, vs, vo} Objs={cn, co, vn}
+Output ("CutStr  : (hif,row)=("+CutStr(cs,2,4)+","+CutStr(vo,2,4)+")") Strs={cs, vo}
+Return //Const
+
+#ExpOtp
+Consts:
+Length  : 3=3
+Num     : (0,5,7)=(0,5,7)
+KeyCode : (160,192,192)=(160,192,192)
+Floor   : (1,1,1,1,2)=(1,1,1,1,2)
+Round   : (1,1,2,2,2)=(1,1,2,2,2)
+Ceil    : (1,2,2,2,2)=(1,2,2,2,2)
+Str     : (,5,def)=(,5,def)
+CutStr  : (cde,cde)=(cde,cde)
+Vars:
+Length  : (6,1,10)=(6,1,10)
+Num     : (5,0,0,0)=(5,0,0,0)
+KeyCode : (161,39)=(161,39)
+Str     : (5,RShift,,0,0,ArrowRight)=(5,RShift,,0,0,ArrowRight)
+CutStr  : (hif,row)=(hif,row)
+%stoped

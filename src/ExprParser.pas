@@ -1,7 +1,7 @@
 ﻿unit ExprParser;
+
 //ToDo Контекст ошибок
-//ToDo тесты всех функций
-//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где)
+//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где) // P.S. вроде для контекста жешь
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
 // - наверное всё же контекст ошибок придётся сделать для этого
@@ -429,8 +429,7 @@ type
     constructor(val: string) :=
     self.val := val;
     
-    public function ToString: string; override :=
-    $'"{val}"';
+    public function ToString: string; override;
     
   end;
   
@@ -488,7 +487,7 @@ type
   
   {$endregion PreOpt}
   
-  {$region Optimize}
+  {$region Optimized}
   
   {$region Base}
   
@@ -681,10 +680,7 @@ type
       bw.Write(res);
     end;
     
-    public function ToString(nvn, svn, ovn: array of string): string; override :=
-    (res.Length < 100)?
-    $'"{res}"':
-    $'"{res.Substring(0,100)}..."[{res.Length}]';
+    public function ToString(nvn, svn, ovn: array of string): string; override;
     
   end;
   OptNullLiteralExpr = sealed class(OptOExprBase, IOptLiteralExpr)
@@ -2793,13 +2789,35 @@ type
   
   {$endregion Wrappers}
   
-  {$endregion Optimize}
+  {$endregion Optimized}
   
 implementation
 
 uses KCDData;
 
-{$region PreOpt}
+{$region StrFuncs}
+
+function EscapeStrSyms(self: string): string; extensionmethod :=
+self.Replace('\','\\').Replace('"','\"');
+
+function FindStrEnd(self: string; from: integer): integer; extensionmethod;
+begin
+  var nfrom := from;
+  while true do
+  begin
+    
+    if from > self.Length then
+      raise new CorrespondingCharNotFoundException(self, '"', nfrom);
+    
+    if self[from] = '"' then
+    begin
+      Result := from;
+      exit;
+    end;
+    
+    from += self[from]='\'?2:1;
+  end;
+end;
 
 function FindNext(self: string; from: integer; ch: char): integer; extensionmethod;
 begin
@@ -2817,11 +2835,10 @@ begin
     end;
     
     if self[from] = '(' then from := self.FindNext(from+1,')') else
-    if self[from] = '"' then from := self.FindNext(from+1,'"') else
+    if self[from] = '"' then from := self.FindStrEnd(from+1) else
     if self[from] = '[' then from := self.FindNext(from+1,']');
     
     from += 1;
-    
   end;
 end;
 
@@ -2845,15 +2862,14 @@ begin
   while n+str.Length-1 < self.Length do
   begin
     
-    if self[n] = '"' then
-      n := self.FindNext(n+1,'"') else
-    if self[n] = '(' then
-      n := self.FindNext(n+1,')') else
-    if 1.&To(str.Length).All(i->self[n+i-1] = str[i]) then
+    if Range(1,str.Length).All(i->self[n+i-1] = str[i]) then
     begin
       wsp += n;
       if wsp.Count = c then break;
-    end;
+    end else
+    if self[n] = '(' then n := self.FindNext(n+1,')') else
+    if self[n] = '"' then n := self.FindStrEnd(n+1) else
+    if self[n] = '[' then n := self.FindNext(n+1,']');
     
     n += 1;
   end;
@@ -2895,7 +2911,12 @@ begin
   end;
 end;
 
+{$endregion StrFuncs}
 
+{$region PreOpt}
+
+function SLiteralExpr.ToString: string :=
+$'"{val.EscapeStrSyms}"';
 
 type
   ArithOp = (none, plus, minus, mlt, divide, pow);
@@ -2920,7 +2941,7 @@ begin
       Result := Expr.FromString(text, si1+1, si2-1) else
   if text[si1] = '"' then
   begin
-    var i := text.FindNext(si1+1, '"');
+    var i := text.FindStrEnd(si1+1);
     if (i <> si2) and (text[i+1] = '[') then
     begin
       if text.FindNext(i+2,']') <> si2 then raise new ExtraCharsException(text, si1, si2, text.FindNext(i+2,']'));
@@ -2930,8 +2951,8 @@ begin
       Result := new FuncExpr('cutstr', new string[](str, cps[0], cps[1]));
     end else
     begin
-      if i <> si2 then raise new ExtraCharsException(text, si1, si2, i);
-      Result := new SLiteralExpr(text.Substring(si1,si2-si1-1));
+      if i <> si2 then raise new ExtraCharsException(text, si1, i+1, si2);
+      Result := new SLiteralExpr(text.Substring(si1,si2-si1-1).Replace('\"','"').Replace('\\','\'));
     end;
   end else
   begin
@@ -3115,7 +3136,7 @@ begin
     begin
       curr.Op := none;
       curr.i1 := i1;
-      i1 := text.FindNext(i1+1, '"')+1;
+      i1 := text.FindStrEnd(i1+1)+1;
     end;
     else
     if text[i1].IsDigit or text[i1].IsLetter or (text[i1] = '_') or (text[i1] = '(') or (text[i1] = ')') then
@@ -3686,6 +3707,15 @@ new OptFunc_DeflyNum(new OptExprBase[](o), ifnot);
 
 static function OptExprBase.AsStrExpr(o: OptExprBase): OptSExprBase :=
 new OptFunc_Str(new OptExprBase[](o));
+
+function OptSLiteralExpr.ToString(nvn, svn, ovn: array of string): string;
+begin
+  var formated_res := res.EscapeStrSyms;
+  Result :=
+    (formated_res.Length <= 100)?
+    $'"{formated_res}"':
+    $'"{formated_res.Substring(0,100)}..."[{formated_res.Length}]';
+end;
 
 function UnOptVarExpr.FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr;
 begin

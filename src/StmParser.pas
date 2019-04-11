@@ -1,4 +1,5 @@
 ﻿unit StmParser;
+//ToDo я видел очень странный ExpOptCode в каком то тесте, лучше пересмотреть все
 
 //ToDo оператор Assert
 //ToDo не удалять лишние блоки при оптимизации в режиме библиотеки
@@ -4001,7 +4002,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Output "{otp}" //Const';
+    $'Output "{otp.EscapeStrSyms}" //Const';
     
   end;
   

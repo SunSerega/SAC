@@ -8,8 +8,8 @@ begin
   var ep: ExecParams;
   ep.SupprIO := true;
   
-  //var s := new Script('Lib\examples\Basic operators\main.sac');
-  var s := new Script('0\0.sac', ep);
+  var s := new Script('D:\Мои программы\SAC\src\TestSuite\TestExec\AllFuncs\Main.sac',ep);
+  //var s := new Script('0\0.sac', ep);
   
   //SaveObj('test.bin',s);
   
@@ -19,10 +19,10 @@ begin
 //  writeln(s);
 //  exit;
   
-//  s.otp += s->writeln(s);
-//  s.susp_called += procedure->writeln('%susp called');
-//  s.stoped += procedure->writeln('%stoped');
-//  s.Execute;
+  s.otp += s->writeln(s);
+  s.susp_called += procedure->writeln('%susp called');
+  s.stoped += procedure->writeln('%stoped');
+  s.Execute;
   readln;
 end.
 
