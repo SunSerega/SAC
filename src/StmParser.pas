@@ -1,21 +1,22 @@
 ﻿unit StmParser;
 
 //ToDo оператор Assert
+//ToDo операторы ReadText и Alert, работающие через месседж боксы
 
 //ToDo в каждом операторе надо хранить имя начального файла
 // - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
-// - вообще это надо засунуть в контекст ошибок. Это не костыль, ибо ReadOnly переменные тоже для ошибок существуют
+// - это нельзя засовывать в контекст ошибок, раз он есть только в режиме дебага. Или, может, сохранять минимум контекста на время компиляции, а потом удалять?
 // - когда будет готово - добавить ReadOnly проверку и в ExecutingContext.SetVar . Это важно, но не смертельно, так что можно и подождать контекста ошибок
 
 
 
 //ToDo Контекст ошибок
+// - его добавлять только в дебаг режиме
+
 //ToDo тесты для всех скриптов из справки
 
 //ToDo а как будет работать получение относительного пути, если при подключении файла указать название диска?
 // - и в библиотеках проверить, если указать полный путь - наверное не надо считать относительный в библиотеке...
-
-//ToDo операторы ReadText и Alert, работающие через месседж боксы
 
 //ToDo Directives: !NoOpt/!Opt
 
@@ -4235,7 +4236,7 @@ type
     foreach var s in par.Skip(1) do
     begin
       var res := OptExprWrapper.FromExpr(Expr.FromString(s)).GetMain;
-      res := res.Optimize as OptExprBase;
+      res := res.Optimize(res.wrapper) as OptExprBase;
       if not (res is IOptLiteralExpr) then raise new ConstExprExpectedException(s, res);
       bl.scr.ReadFile(nil, ObjToStr(res.GetRes()));
     end;

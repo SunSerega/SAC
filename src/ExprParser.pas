@@ -1,7 +1,6 @@
 ﻿unit ExprParser;
 
 //ToDo Контекст ошибок
-//ToDo каждая часть выражения должна хранить ссылку на врапер, чтоб работал .ToString (ну и потом ещё кое где понадобится, не помню где) // P.S. вроде для контекста жешь
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
 // - наверное всё же контекст ошибок придётся сделать для этого
@@ -494,6 +493,7 @@ type
   OptExprBase=class;
   OptNExprBase=class;
   OptSExprBase=class;
+  OptExprWrapper=class;
   
   IOptExpr = interface
     
@@ -507,7 +507,8 @@ type
     procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks, StrChecks: Dictionary<string, ExprContextArea>);
     function IsSame(oe: IOptExpr): boolean;
     
-    function Optimize: IOptExpr;
+    function Optimize(nvn, svn, ovn: array of string): IOptExpr;
+    procedure SetWrapper(wrapper: OptExprWrapper);
     procedure ClampLists;
     
     function GetCalc: sequence of Action0;
@@ -517,6 +518,7 @@ type
   OptExprBase = abstract class(IOptExpr)
     
     protected static nfi := new System.Globalization.NumberFormatInfo;
+    public wrapper: OptExprWrapper;
     
     public static function AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0 := nil): OptNExprBase;//("a"*o1)*(5*3) => "a"*(DeflyNum(o1)*5*3)
     public static function AsStrExpr(o: OptExprBase): OptSExprBase;//"a"+("b"+o1) => "a"+"b"+Str(o1)
@@ -572,8 +574,16 @@ type
     public function FinalFixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; virtual :=
     TransformAllSubExprs(oe->oe.FinalFixVarExprs(sn,ss,so, nn,ns,no));
     
-    public function Optimize: IOptExpr; virtual :=
-    TransformAllSubExprs(oe->oe.Optimize);
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; virtual :=
+    TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn));
+    
+    public function Optimize(wrapper: OptExprWrapper): IOptExpr;
+    
+    public procedure SetWrapper(wrapper: OptExprWrapper);
+    begin
+      self.wrapper := wrapper;
+      ExecuteOnEverySubExpr(oe->oe.SetWrapper(wrapper));
+    end;
     
     public procedure ClampLists; virtual :=
     ExecuteOnEverySubExpr(oe->oe.ClampLists());
@@ -601,12 +611,10 @@ type
     
     public function GetCalc: sequence of Action0; virtual := new Action0[0];
     
+    public function ToString: string; override;
+    
     public function ToString(nvn, svn, ovn: array of string): string; virtual :=
-    $'{self.GetType}(.ToString not found)';
-    
-    
-    
-    private property DebugType: System.Type read self.GetType;
+    $'{self.GetType}(.ToString(*vn) not found)';
     
   end;
   OptNExprBase = abstract class(OptExprBase)
@@ -762,9 +770,9 @@ type
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := Negative.Cast&<OptExprBase>;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNNPlusExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptNNPlusExpr;
       
       var res1: OptNNPlusExpr;
       if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptPlusExpr) then
@@ -960,9 +968,9 @@ type
     public function GetPositive: sequence of OptExprBase := Positive.Cast&<OptExprBase>;
     public function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSSPlusExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptSSPlusExpr;
       
       var res1: OptSSPlusExpr;
       if res0.Positive.Any(oe->oe is IOptPlusExpr) then
@@ -1165,9 +1173,9 @@ type
     public function GetPositive: sequence of OptExprBase := Positive;
     public function GetNegative: sequence of OptExprBase := Negative;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res1 := TransformAllSubExprs(oe->oe.Optimize) as OptOPlusExpr;
+      var res1 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptOPlusExpr;
       if res1.Negative.Any(oe->oe is OptSExprBase) then raise new CannotSubStringExprException(nil, nil);
       
       res1.Positive.RemoveAll(oe->oe is OptNullLiteralExpr);
@@ -1184,14 +1192,14 @@ type
         
         var res := new OptSSPlusExpr;
         res.Positive := res1.Positive.ConvertAll(AsStrExpr);
-        Result := res.Optimize;
+        Result := res.Optimize(nvn, svn, ovn);
       end else
       if res1.Positive.Concat(res1.Negative).All(oe->(oe is OptNExprBase) or (oe is OptNullLiteralExpr)) then
       begin
         var res := new OptNNPlusExpr;
         res.Positive := res1.Positive.ConvertAll(oe->AsDefinitelyNumExpr(oe));
         res.Negative := res1.Negative.ConvertAll(oe->AsDefinitelyNumExpr(oe));
-        Result := res.Optimize;
+        Result := res.Optimize(nvn, svn, ovn);
       end else
         Result := res1;//Даже если есть несколько констант подряд - их нельзя складывать, потому что числа и строки по разному складываются
       
@@ -1345,9 +1353,9 @@ type
     function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     function GetNegative: sequence of OptExprBase := Negative.Select(oe->oe as OptExprBase);
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNNMltExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptNNMltExpr;
       
       var res1 := new OptNNMltExpr;
       if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptMltExpr) then
@@ -1357,16 +1365,16 @@ type
         foreach var oe in res0.Positive do
           if oe is IOptMltExpr(var ome) then
           begin
-            res1.Positive.AddRange(ome.GetPositive.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
-            res1.Negative.AddRange(ome.GetNegative.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
+            res1.Positive.AddRange(ome.GetPositive.Select(oe->OptExprBase.AsDefinitelyNumExpr(oe).Optimize(nvn, svn, ovn) as OptNExprBase));
+            res1.Negative.AddRange(ome.GetNegative.Select(oe->OptExprBase.AsDefinitelyNumExpr(oe).Optimize(nvn, svn, ovn) as OptNExprBase));
           end else
             res1.Positive.Add(oe);
         
         foreach var oe in res0.Negative do
           if oe is IOptMltExpr(var ome) then
           begin
-            res1.Negative.AddRange(ome.GetPositive.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
-            res1.Positive.AddRange(ome.GetNegative.Select(oe->AsDefinitelyNumExpr(oe).Optimize as OptNExprBase));
+            res1.Negative.AddRange(ome.GetPositive.Select(oe->OptExprBase.AsDefinitelyNumExpr(oe).Optimize(nvn, svn, ovn) as OptNExprBase));
+            res1.Positive.AddRange(ome.GetNegative.Select(oe->OptExprBase.AsDefinitelyNumExpr(oe).Optimize(nvn, svn, ovn) as OptNExprBase));
           end else
             res1.Negative.Add(oe);
         
@@ -1551,9 +1559,9 @@ type
     function GetPositive: sequence of OptExprBase := new OptExprBase[](Base, Positive);
     function GetNegative: sequence of OptExprBase := new OptExprBase[0];
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSNMltExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptSNMltExpr;
       
       var res1: OptSNMltExpr;
       if res0.Base is IOptMltExpr(var ome) then
@@ -1783,9 +1791,9 @@ type
     function GetPositive: sequence of OptExprBase := Positive;
     function GetNegative: sequence of OptExprBase := Negative;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptOMltExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptOMltExpr;
       
       var res1: OptOMltExpr;
       if res0.Positive.Concat(res0.Negative).Any(oe->oe is IOptMltExpr) then
@@ -1836,14 +1844,14 @@ type
         
         rp.Negative.AddRange(res1.Negative.Select(oe->AsDefinitelyNumExpr(oe)));
         res.Positive := rp;
-        Result := res.Optimize;
+        Result := res.Optimize(nvn, svn, ovn);
       end else
       if pn.All(oe->(oe is OptNExprBase) or (oe is OptNullLiteralExpr)) then
       begin
         var res := new OptNNMltExpr;
         res.Positive := res1.Positive.ConvertAll(oe->AsDefinitelyNumExpr(oe));
         res.Negative := res1.Negative.ConvertAll(oe->AsDefinitelyNumExpr(oe));
-        Result := res.Optimize;
+        Result := res.Optimize(nvn, svn, ovn);
       end else
       if pn.Count(oe->oe is IOptLiteralExpr) < 2 then
         Result := res1 else
@@ -2005,9 +2013,9 @@ type
     
     public function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNPowExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptNPowExpr;
       
       var res1: OptNPowExpr;
       if res0.Positive[0] is IOptPowExpr(var ope) then
@@ -2015,7 +2023,7 @@ type
         res1 := new OptNPowExpr;
         
         foreach var oe in ope.GetPositive do
-          res1.Positive.Add(AsDefinitelyNumExpr(oe).Optimize as OptNExprBase);
+          res1.Positive.Add(AsDefinitelyNumExpr(oe).Optimize(nvn, svn, ovn) as OptNExprBase);
         
         res1.Positive.AddRange(res0.Positive.Skip(1));
       end else
@@ -2188,9 +2196,9 @@ type
     
     public procedure CheckParams; abstract;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptNFuncExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptNFuncExpr;
       CheckParams;
       if res0.par.All(oe->oe is IOptLiteralExpr) then
       begin
@@ -2305,9 +2313,9 @@ type
     
     public procedure CheckParams; abstract;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
-      var res0 := TransformAllSubExprs(oe->oe.Optimize) as OptSFuncExpr;
+      var res0 := TransformAllSubExprs(oe->oe.Optimize(nvn, svn, ovn)) as OptSFuncExpr;
       CheckParams;
       if res0.par.All(oe->oe is IOptLiteralExpr) then
       begin
@@ -3274,10 +3282,10 @@ type
       yield Action0(self.Calc);
     end;
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
       
-      var oe := par[0].Optimize as OptExprBase;
+      var oe := par[0].Optimize(nvn, svn, ovn) as OptExprBase;
       var res1: OptFunc_Num;
       if oe<>par[0] then
         res1 := new OptFunc_Num(new OptExprBase[](oe)) else
@@ -3287,7 +3295,7 @@ type
         Result := res1.par[0] else
       if res1.par[0] is IOptLiteralExpr then
       begin
-        Calc;
+        res1.Calc;
         Result := new OptNLiteralExpr(res1.res)
       end else
         Result := res1;
@@ -3389,10 +3397,10 @@ type
     
     
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
       
-      var oe := par[0].Optimize as OptExprBase;
+      var oe := par[0].Optimize(nvn, svn, ovn) as OptExprBase;
       var res1: OptFunc_DeflyNum;
       if oe<>par[0] then
         res1 := new OptFunc_DeflyNum(new OptExprBase[](oe), ifnot) else
@@ -3593,10 +3601,10 @@ type
     
     
     
-    public function Optimize: IOptExpr; override;
+    public function Optimize(nvn, svn, ovn: array of string): IOptExpr; override;
     begin
       
-      var oe := par[0].Optimize as OptExprBase;
+      var oe := par[0].Optimize(nvn, svn, ovn) as OptExprBase;
       var res1: OptFunc_Str;
       if oe<>par[0] then
         res1 := new OptFunc_Str(new OptExprBase[](oe)) else
@@ -3702,11 +3710,17 @@ type
 
 {$region some impl}
 
+function OptExprBase.Optimize(wrapper: OptExprWrapper): IOptExpr :=
+Optimize(wrapper.n_vars_names,wrapper.s_vars_names,wrapper.o_vars_names);
+
 static function OptExprBase.AsDefinitelyNumExpr(o: OptExprBase; ifnot: Action0): OptNExprBase :=
 new OptFunc_DeflyNum(new OptExprBase[](o), ifnot);
 
 static function OptExprBase.AsStrExpr(o: OptExprBase): OptSExprBase :=
 new OptFunc_Str(new OptExprBase[](o));
+
+function OptExprBase.ToString: string :=
+self.ToString(wrapper.n_vars_names,wrapper.s_vars_names,wrapper.o_vars_names);
 
 function OptSLiteralExpr.ToString(nvn, svn, ovn: array of string): string;
 begin
@@ -3782,6 +3796,7 @@ begin
     Result := new OptSExprWrapper(Main as OptSExprBase) else
     Result := new OptOExprWrapper(Main as OptOExprBase);
   
+  Main.SetWrapper(Result);
 end;
 
 function OptExprWrapper.Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
@@ -3847,7 +3862,7 @@ begin
   var o_vars_names := lovn.ToArray;
   
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
-  Main := Main.Optimize;
+  Main := Main.Optimize(n_vars_names,s_vars_names,o_vars_names);
   
   Result := GetOptInst(Main, nNumChecks,nStrChecks);
   if Result=self then exit;
@@ -3921,7 +3936,7 @@ begin
   var o_vars_names := lovn.ToArray;
   
   Main := Main.FinalFixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
-  Main := Main.Optimize;
+  Main := Main.Optimize(n_vars_names,s_vars_names,o_vars_names);
   
   Result := GetOptInst(Main, nNumChecks,nStrChecks);
   if Result=self then exit;
@@ -3994,7 +4009,7 @@ begin
   var o_vars_names := lovn.ToArray;
   
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
-  Main := Main.Optimize;
+  Main := Main.Optimize(n_vars_names,s_vars_names,o_vars_names);
   
   SetMain(Main as OptExprBase);
   
@@ -4168,6 +4183,7 @@ type
       if Main is OptSExprBase then
         Result := new OptSExprWrapper(Main as OptSExprBase) else
         Result := new OptOExprWrapper(Main as OptOExprBase);
+      Main.SetWrapper(Result);
       
       Result.n_vars := n_vars;
       Result.s_vars := s_vars;
