@@ -1,0 +1,8 @@
+
+x=5
+
+#Loop
+Output x
+x=x-1
+JumpIf x = 0 "#LoopBreak" "#Loop"
+#LoopBreak
