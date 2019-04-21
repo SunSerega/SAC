@@ -1,5 +1,7 @@
 ﻿unit ExprParser;
 
+//ToDo а что если убрать IOptExpr? Оно вроде давно утратило своё предназначение
+
 //ToDo Контекст ошибок
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
@@ -548,6 +550,8 @@ type
     
     
     
+    public function Copy: OptExprBase; abstract;
+    
     public function GetRes: object; abstract;
     public function GetResType: System.Type; abstract;
     
@@ -659,6 +663,9 @@ type
     public constructor(val: real) :=
     self.res := val;
     
+    public function Copy: OptExprBase; override :=
+    new OptNLiteralExpr(self.res);
+    
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptNLiteralExpr(var noe)) and (noe.res=self.res);
     
@@ -678,6 +685,9 @@ type
     public constructor(val: string) :=
     self.res := val;
     
+    public function Copy: OptExprBase; override :=
+    new OptSLiteralExpr(self.res);
+    
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptSLiteralExpr(var noe)) and (noe.res=self.res);
     
@@ -695,6 +705,9 @@ type
     
     public constructor :=
     self.res := nil;
+    
+    public function Copy: OptExprBase; override :=
+    new OptNullLiteralExpr;
     
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptNullLiteralExpr);
@@ -764,6 +777,15 @@ type
         Result := self;
       
     end;
+    
+    public constructor(Positive: List<OptNExprBase>; Negative: List<OptNExprBase>);
+    begin
+      self.Positive := Positive;
+      self.Negative := Negative;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptNNPlusExpr(self.Positive.ConvertAll(oe->OptNExprBase(oe.Copy)), self.Negative.ConvertAll(oe->OptNExprBase(oe.Copy)));
     
     
     
@@ -962,6 +984,14 @@ type
         Result := self;
       
     end;
+    
+    public constructor(Positive: List<OptSExprBase>);
+    begin
+      self.Positive := Positive;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptSSPlusExpr(self.Positive.ConvertAll(oe->OptSExprBase(oe.Copy)));
     
     
     
@@ -1168,6 +1198,15 @@ type
       
     end;
     
+    public constructor(Positive: List<OptExprBase>; Negative: List<OptExprBase>);
+    begin
+      self.Positive := Positive;
+      self.Negative := Negative;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptOPlusExpr(self.Positive.ConvertAll(oe->oe.Copy), self.Negative.ConvertAll(oe->oe.Copy));
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive;
@@ -1345,6 +1384,15 @@ type
         Result := self;
       
     end;
+    
+    public constructor(Positive: List<OptNExprBase>; Negative: List<OptNExprBase>);
+    begin
+      self.Positive := Positive;
+      self.Negative := Negative;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptNNMltExpr(self.Positive.ConvertAll(oe->OptNExprBase(oe.Copy)), self.Negative.ConvertAll(oe->OptNExprBase(oe.Copy)));
     
     
     
@@ -1551,6 +1599,15 @@ type
       end;
       
     end;
+    
+    public constructor(Base: OptSExprBase; Positive: OptNExprBase);
+    begin
+      self.Base := Base;
+      self.Positive := Positive;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptSNMltExpr(OptSExprBase(self.Base.Copy), OptNExprBase(self.Positive.Copy));
     
     
     
@@ -1784,6 +1841,15 @@ type
       
     end;
     
+    public constructor(Positive: List<OptExprBase>; Negative: List<OptExprBase>);
+    begin
+      self.Positive := Positive;
+      self.Negative := Negative;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptOMltExpr(self.Positive.ConvertAll(oe->oe.Copy), self.Negative.ConvertAll(oe->oe.Copy));
+    
     
     
     public function AnyNegative := Negative.Any;
@@ -2009,6 +2075,14 @@ type
       
     end;
     
+    public constructor(Positive: List<OptNExprBase>);
+    begin
+      self.Positive := Positive;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptNPowExpr(self.Positive.ConvertAll(oe->OptNExprBase(oe.Copy)));
+    
     
     
     public function GetPositive: sequence of OptExprBase := Positive.Select(oe->oe as OptExprBase);
@@ -2174,15 +2248,18 @@ type
           need_copy := true;
       end);
       
-      Result := need_copy?self.Copy(npar):self;
+      Result := need_copy?self.GetNewInst(npar):self;
       
     end;
+    
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; abstract;
+    
+    public function Copy: OptExprBase; override :=
+    OptExprBase(GetNewInst(self.par.ConvertAll(oe->oe.Copy)));
     
     
     
     public function GetTps: array of System.Type; abstract;
-    
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
     protected procedure CheckParamsBase;
     begin
@@ -2291,15 +2368,18 @@ type
           need_copy := true;
       end);
       
-      Result := need_copy?self.Copy(npar):self;
+      Result := need_copy?self.GetNewInst(npar):self;
       
     end;
+    
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; abstract;
+    
+    public function Copy: OptExprBase; override :=
+    GetNewInst(self.par.ConvertAll(oe->oe.Copy)) as OptExprBase;
     
     
     
     public function GetTps: array of System.Type; abstract;
-    
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; abstract;
     
     protected procedure CheckParamsBase;
     begin
@@ -2403,6 +2483,12 @@ type
     
     public name: string;
     
+    public constructor(name: string) :=
+    self.name := name;
+    
+    public function Copy: OptExprBase; override :=
+    new UnOptVarExpr(name);
+    
     
     
     public function FixVarExprs(sn: array of real; ss: array of string; so: array of object; nn, ns, no: array of string): IOptExpr; override;
@@ -2455,9 +2541,6 @@ type
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is UnOptVarExpr(var noe)) and (noe.name=self.name);
     
-    public constructor(name: string) :=
-    self.name := name;
-    
     public function ToString(nvn, svn, ovn: array of string): string; override;
     begin
       var sb := new StringBuilder;
@@ -2477,6 +2560,15 @@ type
     
     public procedure Calc :=
     res := source[id];
+    
+    public constructor(source: array of real; id: integer);
+    begin
+      self.source := source;
+      self.id := id;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptNVarExpr(source, id);
     
     
     
@@ -2516,6 +2608,15 @@ type
     public procedure Calc :=
     res := source[id];
     
+    public constructor(source: array of string; id: integer);
+    begin
+      self.source := source;
+      self.id := id;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptSVarExpr(source, id);
+    
     
     
     public function UnFixVarExprs(nn, ns, no: array of string): IOptExpr; override :=
@@ -2553,6 +2654,15 @@ type
     
     public procedure Calc :=
     res := source[id];
+    
+    public constructor(source: array of object; id: integer);
+    begin
+      self.source := source;
+      self.id := id;
+    end;
+    
+    public function Copy: OptExprBase; override :=
+    new OptOVarExpr(source, id);
     
     
     
@@ -2609,6 +2719,25 @@ type
     
     public function GetMain: OptExprBase; abstract;
     public procedure SetMain(Main: OptExprBase); abstract;
+    
+    protected function GetNewInst: OptExprWrapper; abstract;
+    
+    public function Copy: OptExprWrapper;
+    begin
+      Result := GetNewInst;
+      
+      Result.n_vars := self.n_vars;
+      Result.s_vars := self.s_vars;
+      Result.o_vars := self.o_vars;
+      
+      Result.n_vars_names := self.n_vars_names;
+      Result.s_vars_names := self.s_vars_names;
+      Result.o_vars_names := self.o_vars_names;
+      
+      Result.NumChecks := self.NumChecks.ToDictionary(kvp->kvp.Key, kvp->kvp.Value);
+      Result.StrChecks := self.StrChecks.ToDictionary(kvp->kvp.Key, kvp->kvp.Value);
+      
+    end;
     
     protected function GetOptInst(Main: IOptExpr; NumChecks, StrChecks: Dictionary<string, ExprContextArea>): OptExprWrapper;
     
@@ -2722,6 +2851,14 @@ type
     public function GetMain: OptExprBase; override := Main;
     public procedure SetMain(Main: OptExprBase); override := self.Main := OptNExprBase(Main);
     
+    protected function GetNewInst: OptExprWrapper; override;
+    begin
+      var res := new OptNExprWrapper;
+      res.Main := OptNExprBase(self.Main.Copy);
+      res.Main.SetWrapper(res);
+      Result := res;
+    end;
+    
     public function CalcN(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): real;
     begin
       
@@ -2750,6 +2887,14 @@ type
     public function GetMain: OptExprBase; override := Main;
     public procedure SetMain(Main: OptExprBase); override := self.Main := OptSExprBase(Main);
     
+    protected function GetNewInst: OptExprWrapper; override;
+    begin
+      var res := new OptSExprWrapper;
+      res.Main := OptSExprBase(self.Main.Copy);
+      res.Main.SetWrapper(res);
+      Result := res;
+    end;
+    
     public function CalcS(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): string;
     begin
       
@@ -2777,6 +2922,14 @@ type
     
     public function GetMain: OptExprBase; override := Main;
     public procedure SetMain(Main: OptExprBase); override := self.Main := Main;
+    
+    protected function GetNewInst: OptExprWrapper; override;
+    begin
+      var res := new OptOExprWrapper;
+      res.Main := self.Main.Copy;
+      res.Main.SetWrapper(res);
+      Result := res;
+    end;
     
     public function Calc(n_vars: Dictionary<string, real>; s_vars: Dictionary<string, string>): object; override;
     begin
@@ -3202,7 +3355,7 @@ end;
 
 {$endregion PreOpt}
 
-{$region Optimize}
+{$region Optimized}
 
 {$region Funcs}
 type
@@ -3249,7 +3402,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Length(par);
     
   end;
@@ -3319,7 +3472,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Num(par);
     
   end;
@@ -3365,7 +3518,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_KeyCode(par);
     
   end;
@@ -3440,7 +3593,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_DeflyNum(par, ifnot);
     
   end;
@@ -3486,7 +3639,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Floor(par);
     
   end;
@@ -3532,7 +3685,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Round(par);
     
   end;
@@ -3578,7 +3731,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Ceil(par);
     
   end;
@@ -3642,7 +3795,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_Str(par);
     
   end;
@@ -3701,7 +3854,7 @@ type
       CheckParams;
     end;
     
-    public function Copy(par: array of OptExprBase): IOptFuncExpr; override :=
+    public function GetNewInst(par: array of OptExprBase): IOptFuncExpr; override :=
     new OptFunc_CutStr(par);
     
   end;
@@ -4337,6 +4490,6 @@ end;
 
 {$endregion Load}
 
-{$endregion Optimize}
+{$endregion Optimized}
 
 end.

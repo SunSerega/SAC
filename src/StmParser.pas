@@ -1,9 +1,16 @@
 ﻿unit StmParser;
 
+//ToDo перестановка переменных в следующий блок всё ещё неправильна. В перёд переставлять можно только если ничего тот блок не вызывает (кроме того, откуда эту переменную переместили)
+// - это в 2 местах одновременно надо исправлять
+
+//ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
+//ToDo задокументировать возможность добавлять табы в начале каждой строчки
+//ToDo в тестере сделать чтоб заменялся весь файл (вместо добавления в конце)
+//ToDo засовывать WW и WH в основные константы... наверное - не лучшая идея. Лучше хранить их в отдельном словаре
 //ToDo оператор Assert
 //ToDo операторы ReadText и Alert, работающие через месседж боксы
 
-//ToDo в каждом операторе надо хранить имя начального файла
+//ToDo в каждом ExprStm и DSBR надо хранить имя начального файла
 // - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
 // - это нельзя засовывать в контекст ошибок, раз он есть только в режиме дебага. Или, может, сохранять минимум контекста на время компиляции, а потом удалять?
 // - когда будет готово - добавить ReadOnly проверку и в ExecutingContext.SetVar . Это важно, но не смертельно, так что можно и подождать контекста ошибок
@@ -23,6 +30,12 @@
 //ToDo даже если несколько блоков вызывают какой то один - можно всё равно узнать какие переменные могут иметь какой тип. FinalOptimize не проведёшь, но Optimize вполне
 // - не забыть что блок может быть стартом программы
 // - FinalOptimize всё же может случится, если нет такого что из 1 блока переменная Str, а из другого она же Num
+
+//ToDo как насчёт директивы !DefFunc ?
+// - объявляется в начале блока
+// - можно указать список передаваемых переменных (или не так... хз пока)
+// - это помогло бы создавать не_игрушечные библиотеки
+// - с другой стороны, по хорошему надо написать .Net библиотеку для кликеров, ибо это всё всё равно баловство ради опыта и скриптов на 10-20 строк
 
 //ToDo Проверить issue:
 // - #1502
@@ -526,6 +539,9 @@ type
     
     
     
+    ///Only creates new instance for stms that can change container when optimized (like when Jump becomes [Const])
+    public function Copy(container: StmBlock): StmBase; virtual := self;
+    
     public procedure CheckSngDef; virtual := exit;
     
     public function Optimize(nvn, svn: HashSet<string>): StmBase; virtual := self;
@@ -893,7 +909,7 @@ type
     end;
     
     public function GetBodyString: string :=
-    (StartPos?'!StartPos //Const'#10:'') +
+    (StartPos?'!StartPos [Const]'#10:'') +
     stms.JoinIntoString(#10);
     
     public function ToString: string; override;
@@ -1481,7 +1497,7 @@ type
     
     public kk: byte;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext) :=
@@ -1518,14 +1534,14 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyD {kk} //Const';
+    $'KeyD {kk} [Const]';
     
   end;
   OperConstKeyUp = sealed class(OperStmBase)
     
     public kk: byte;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext) :=
@@ -1562,14 +1578,14 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyU {kk} //Const';
+    $'KeyU {kk} [Const]';
     
   end;
   OperConstKeyPress = sealed class(OperStmBase)
     
     public kk: byte;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1609,7 +1625,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'KeyP {kk} //Const';
+    $'KeyP {kk} [Const]';
     
   end;
   
@@ -1617,7 +1633,7 @@ type
     
     public kk: InputNValue;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1712,7 +1728,7 @@ type
     
     public kk: InputNValue;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1807,7 +1823,7 @@ type
     
     public kk: InputNValue;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -1903,7 +1919,7 @@ type
     
     public kk, dp: InputNValue;
     
-    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: longword);
+    static procedure keybd_event(bVk, bScan: byte; dwFlags, dwExtraInfo: cardinal);
     external 'User32.dll' name 'keybd_event';
     
     private procedure Calc(ec: ExecutingContext);
@@ -2077,7 +2093,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MouseD {kk} //Const';
+    $'MouseD {kk} [Const]';
     
   end;
   OperConstMouseUp = sealed class(OperStmBase)
@@ -2146,7 +2162,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MouseU {kk} //Const';
+    $'MouseU {kk} [Const]';
     
   end;
   OperConstMousePress = sealed class(OperStmBase)
@@ -2215,7 +2231,7 @@ type
     end;
     
     public function ToString: string; override :=
-    $'MouseP {kk} //Const';
+    $'MouseP {kk} [Const]';
     
   end;
   
@@ -2712,7 +2728,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'MousePos {x} {y} //Const';
+    $'MousePos {x} {y} [Const]';
     
   end;
   OperConstGetKey = sealed class(OperStmBase)
@@ -2781,7 +2797,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'GetKey {kk} {vname} //Const';
+    $'GetKey {kk} {vname} [Const]';
     
   end;
   OperConstGetKeyTrigger = sealed class(OperStmBase)
@@ -2850,7 +2866,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'GetKeyTrigger {kk} {vname} //Const';
+    $'GetKeyTrigger {kk} {vname} [Const]';
     
   end;
   
@@ -3257,7 +3273,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'GetMousePos {x} {y} //Const';
+    $'GetMousePos {x} {y} [Const]';
     
   end;
   
@@ -3292,6 +3308,9 @@ type
       self.bl := bl;
       self.scr := bl.scr;
     end;
+    
+    public function Copy(container: StmBlock): StmBase; override :=
+    new OperJump(CalledBlock, container);
     
     public function Simplify(nCalledBlock: StmBlockRef): StmBase;
     begin
@@ -3388,6 +3407,20 @@ type
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5]));
     end;
     
+    public constructor(e1,e2: OptExprWrapper; compr: comprT; CalledBlock1: StmBlockRef; CalledBlock2: StmBlockRef; bl: StmBlock);
+    begin
+      self.e1 := e1;
+      self.e2 := e2;
+      self.compr := compr;
+      self.CalledBlock1 := CalledBlock1;
+      self.CalledBlock2 := CalledBlock2;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function Copy(container: StmBlock): StmBase; override :=
+    new OperJumpIf(e1.Copy,e2.Copy, compr, CalledBlock1,CalledBlock2, container);
+    
     private function comp_obj(o1,o2: object): boolean;
     begin
       if (o1 is real) and (o2 is real) then
@@ -3401,17 +3434,6 @@ type
           less: Result := ObjToStr(o1) < ObjToStr(o2);
           more: Result := ObjToStr(o1) > ObjToStr(o2);
         end;
-    end;
-    
-    public constructor(e1,e2: OptExprWrapper; compr: comprT; CalledBlock1: StmBlockRef; CalledBlock2: StmBlockRef; bl: StmBlock);
-    begin
-      self.e1 := e1;
-      self.e2 := e2;
-      self.compr := compr;
-      self.CalledBlock1 := CalledBlock1;
-      self.CalledBlock2 := CalledBlock2;
-      self.bl := bl;
-      self.scr := bl.scr;
     end;
     
     public function Simplify(ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
@@ -3571,7 +3593,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} //Const';
+    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Const]';
     
   end;
   
@@ -3864,7 +3886,7 @@ type
     new Action<ExecutingContext>[](Calc);
     
     public function ToString: string; override :=
-    $'Susp //Const';
+    $'Susp [Const]';
     
   end;
   OperReturn = sealed class(OperStmBase, IContextJumpOper)
@@ -3888,7 +3910,7 @@ type
     new Action<ExecutingContext>[0];
     
     public function ToString: string; override :=
-    $'Return //Const';
+    $'Return [Const]';
     
   end;
   OperHalt = sealed class(OperStmBase, IContextJumpOper)
@@ -3914,7 +3936,7 @@ type
     new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
     
     public function ToString: string; override :=
-    $'Halt //Const';
+    $'Halt [Const]';
     
   end;
   
@@ -3957,7 +3979,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Sleep {l} //Const';
+    $'Sleep {l} [Const]';
     
   end;
   OperConstOutput = sealed class(OperStmBase)
@@ -3999,7 +4021,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Output "{otp.EscapeStrSyms}" //Const';
+    $'Output "{otp.EscapeStrSyms}" [Const]';
     
   end;
   
@@ -4142,7 +4164,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Random {vname} //Const';
+    $'Random {vname} [Const]';
     
   end;
   OperOutput = sealed class(OperStmBase)
@@ -4413,7 +4435,7 @@ begin
     
     str.Position := 0;
     sr := new System.IO.StreamReader(str);
-    lns := sr.ReadToEnd.Remove(#13).Split(#10);
+    lns := sr.ReadToEnd.Remove(#13).Split(#10).ConvertAll(l->l.TrimStart(#9));
     sr.Close;
     
   end;
@@ -4632,8 +4654,8 @@ begin
   begin
     
     if next=nil then
-      bl += 'Return //Const' else
-      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" //Const';
+      bl += 'Return [Const]' else
+      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" [Const]';
     
     bl += #10;
   end;
@@ -4699,7 +4721,7 @@ type
     GBCR_nonconst_context_jump = $4
   );
 
-function GetBlockChain(bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): GBCResT;
 begin
   var curr := bl;
   
@@ -4747,7 +4769,8 @@ begin
         exit;
       end else
       begin
-        var opt := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
+        if curr<>org_bl then stm := stm.Copy(org_bl);
+        var opt: StmBase := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
         
         if (opt is OperConstCall(var cc)) and (cc.CalledBlock=nil) then opt := nil;
         
@@ -4766,7 +4789,7 @@ begin
         ind_lst.Add(stm_lst.Count);
         pi := ind_lst.Count;
         
-        case GetBlockChain(occ.CalledBlock, bl_lst.ToList, stm_lst, ind_lst, allow_final_opt) of
+        case GetBlockChain(org_bl, occ.CalledBlock, bl_lst.ToList, stm_lst, ind_lst, allow_final_opt) of
           
           GBCR_done: ;
           
@@ -4893,7 +4916,7 @@ begin
       
       var stms := new List<StmBase>;
       
-      case GetBlockChain(curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) of
+      case GetBlockChain(curr,curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) of
         
         GBCR_done,
         GBCR_context_halt,
@@ -4945,7 +4968,8 @@ begin
         {$region usages}
         
         var usages := new List<(StmBase, OptExprWrapper)>;
-        var pri := -1;//param rewriter index // this is index in bl.stms array
+        var pri := -1; // param rewriter index // this is index in bl.stms array
+        var pio := false; // param is overridden (is this block)
         
         foreach var stm in
           bl.stms
@@ -4960,7 +4984,11 @@ begin
           
           usages.AddRange(cu);
           
-          if stm.DoesRewriteVar(e.vname) then break;
+          if stm.DoesRewriteVar(e.vname) then
+          begin
+            pio := true;
+            break;
+          end;
           
           if params_names.Any(vname->stm.DoesRewriteVar(vname)) then
           begin
@@ -4978,7 +5006,7 @@ begin
         var nue := false;
         
         if bl.next = nil then
-          nue := bl.stms.LastOrDefault is IJumpCallOper else
+          nue := (bl.stms.LastOrDefault is IJumpCallOper) and not pio else
         begin
           var prev := new HashSet<StmBase>(bl.stms);
           
@@ -5026,7 +5054,7 @@ begin
             try_opt_again := true;
             
           end else
-          if (bl.next<>nil) and (bl.next.next <> bl.next) then
+          if (bl.next<>nil) and (self.start_pos_def and not bl.next.StartPos) and (bl.next.next <> bl.next) then
           begin
             bl.stms.Remove(e);
             bl.next.stms.Insert(0, e);
@@ -5056,14 +5084,14 @@ begin
           end else
           if nue then
           begin
-            if bl.next.next <> bl.next then
+            if (bl.next<>nil) and (self.start_pos_def and not bl.next.StartPos) and (bl.next.next <> bl.next) then
             begin
               bl.stms.Remove(e);
               bl.next.stms.Insert(0, e);
               try_opt_again := true;
             end;
           end else
-          if allow_final_opt.Contains(bl) then
+          //if allow_final_opt.Contains(bl) then // why was it here? // added in "a bit of refactoring" commit: d081a0184203fa92b8cf42ace1638a4c6a87bc2f
           begin
             bl.stms.Remove(e);
             try_opt_again := true;
