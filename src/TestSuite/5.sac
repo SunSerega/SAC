@@ -1,0 +1,31 @@
+
+!SngDef w=Num:Const=39
+!SngDef h=Num:Const=4
+
+!StartPos
+y=h
+#ForY
+	
+	x=w
+	#ForX
+		
+		MouseP 1
+		Sleep 20
+		
+		GetMousePos mx my
+		MousePos mx-49 my
+		
+		x=x-1
+		JumpIf x < 1 "#ForXBreak" "#ForX"
+	#ForXBreak
+	
+	y=y-1
+	JumpIf y < 1 "#ResetAll" "#ForYReset"
+	#ForYReset
+	GetMousePos mx my
+	MousePos mx+49*w my-49
+	Jump "#ForY"
+
+#ResetAll
+Susp
+Jump "#"
