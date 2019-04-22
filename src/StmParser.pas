@@ -3,6 +3,8 @@
 //ToDo перестановка переменных в следующий блок всё ещё неправильна. В перёд переставлять можно только если ничего тот блок не вызывает (кроме того, откуда эту переменную переместили)
 // - это в 2 местах одновременно надо исправлять
 
+//ToDo параметр для разрешения разворачивания: [> JumpIf ... "Loop" ... <]
+//ToDo параметр для ограничения размера блока (обязательно с дефолтным значением)
 //ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
 //ToDo задокументировать возможность добавлять табы в начале каждой строчки
 //ToDo в тестере сделать чтоб заменялся весь файл (вместо добавления в конце)
@@ -12,7 +14,7 @@
 
 //ToDo защита GetBlockChain от бесконечного Call
 // - иначе может быть внутренняя StackOverflow оптимизатора
-// - нужно добавить параметр-глубину в GetBlockChain, если он ушёл за предел размера стека - ошибка
+// - нужно добавить параметр-глубину в GetBlockChain, если он ушёл за предел рекурсии - ошибка
 
 //ToDo в каждом ExprStm надо хранить имя начального файла
 // - иначе оптимизация меняет блок а с ним и файл, и ReadOnly переменные могут перестать работать
@@ -4773,8 +4775,10 @@ begin
         exit;
       end else
       begin
-        if curr<>org_bl then stm := stm.Copy(org_bl);
-        var opt: StmBase := allow_final_opt?stm.FinalOptimize(nvn, svn, ovn):stm.Optimize(nvn, svn);
+        var opt :=
+          allow_final_opt?
+          (curr=org_bl?stm:stm.Copy(org_bl)).FinalOptimize(nvn, svn, ovn):
+          (curr=org_bl?stm:stm.Copy(org_bl)).Optimize(nvn, svn);
         
         if (opt is OperConstCall(var cc)) and (cc.CalledBlock=nil) then opt := nil;
         
@@ -4868,6 +4872,7 @@ begin
 //    writeln('opt');
 //    writeln(self);
 //    writeln('-'*50);
+//    readln;
 //    Sleep(1000);
     
     {$region Init}
