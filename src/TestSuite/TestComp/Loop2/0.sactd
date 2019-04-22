@@ -2,7 +2,7 @@
 #ExpOptCode
  (file Main.sac)
 \#
-Output "test" //Const
-Sleep 100 //Const
-Susp //Const
-Jump "Main.sac\#" //Const
+Output "test" [Const]
+Sleep 100 [Const]
+Susp [Const]
+Jump "Main.sac\#" [Const]

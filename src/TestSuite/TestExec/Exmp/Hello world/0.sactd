@@ -2,26 +2,26 @@
 #ExpOptCode
  (file Main.sac)
 \#
-KeyD 160 //Const
-KeyP 72 //Const
-KeyU 160 //Const
-KeyP 69 //Const
-KeyP 76 //Const
-KeyP 76 //Const
-KeyP 79 //Const
-KeyP 188 //Const
-KeyP 32 //Const
-KeyP 87 //Const
-KeyP 79 //Const
-KeyP 82 //Const
-KeyP 76 //Const
-KeyP 68 //Const
-KeyD 160 //Const
-KeyP 49 //Const
-KeyU 160 //Const
-Output "Done writing hello world" //Const
-Susp //Const
-Return //Const
+KeyD 160 [Const]
+KeyP 72 [Const]
+KeyU 160 [Const]
+KeyP 69 [Const]
+KeyP 76 [Const]
+KeyP 76 [Const]
+KeyP 79 [Const]
+KeyP 188 [Const]
+KeyP 32 [Const]
+KeyP 87 [Const]
+KeyP 79 [Const]
+KeyP 82 [Const]
+KeyP 76 [Const]
+KeyP 68 [Const]
+KeyD 160 [Const]
+KeyP 49 [Const]
+KeyU 160 [Const]
+Output "Done writing hello world" [Const]
+Susp [Const]
+Return [Const]
 
 #ExpOtp
 Done writing hello world

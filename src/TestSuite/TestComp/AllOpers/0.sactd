@@ -2,11 +2,11 @@
 #ExpOptCode
  (file Main.sac)
 \#
-!StartPos //Const
+!StartPos [Const]
 cn=5
 cs="abc"
 co=null
-GetKey 1 vn //Const
+GetKey 1 vn [Const]
 vs=Str(vn) Nums={vn}
 JumpIf vn = 0 "Main.sac\#vo_num" "Main.sac\#vo_str" Nums={vn}
 
@@ -57,17 +57,17 @@ GetKeyTrigger cn to Nums={cn}
 GetKeyTrigger vn to Nums={vn}
 GetKeyTrigger co to Nums={co}
 GetKeyTrigger vo to Nums={vo}
-GetMousePos to to //Const
+GetMousePos to to [Const]
 Sleep cn Nums={cn}
 Sleep vn Nums={vn}
 Sleep co Nums={co}
 Sleep vo Nums={vo}
-Random to //Const
+Random to [Const]
 Output Str(cs) Objs={cs}
 Output Str(vs) Objs={vs}
 Output Str(cn) Nums={cn}
 Output Str(vn) Nums={vn}
 Output Str(co) Nums={co}
 Output Str(vo) Nums={vo}
-Susp //Const
-Halt //Const
+Susp [Const]
+Halt [Const]

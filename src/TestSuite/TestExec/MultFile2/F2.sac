@@ -6,5 +6,6 @@ Jump "#lbl1"
 KeyP 5
 
 #lbl1
+Sleep 10
 KeyP 3
 Jump "Main.sac#lbl1"

@@ -2,8 +2,8 @@
 #ExpOptCode
  (file Main.sac)
 \#
-!StartPos //Const
-GetKey 1 vn //Const
+!StartPos [Const]
+GetKey 1 vn [Const]
 JumpIf vn = 0 "Main.sac\#vo_num" "Main.sac\#vo_str" Nums={vn}
 
 \#vo_num
@@ -16,4 +16,4 @@ JumpIf vn = 0 "Main.sac\#Tests" "Main.sac\#" Objs={vn}
 
 \#Tests
 Output Str(Length(vo)) StrChecks={vo} Strs={vo}
-Return //Const
+Return [Const]

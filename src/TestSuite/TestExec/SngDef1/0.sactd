@@ -2,8 +2,8 @@
 #ExpOptCode
  (file Main.sac)
 \#
-Output "0" //Const
-Return //Const
+Output "0" [Const]
+Return [Const]
 
 #ExpOtp
 0

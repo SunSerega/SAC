@@ -2,13 +2,13 @@
 #ExpOptCode
  (file Main.sac)
 \#
-!StartPos //Const
-Output "1405 hi" //Const
-Output "lbl1 executed" //Const
-Output "hi" //Const
-Output "8" //Const
-Susp //Const
-Return //Const
+!StartPos [Const]
+Output "1405 hi" [Const]
+Output "lbl1 executed" [Const]
+Output "hi" [Const]
+Output "8" [Const]
+Susp [Const]
+Return [Const]
 
 #ExpOtp
 1405 hi

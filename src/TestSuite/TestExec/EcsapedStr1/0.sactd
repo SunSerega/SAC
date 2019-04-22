@@ -2,11 +2,11 @@
 #ExpOptCode
  (file Main.sac)
 \#
-Output "(" //Const
-Output "\"" //Const
-Output "\\" //Const
-Output "\\\"" //Const
-Return //Const
+Output "(" [Const]
+Output "\"" [Const]
+Output "\\" [Const]
+Output "\\\"" [Const]
+Return [Const]
 
 #ExpOtp
 (

@@ -2,8 +2,9 @@
 #ExpOptCode
  (file Main.sac)
 \#
-!StartPos //Const
-Jump "Main.sac\#" //Const
+!StartPos [Const]
+Sleep 10 [Const]
+Jump "Main.sac\#" [Const]
 
 #ExpOtp
 %aborted

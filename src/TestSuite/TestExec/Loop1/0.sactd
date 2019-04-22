@@ -4,7 +4,7 @@
 \#
 i=(i+1) Objs={i}
 Output ("iteration "+Str(i)) Objs={i}
-Susp //Const
+Susp [Const]
 JumpIf i < 10 "Main.sac\#" null Objs={i}
 
 #ExpOtp

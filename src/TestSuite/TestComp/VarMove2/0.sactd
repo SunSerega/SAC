@@ -2,10 +2,10 @@
 #ExpOptCode
  (file Main.sac)
 \#
-GetKey 1 n //Const
+GetKey 1 n [Const]
 n=(n+1) Nums={n}
-Jump "Main.sac\#lbl1" //Const
+Jump "Main.sac\#lbl1" [Const]
 
 \#lbl1
 KeyP n NumChecks={n} Nums={n}
-Jump "Main.sac\#lbl1" //Const
+Jump "Main.sac\#lbl1" [Const]
