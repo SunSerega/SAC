@@ -1360,7 +1360,7 @@ type
       bw.Write(res);
     end;
     
-    public static function Load(br: System.IO.BinaryReader): DInputNValue;
+    public static function Load(br: System.IO.BinaryReader): SInputSValue;
     begin
       Result := new SInputSValue;
       Result.res := br.ReadString;
