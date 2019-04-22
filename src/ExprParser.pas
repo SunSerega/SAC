@@ -2739,6 +2739,17 @@ type
       
     end;
     
+    public function IsSame(wrapper: OptExprWrapper): boolean :=
+      
+      self.n_vars_names.SequenceEqual(wrapper.n_vars_names) and
+      self.s_vars_names.SequenceEqual(wrapper.s_vars_names) and
+      self.o_vars_names.SequenceEqual(wrapper.o_vars_names) and
+      
+      self.NumChecks.SequenceEqual(wrapper.NumChecks) and // ExprContextArea shouldn't copy itself, so it's ok to check this way
+      self.StrChecks.SequenceEqual(wrapper.StrChecks) and
+      
+      self.GetMain.IsSame(wrapper.GetMain);
+    
     protected function GetOptInst(Main: IOptExpr; NumChecks, StrChecks: Dictionary<string, ExprContextArea>): OptExprWrapper;
     
     public function Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;

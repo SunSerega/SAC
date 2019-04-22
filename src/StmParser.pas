@@ -556,6 +556,8 @@ type
     ///Only creates new instance for stms that can change container when optimized (like when Jump becomes [Const])
     public function Copy(container: StmBlock): StmBase; virtual := self;
     
+    public function IsSame(stm: StmBase): boolean; abstract;
+    
     public procedure CheckSngDef; virtual := exit;
     
     public function Optimize(prev_bls: List<StmBlock>; nvn, svn: HashSet<string>): StmBase; virtual := self;
@@ -711,6 +713,17 @@ type
       self.scr := scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as ExprStm;
+      if nstm=nil then exit;
+      
+      Result :=
+        (self.vname = nstm.vname) and
+        e.IsSame(nstm.e);
+      
+    end;
+    
     public function Simplify(ne: OptExprWrapper): StmBase;
     begin
       
@@ -816,6 +829,14 @@ type
   DrctStmBase = abstract class(StmBase)
     
     public static function FromString(bl: StmBlock; s: string; par: array of string): DrctStmBase;
+    
+    private constructor := raise new System.NotSupportedException;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      Result := false;
+      raise new System.NotSupportedException;
+    end;
     
     public function Optimize(prev_bls: List<StmBlock>; nvn, svn: HashSet<string>): StmBase; override := nil;
     
@@ -1212,6 +1233,8 @@ type
     
     public res: string;
     
+    public function IsSame(val: InputSValue): boolean; abstract;
+    
     public function GetCalc: Action<ExecutingContext>; virtual := nil;
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -1228,6 +1251,10 @@ type
     
     public constructor(res: string) :=
     self.res := res;
+    
+    public function IsSame(val: InputSValue): boolean; override :=
+    (val is SInputSValue(var nval)) and
+    (self.res = nval.res);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1255,6 +1282,10 @@ type
     begin
       self.oe := oe;
     end;
+    
+    public function IsSame(val: InputSValue): boolean; override :=
+    (val is DInputSValue(var nval)) and
+    self.oe.IsSame(nval.oe);
     
     public function Simplify(noe: OptSExprWrapper): InputSValue;
     begin
@@ -1291,6 +1322,8 @@ type
     
     public res: real;
     
+    public function IsSame(val: InputNValue): boolean; abstract;
+    
     public function GetCalc: Action<ExecutingContext>; virtual := nil;
     public procedure Save(bw: System.IO.BinaryWriter); abstract;
     
@@ -1307,6 +1340,10 @@ type
     
     public constructor(res: real) :=
     self.res := res;
+    
+    public function IsSame(val: InputNValue): boolean; override :=
+    (val is SInputNValue(var nval)) and
+    (self.res = nval.res);
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -1334,6 +1371,10 @@ type
     begin
       self.oe := oe;
     end;
+    
+    public function IsSame(val: InputNValue): boolean; override :=
+    (val is DInputNValue(var nval)) and
+    self.oe.IsSame(nval.oe);
     
     public function Simplify(noe: OptNExprWrapper): InputNValue;
     begin
@@ -1376,6 +1417,8 @@ type
     
     public function GetBlock(scr: Script): StmBlock; abstract;
     
+    public function IsSame(ref: StmBlockRef): boolean; abstract;
+    
     public function Optimize(scr: Script; nvn, svn: HashSet<string>): StmBlockRef; virtual := self;
     public function FinalOptimize(scr: Script; nvn, svn, ovn: HashSet<string>): StmBlockRef; virtual := self;
     
@@ -1396,6 +1439,10 @@ type
     public constructor(bl: StmBlock) :=
     self.bl := bl;
     
+    public function IsSame(ref: StmBlockRef): boolean; override :=
+    (ref is StaticStmBlockRef(var nref)) and
+    (self.bl = nref.bl);
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       bw.Write(byte(1));
@@ -1413,6 +1460,11 @@ type
     
     public s: InputSValue;
     public org_fname: string;
+    
+    public function IsSame(ref: StmBlockRef): boolean; override :=
+    (ref is DynamicStmBlockRef(var nref)) and
+    self.s.IsSame(nref.s) and
+    (self.org_fname = nref.org_fname);
     
     public function GetCalc: Action<ExecutingContext>; override := s.GetCalc();
     
@@ -1534,6 +1586,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstKeyDown;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -1576,6 +1637,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstKeyUp;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1623,6 +1693,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstKeyPress;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -1683,6 +1762,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperKeyDown;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
     end;
     
     public function Simplify(nkk: InputNValue): StmBase;
@@ -1780,6 +1868,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperKeyUp;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
+    end;
+    
     public function Simplify(nkk: InputNValue): StmBase;
     begin
       
@@ -1874,6 +1971,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperKeyPress;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
     end;
     
     public function Simplify(nkk: InputNValue): StmBase;
@@ -1975,6 +2081,17 @@ type
       self.dp := dp;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperKey;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.kk.IsSame(nstm.kk) and
+        self.dp.IsSame(nstm.dp);
+      
     end;
     
     public function Simplify(nkk, ndp: InputNValue; optf: StmBase->StmBase): StmBase;
@@ -2080,6 +2197,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstMouseDown;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2149,6 +2275,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstMouseUp;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2216,6 +2351,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstMousePress;
+      if nstm=nil then exit;
+      
+      Result := self.kk = nstm.kk;
+      
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -2299,6 +2443,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperMouseDown;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
     end;
     
     public function Simplify(nkk: InputNValue): StmBase;
@@ -2408,6 +2561,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperMouseUp;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
+    end;
+    
     public function Simplify(nkk: InputNValue): StmBase;
     begin
       
@@ -2513,6 +2675,15 @@ type
       self.kk := kk;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperMousePress;
+      if nstm=nil then exit;
+      
+      Result := self.kk.IsSame(nstm.kk);
+      
     end;
     
     public function Simplify(nkk: InputNValue): StmBase;
@@ -2631,6 +2802,17 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperMouse;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.kk.IsSame(nstm.kk) and
+        self.dp.IsSame(nstm.dp);
+      
+    end;
+    
     public function Simplify(nkk, ndp: InputNValue; optf: StmBase->StmBase): StmBase;
     begin
       
@@ -2726,6 +2908,17 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstMousePos;
+      if nstm=nil then exit;
+      
+      Result :=
+        (self.x = nstm.x) and
+        (self.y = nstm.y);
+      
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -2772,6 +2965,17 @@ type
       self.vname := vname;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstGetKey;
+      if nstm=nil then exit;
+      
+      Result :=
+        (self.kk = nstm.kk) and
+        (self.vname = nstm.vname);
+      
     end;
     
     public procedure CheckSngDef; override :=
@@ -2841,6 +3045,17 @@ type
       self.vname := vname;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstGetKeyTrigger;
+      if nstm=nil then exit;
+      
+      Result :=
+        (self.kk = nstm.kk) and
+        (self.vname = nstm.vname);
+      
     end;
     
     public procedure CheckSngDef; override :=
@@ -2926,6 +3141,17 @@ type
       self.y := y;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperMousePos;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.x.IsSame(nstm.x) and
+        self.y.IsSame(nstm.y);
+      
     end;
     
     public function Simplify(nx,ny: InputNValue): StmBase;
@@ -3025,6 +3251,17 @@ type
       self.vname := vname;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperGetKey;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.kk.IsSame(nstm.kk) and
+        (self.vname = nstm.vname);
+      
     end;
     
     public procedure CheckSngDef; override :=
@@ -3140,6 +3377,17 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperGetKeyTrigger;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.kk.IsSame(nstm.kk) and
+        (self.vname = nstm.vname);
+      
+    end;
+    
     public procedure CheckSngDef; override :=
     scr.CheckCanOverride(vname, bl.fname);
     
@@ -3242,6 +3490,17 @@ type
       y := par[2];
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperGetMousePos;
+      if nstm=nil then exit;
+      
+      Result :=
+        (self.x = nstm.x) and
+        (self.y = nstm.y);
+      
+    end;
+    
     public procedure CheckSngDef; override;
     begin
       scr.CheckCanOverride(x, bl.fname);
@@ -3330,6 +3589,15 @@ type
     
     public function Copy(container: StmBlock): StmBase; override :=
     new OperJump(CalledBlock, container);
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperJump;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock.IsSame(nstm.CalledBlock);
+      
+    end;
     
     public function Simplify(nCalledBlock: StmBlockRef): StmBase;
     begin
@@ -3439,6 +3707,20 @@ type
     
     public function Copy(container: StmBlock): StmBase; override :=
     new OperJumpIf(e1.Copy,e2.Copy, compr, CalledBlock1,CalledBlock2, container);
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperJumpIf;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.e1.IsSame(nstm.e1) and
+        self.e2.IsSame(nstm.e2) and
+        (self.compr = nstm.compr) and
+        self.CalledBlock1.IsSame(nstm.CalledBlock1) and
+        self.CalledBlock2.IsSame(nstm.CalledBlock2);
+      
+    end;
     
     private function comp_obj(o1,o2: object): boolean;
     begin
@@ -3598,6 +3880,15 @@ type
       self.scr := bl.scr;
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstCall;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock = nstm.CalledBlock;
+      
+    end;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -3652,6 +3943,15 @@ type
       self.CalledBlock := CalledBlock;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperCall;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock.IsSame(nstm.CalledBlock);
+      
     end;
     
     public function Simplify(nCalledBlock: StmBlockRef): StmBase;
@@ -3748,6 +4048,20 @@ type
       
       CalledBlock1 := new DynamicStmBlockRef(new DInputSValue(par[4]), bl.fname);
       CalledBlock2 := new DynamicStmBlockRef(new DInputSValue(par[5]), bl.fname);
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperCallIf;
+      if nstm=nil then exit;
+      
+      Result :=
+        self.e1.IsSame(nstm.e1) and
+        self.e2.IsSame(nstm.e2) and
+        (self.compr = nstm.compr) and
+        self.CalledBlock1.IsSame(nstm.CalledBlock1) and
+        self.CalledBlock2.IsSame(nstm.CalledBlock2);
+      
     end;
     
     private function comp_obj(o1,o2: object): boolean;
@@ -3912,6 +4226,9 @@ type
     
     public constructor := exit;
     
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperSusp;
+    
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
@@ -3929,6 +4246,9 @@ type
   OperReturn = sealed class(OperStmBase, IContextJumpOper)
     
     public constructor := exit;
+    
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperReturn;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3961,6 +4281,9 @@ type
     
     
     public constructor := exit;
+    
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperHalt;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
@@ -3995,6 +4318,15 @@ type
       self.l := l;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstSleep;
+      if nstm=nil then exit;
+      
+      Result := self.l = nstm.l;
+      
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -4037,6 +4369,15 @@ type
       self.otp := otp;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstOutput;
+      if nstm=nil then exit;
+      
+      Result := self.otp = nstm.otp;
+      
     end;
     
     public procedure Save(bw: System.IO.BinaryWriter); override;
@@ -4087,6 +4428,15 @@ type
       self.l := l;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperSleep;
+      if nstm=nil then exit;
+      
+      Result := self.l.IsSame(nstm.l);
+      
     end;
     
     public function Simplify(nl: InputNValue): StmBase;
@@ -4161,6 +4511,15 @@ type
       vname := par[1];
     end;
     
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperRandom;
+      if nstm=nil then exit;
+      
+      Result := self.vname = nstm.vname;
+      
+    end;
+    
     public procedure CheckSngDef; override :=
     scr.CheckCanOverride(vname, bl.fname);
     
@@ -4228,6 +4587,15 @@ type
       self.otp := otp;
       self.bl := bl;
       self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperOutput;
+      if nstm=nil then exit;
+      
+      Result := self.otp.IsSame(nstm.otp);
+      
     end;
     
     public function Simplify(notp: InputSValue): StmBase;
