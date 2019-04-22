@@ -6,10 +6,6 @@
 //ToDo типы Ununwrapable[Jump/Call]If
 // - надо ибо сейчас в случае невозможности развернуть - остаётся огрызок, который в Calc делает кучу лишнего
 
-//ToDo Load StmBlockRef-ов засунуть в отдельные статичные методы соответствующих классов
-// - то что сейчас - проще но говнокод
-// - проверит то же самое у InputValue
-
 //ToDo параметр для разрешения разворачивания: [> JumpIf ... "Loop" ... <]
 // - написать где то что возможно бесконечное разворачивание в определённых условиях
 
@@ -1230,95 +1226,6 @@ type
   
   {$region InputValue}
   
-  InputSValue = abstract class
-    
-    public res: string;
-    
-    public function IsSame(val: InputSValue): boolean; abstract;
-    
-    public function GetCalc: Action<ExecutingContext>; virtual := nil;
-    public procedure Save(bw: System.IO.BinaryWriter); abstract;
-    
-    public function Optimize(nvn,svn: HashSet<string>): InputSValue; virtual := self;
-    public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; virtual := self;
-    
-    public function GetAllExprs: sequence of OptExprWrapper; virtual :=
-    new OptExprWrapper[0];
-    
-    public static function Load(br: System.IO.BinaryReader): InputSValue;
-    
-  end;
-  SInputSValue = sealed class(InputSValue)
-    
-    public constructor(res: string) :=
-    self.res := res;
-    
-    public function IsSame(val: InputSValue): boolean; override :=
-    (val is SInputSValue(var nval)) and
-    (self.res = nval.res);
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      bw.Write(byte(1));
-      bw.Write(res);
-    end;
-    
-    public function ToString: string; override :=
-    $'"{res}"';
-    
-  end;
-  DInputSValue = sealed class(InputSValue)
-    
-    public oe: OptSExprWrapper;
-    
-    public procedure Calc(ec: ExecutingContext) :=
-    self.res := oe.CalcS(ec.nvs, ec.svs);
-    
-    
-    
-    public constructor(s: string) :=
-    oe := OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr) as OptSExprWrapper;
-    
-    public constructor(oe: OptSExprWrapper);
-    begin
-      self.oe := oe;
-    end;
-    
-    public function IsSame(val: InputSValue): boolean; override :=
-    (val is DInputSValue(var nval)) and
-    self.oe.IsSame(nval.oe);
-    
-    public function Simplify(noe: OptSExprWrapper): InputSValue;
-    begin
-      if noe.Main is OptSLiteralExpr(var sle) then
-        Result := new SInputSValue(sle.res) else
-      if oe=noe then
-        Result := self else
-        Result := new DInputSValue(noe);
-    end;
-    
-    public function Optimize(nvn,svn: HashSet<string>): InputSValue; override :=
-    Simplify(OptSExprWrapper(oe.Optimize(nvn,svn)));
-    
-    public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; override :=
-    Simplify(OptSExprWrapper(oe.FinalOptimize(nvn,svn,ovn)));
-    
-    public function GetAllExprs: sequence of OptExprWrapper; override :=
-    new OptExprWrapper[](oe);
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      bw.Write(byte(2));
-      oe.Save(bw);
-    end;
-    
-    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
-    
-    public function ToString: string; override :=
-    oe.ToString;
-    
-  end;
-  
   InputNValue = abstract class
     
     public res: real;
@@ -1350,6 +1257,12 @@ type
     begin
       bw.Write(byte(1));
       bw.Write(res);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): SInputNValue;
+    begin
+      Result := new SInputNValue;
+      Result.res := br.ReadDouble;
     end;
     
     public function ToString: string; override :=
@@ -1401,6 +1314,113 @@ type
       oe.Save(bw);
     end;
     
+    public static function Load(br: System.IO.BinaryReader): DInputNValue;
+    begin
+      Result := new DInputNValue;
+      Result.oe := OptNExprWrapper(OptExprWrapper.Load(br));
+    end;
+    
+    public function GetCalc: Action<ExecutingContext>; override := self.Calc;
+    
+    public function ToString: string; override :=
+    oe.ToString;
+    
+  end;
+  
+  InputSValue = abstract class
+    
+    public res: string;
+    
+    public function IsSame(val: InputSValue): boolean; abstract;
+    
+    public function GetCalc: Action<ExecutingContext>; virtual := nil;
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    
+    public function Optimize(nvn,svn: HashSet<string>): InputSValue; virtual := self;
+    public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; virtual := self;
+    
+    public function GetAllExprs: sequence of OptExprWrapper; virtual :=
+    new OptExprWrapper[0];
+    
+    public static function Load(br: System.IO.BinaryReader): InputSValue;
+    
+  end;
+  SInputSValue = sealed class(InputSValue)
+    
+    public constructor(res: string) :=
+    self.res := res;
+    
+    public function IsSame(val: InputSValue): boolean; override :=
+    (val is SInputSValue(var nval)) and
+    (self.res = nval.res);
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(1));
+      bw.Write(res);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): DInputNValue;
+    begin
+      Result := new SInputSValue;
+      Result.res := br.ReadString;
+    end;
+    
+    public function ToString: string; override :=
+    $'"{res}"';
+    
+  end;
+  DInputSValue = sealed class(InputSValue)
+    
+    public oe: OptSExprWrapper;
+    
+    public procedure Calc(ec: ExecutingContext) :=
+    self.res := oe.CalcS(ec.nvs, ec.svs);
+    
+    
+    
+    public constructor(s: string) :=
+    oe := OptExprWrapper.FromExpr(Expr.FromString(s), OptExprBase.AsStrExpr) as OptSExprWrapper;
+    
+    public constructor(oe: OptSExprWrapper);
+    begin
+      self.oe := oe;
+    end;
+    
+    public function IsSame(val: InputSValue): boolean; override :=
+    (val is DInputSValue(var nval)) and
+    self.oe.IsSame(nval.oe);
+    
+    public function Simplify(noe: OptSExprWrapper): InputSValue;
+    begin
+      if noe.Main is OptSLiteralExpr(var sle) then
+        Result := new SInputSValue(sle.res) else
+      if oe=noe then
+        Result := self else
+        Result := new DInputSValue(noe);
+    end;
+    
+    public function Optimize(nvn,svn: HashSet<string>): InputSValue; override :=
+    Simplify(OptSExprWrapper(oe.Optimize(nvn,svn)));
+    
+    public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; override :=
+    Simplify(OptSExprWrapper(oe.FinalOptimize(nvn,svn,ovn)));
+    
+    public function GetAllExprs: sequence of OptExprWrapper; override :=
+    new OptExprWrapper[](oe);
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      bw.Write(byte(2));
+      oe.Save(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): DInputSValue;
+    begin
+      Result := new DInputSValue;
+      Result.oe := OptSExprWrapper(OptExprWrapper.Load(br));
+    end;
+    
     public function GetCalc: Action<ExecutingContext>; override := self.Calc;
     
     public function ToString: string; override :=
@@ -1450,6 +1470,18 @@ type
       if bl = nil then
         bw.Write(-1) else
         bl.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): StaticStmBlockRef;
+    begin
+      Result := new StaticStmBlockRef;
+      
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < bls.Length then
+          Result.bl := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
+      
     end;
     
     public function ToString: string; override :=
@@ -1529,6 +1561,13 @@ type
       bw.Write(byte(2));
       s.Save(bw);
       bw.Write(org_fname);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader): DynamicStmBlockRef;
+    begin
+      Result := new DynamicStmBlockRef;
+      Result.s := InputSValue.Load(br);
+      Result.org_fname := br.ReadString;
     end;
     
     public function ToString: string; override :=
@@ -5616,8 +5655,8 @@ begin
   var t := br.ReadByte;
   case t of
     
-    1: Result := new SInputSValue(br.ReadString);
-    2: Result := new DInputSValue(OptExprWrapper.Load(br) as OptSExprWrapper);
+    1: Result := SInputSValue.Load(br);
+    2: Result := DInputSValue.Load(br);
     
     else raise new InvalidInpTException(t);
   end;
@@ -5628,8 +5667,8 @@ begin
   var t := br.ReadByte;
   case t of
     
-    1: Result := new SInputNValue(br.ReadDouble);
-    2: Result := new DInputNValue(OptExprWrapper.Load(br) as OptNExprWrapper);
+    1: Result := SInputNValue.Load(br);
+    2: Result := DInputNValue.Load(br);
     
     else raise new InvalidInpTException(t);
   end;
@@ -5640,20 +5679,8 @@ begin
   var t := br.ReadByte;
   case t of
     
-    1:
-    begin
-      var res := new StaticStmBlockRef;
-      
-      var n := br.ReadInt32;
-      if n <> -1 then
-        if cardinal(n) < bls.Length then
-          res.bl := bls[n] else
-          raise new InvalidStmBlIdException(n, bls.Length);
-      
-      Result := res;
-    end;
-    
-    2: Result := new DynamicStmBlockRef(InputSValue.Load(br), br.ReadString);
+    1: Result := StaticStmBlockRef.Load(br, bls);
+    2: Result := DynamicStmBlockRef.Load(br);
     
     else raise new InvalidBlRefTException(t);
   end;
