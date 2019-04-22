@@ -5387,6 +5387,11 @@ begin
         
       end;
       
+      try_opt_again :=
+        try_opt_again or
+        (curr.stms.Count<>stms.Count) or
+        not curr.stms.Zip(stms, (stm1,stm2)->stm1.IsSame(stm2)).All(b->b);
+      
       curr.stms := stms;
       
       if not_all_waiting then
