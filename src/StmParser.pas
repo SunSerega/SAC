@@ -5344,18 +5344,29 @@ begin
         // [4.] and [5.] - ExprStmOptContainer.GetVarChain skips vars it has already found
         
         var opt_stm := stm;
-        foreach var vname in var_replacements.Keys do
+        foreach var vname in var_replacements.Keys.ToArray do
+        begin
+          
           foreach var oew in opt_stm.FindVarUsages(vname) do
             oew.ReplaceVar(vname, var_replacements[vname]);
+          
+          if opt_stm.DoesRewriteVar(vname) then
+            var_replacements.Remove(vname) else
+          begin
+            var oe := var_replacements[vname];
+            var uv := oe.n_vars_names + oe.s_vars_names + oe.s_vars_names;
+            if (uv.Length=0) and uv.Any(vname2->opt_stm.DoesRewriteVar(vname2)) then
+              curr_stms += new ExprStm(vname, oe, org_bl, org_bl.scr) as StmBase; // ToDo #1428
+          end;
+          
+        end;
         
         foreach var ec in var_once_used.Keys.ToArray do
           if stm.FindVarUsages(ec.e.vname).Any then
-            var_once_used.Remove(ec);
-        
-        foreach var ec in var_once_used.Keys.ToArray do
-          if stm.DoesRewriteVar(ec.e.vname) then
+            var_once_used.Remove(ec) else
           begin
             
+            curr_stms.Remove(ec.e);
             var_once_used[ec].FindVarUsages(ec.e.vname)
             .Single.ReplaceVar(ec.e.vname, ec.e.e);
             
@@ -5444,8 +5455,9 @@ begin
   var stm_lst := new List<List<StmBase>>;
   var var_lst := new List<ExprStmOptContainer>;
   var var_once_used := new Dictionary<ExprStmOptContainer, StmBase>;
+  var var_replacements := new Dictionary<string, OptExprWrapper>;
   
-  var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,new Dictionary<string, OptExprWrapper>, allow_final_opt);
+  var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,var_replacements, allow_final_opt);
   
   Result := new List<StmBase>(stm_lst.Sum(l->l.Count));
   foreach var l in stm_lst do Result += l;
@@ -5459,14 +5471,20 @@ begin
       curr.next := nil;
       
       foreach var ec in var_once_used.Keys do
+      begin
+        Result.Remove(ec.e);
         var_once_used[ec].FindVarUsages(ec.e.vname)
         .Single.ReplaceVar(ec.e.vname, ec.e.e);
+      end;
       
     end;
     
     GBCR_all_loop,
     GBCR_found_loop:
-      Result.AddRange(var_lst.Select(ec->ec.e as StmBase));
+      Result.AddRange(
+        var_lst.Select(ec->ec.e as StmBase) +
+        var_replacements.Select(kvp->new ExprStm(kvp.Key, kvp.Value, curr, curr.scr) as StmBase)
+      );
     
   end;
   
@@ -5663,42 +5681,6 @@ begin
         {$endregion nue}
         
         //Start checking
-        
-        {$region IOptSimpleExpr}
-        if e.e.GetMain is IOptSimpleExpr then
-        begin
-          
-          if usages.Any then try_opt_again := true;
-          foreach var use in usages do
-            use[1].ReplaceVar(e.vname, e.e);
-          
-          if pri<>-1 then
-          begin
-            var ci := bl.stms.IndexOf(e);
-            if ci<>pri-1 then
-            begin
-              bl.stms.Insert(pri, e);
-              bl.stms.RemoveAt(ci);
-              //try_opt_again := true; // This can't open new opt posability
-            end;
-          end else
-          if nue then
-          begin
-            if (bl.next<>nil) and (self.start_pos_def and not bl.next.StartPos) and (bl.next.next <> bl.next) then
-            begin
-              bl.stms.Remove(e);
-              bl.next.stms.Insert(0, e);
-              try_opt_again := true;
-            end;
-          end else
-          //if allow_final_opt.Contains(bl) then // why was it here? // added in "a bit of refactoring" commit: d081a0184203fa92b8cf42ace1638a4c6a87bc2f
-          begin
-            bl.stms.Remove(e);
-            try_opt_again := true;
-          end;
-          
-        end else
-        {$endregion IOptSimpleExpr}
         
         {$region Only 1 use}
         if (usages.Count = 1) and (pri = -1) and allow_final_opt.Contains(bl) and not nue then
