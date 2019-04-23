@@ -5472,7 +5472,14 @@ begin
     GBCR_done,
     GBCR_context_halt,
     GBCR_nonconst_context_jump:
-      curr.next := nil; // ToDo var_once_used
+    begin
+      curr.next := nil;
+      
+      foreach var ec in var_once_used.Keys do
+        var_once_used[ec].FindVarUsages(ec.e.vname)
+        .Single.ReplaceVar(ec.e.vname, ec.e.e);
+      
+    end;
     
     GBCR_all_loop,
     GBCR_found_loop:
