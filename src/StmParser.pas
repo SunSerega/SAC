@@ -8,21 +8,14 @@
 
 
 
-//ToDo перестановка переменных в следующий блок всё ещё неправильна. В перёд переставлять можно только если ничего тот блок не вызывает (кроме того, откуда эту переменную переместили)
-// - совместить со следующим:
-
-//ToDo кажется, есть идея более хорошего подхода к оптимизатору:
-// - ExprStm просто запоминать в GetBlockChain, а потом сразу подставлять куда надо
-// - так должно быть возможно сильно сократить код оптимизатора и уменьшить кол-во итераций, необходимых ему
-// - секция работы с переменными тогда вообще не нужна
-// - таким способом должно быть и быстрее и проще оптимизация ExprStm
+//ToDo Перестановка переменных в следующий блок
+// - вперёд переставлять можно только если ничего тот блок не вызывает, кроме того, откуда эту переменную переместили
 
 
 
 //ToDo типы Ununwrapable[Jump/Call]If
 // - надо ибо сейчас в случае невозможности развернуть - остаётся огрызок, который в Calc делает кучу лишнего
 // - когда готово - можно будет добавить функционал jci_aggressive_unwrap
-
 
 //ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
 //ToDo задокументировать возможность добавлять табы в начале каждой строчки
@@ -5670,37 +5663,6 @@ begin
         {$endregion nue}
         
         //Start checking
-        
-        {$region No usages}
-        if usages.Count = 0 then
-        begin
-          
-          if pri <> -1 then
-          begin
-            var ci := bl.stms.IndexOf(e);
-            if ci<>pri-1 then
-            begin
-              bl.stms.Insert(pri, e);
-              bl.stms.RemoveAt(ci);
-              //try_opt_again := true; // This can't open new opt posability
-            end;
-          end else
-          if not nue then
-          begin
-            
-            bl.stms.Remove(e);
-            try_opt_again := true;
-            
-          end else
-          if (bl.next<>nil) and (self.start_pos_def and not bl.next.StartPos) and (bl.next.next <> bl.next) then
-          begin
-            bl.stms.Remove(e);
-            bl.next.stms.Insert(0, e);
-            try_opt_again := true;
-          end;
-          
-        end else
-        {$endregion No usages}
         
         {$region IOptSimpleExpr}
         if e.e.GetMain is IOptSimpleExpr then
