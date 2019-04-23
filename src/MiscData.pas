@@ -48,11 +48,20 @@ type
   end;
   ExecParams = record
     
+    public const StdMBS = 50000;
+    public const StdMCT = 5000;
+    
+    
+    
     public help_conf := false;
     
-    public debug := false;
     public SupprIO := false;
     public lib_mode := false;
+    public debug := false;
+    
+    public max_block_size := StdMBS;
+    public max_compile_time := StdMCT;
+    public jci_aggressive_unwrap := false;
     
   end;
   
