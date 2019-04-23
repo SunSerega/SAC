@@ -578,9 +578,9 @@ type
     
     public procedure CheckSngDef; virtual := exit;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; virtual := self;
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; virtual := self;
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; virtual :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; virtual :=
     Optimize(prev_bls, nvn,svn);
     
     public function FindVarUsages(vn: string): sequence of OptExprWrapper :=
@@ -753,7 +753,7 @@ type
     
     public procedure CheckSngDef; override;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override;
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override;
     begin
       Result := Simplify(e.Optimize(nvn,svn));
       var main := ExprStm(Result).e.GetMain;
@@ -771,7 +771,7 @@ type
       
     end;
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override;
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override;
     begin
       Result := Simplify(e.FinalOptimize(nvn,svn,ovn));
       var main := ExprStm(Result).e.GetMain;
@@ -856,7 +856,7 @@ type
       raise new System.NotSupportedException;
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override := nil;
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override := nil;
     
     public function GetCalc: sequence of Action<ExecutingContext>; override :=
     new Action<ExecutingContext>[0];
@@ -1600,21 +1600,29 @@ type
   
   {$region interface's}
   
+  ///All operators that have StmBlockRef in their structure
   IFileRefStm = interface
     
     function GetRefs: sequence of StmBlockRef;
     
   end;
   
-  ///всё что перемещает точку выполнения (Jump, Call, Return, Halt, ...)
+  ///Everything that changes execution point at runtime (Jump, Call, Return, Halt, ...)
   IContextJumpOper = interface
     
   end;
-  ///только Jump и Call операторы
+  
+  ///Only Jump and Call operators
   IJumpCallOper = interface(IContextJumpOper)
     
   end;
-  ///только Call операторы
+  
+  ///Only Jump operators
+  IJumpOper = interface(IJumpCallOper)
+    
+  end;
+  
+  ///Only Call operators
   ICallOper = interface(IJumpCallOper)
     
   end;
@@ -1849,10 +1857,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -1953,10 +1961,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2058,10 +2066,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2171,10 +2179,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn), dp.Optimize(nvn,svn), stm->stm.Optimize(prev_bls, nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), dp.FinalOptimize(nvn,svn,ovn), stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2532,10 +2540,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2648,10 +2656,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2764,10 +2772,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -2890,10 +2898,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn), dp.Optimize(nvn,svn), stm->stm.Optimize(prev_bls, nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), dp.FinalOptimize(nvn,svn,ovn), stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -3052,10 +3060,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn,ovn);
     
     public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
@@ -3132,10 +3140,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn,ovn);
     
     public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
@@ -3224,10 +3232,10 @@ type
         Result := new OperMousePos(nx,ny, bl);
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(x.Optimize(nvn,svn), y.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(x.FinalOptimize(nvn,svn,ovn), y.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -3347,10 +3355,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn), nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), nvn,svn,ovn);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -3471,10 +3479,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(kk.Optimize(nvn,svn), nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), nvn,svn,ovn);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -3582,10 +3590,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn,ovn);
     
     public function DoesRewriteVar(vn: string): boolean; override :=
@@ -3620,7 +3628,7 @@ type
   
   {$region Jump/Call}
   
-  OperJump = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
+  OperJump = sealed class(OperStmBase, IJumpOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
@@ -3671,10 +3679,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.Optimize(scr, nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.FinalOptimize(scr, nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -3714,7 +3722,7 @@ type
     end;
     
   end;
-  OperJumpIf = sealed class(OperStmBase, IJumpCallOper, IFileRefStm)
+  OperJumpIf = sealed class(OperStmBase, IJumpOper, IFileRefStm)
     
     public e1,e2: OptExprWrapper;
     public compr: comprT;
@@ -3798,9 +3806,9 @@ type
         end;
     end;
     
-    public function CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean;
+    public function CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean;
     
-    public function Simplify(prev_bls: List<StmBlock>; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
+    public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
       var AllLiteral :=
         (ne1.GetMain() is IOptLiteralExpr) and
@@ -3826,7 +3834,7 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(
       prev_bls,
       e1.Optimize(nvn,svn),e2.Optimize(nvn,svn),
@@ -3834,7 +3842,7 @@ type
       stm->stm.Optimize(prev_bls, nvn,svn)
     );
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(
       prev_bls,
       e1.FinalOptimize(nvn,svn,ovn),e2.FinalOptimize(nvn,svn,ovn),
@@ -4026,10 +4034,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.Optimize(scr, nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.FinalOptimize(scr, nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -4151,9 +4159,9 @@ type
       self.scr := bl.scr;
     end;
     
-    public function CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean;
+    public function CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean;
     
-    public function Simplify(prev_bls: List<StmBlock>; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
+    public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
       var AllLiteral :=
         (ne1.GetMain() is IOptLiteralExpr) and
@@ -4179,7 +4187,7 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(
       prev_bls,
       e1.Optimize(nvn,svn),e2.Optimize(nvn,svn),
@@ -4187,7 +4195,7 @@ type
       stm->stm.Optimize(prev_bls, nvn,svn)
     );
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(
       prev_bls,
       e1.FinalOptimize(nvn,svn,ovn),e2.FinalOptimize(nvn,svn,ovn),
@@ -4318,7 +4326,7 @@ type
       bw.Write(byte(2));
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override;
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override;
     begin
       bl.next := nil;
       Result := nil;
@@ -4513,10 +4521,10 @@ type
         Result := new OperSleep(nl, bl);
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(l.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(l.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -4594,10 +4602,10 @@ type
       
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn, nil);
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(nvn,svn,ovn);
     
     public function DoesRewriteVar(vn: string): boolean; override := self.vname=vn;
@@ -4668,10 +4676,10 @@ type
         Result := new OperOutput(notp, bl);
     end;
     
-    public function Optimize(prev_bls: List<StmBlock>; nvn,svn: HashSet<string>): StmBase; override :=
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
     Simplify(otp.Optimize(nvn,svn));
     
-    public function FinalOptimize(prev_bls: List<StmBlock>; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(otp.FinalOptimize(nvn,svn,ovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -5089,10 +5097,10 @@ begin
   end;
 end;
 
-function OperJumpIf.CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean :=
+function OperJumpIf.CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean :=
 GCheckCanUnwrapJumpCall_If(prev_bls.ToList, ref);
 
-function OperCallIf.CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean :=
+function OperCallIf.CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean :=
 GCheckCanUnwrapJumpCall_If(prev_bls.ToList, ref);
 
 {$endregion [Jump/Call]If unwraping}
@@ -5385,7 +5393,7 @@ begin
             opt_stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
             opt_stm.Optimize     (prev_bls.Keys, nvn,svn);
           
-          if opt=nil then
+          if opt_stm=nil then
             if stm is IJumpOper then
               break else
               continue;
@@ -5398,18 +5406,18 @@ begin
           foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
           begin
             
-            stm_lst += allow_final_opt?
+            curr_stms += allow_final_opt?
               ec.e.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
               ec.e.Optimize     (prev_bls.Keys, nvn,svn);
           end;
           
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
-          stm_lst += opt_stm;
+          curr_stms += opt_stm;
         end;
         
         // [3.]
-        var_lst.RemoveAll(ec->opt.DoesRewriteVar(ec.e.vname));
+        var_lst.RemoveAll(ec->opt_stm.DoesRewriteVar(ec.e.vname));
       end;
     
     
@@ -5456,7 +5464,7 @@ begin
   
   var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,new Dictionary<string, OptExprWrapper>, allow_final_opt);
   
-  Result := new List<List<StmBase>>(stm_lst.Sum(l->l.Count));
+  Result := new List<StmBase>(stm_lst.Sum(l->l.Count));
   foreach var l in stm_lst do Result += l;
   
   case res of
@@ -5469,7 +5477,6 @@ begin
     GBCR_all_loop,
     GBCR_found_loop:
       ExprStmOptContainer.AddAllVarsChains(var_lst, Result);
-      
     
   end;
   

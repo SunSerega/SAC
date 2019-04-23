@@ -64,5 +64,12 @@ type
     public jci_aggressive_unwrap := false;
     
   end;
-  
+
+function ToDictionary<T1,T2>(self: Dictionary<T1,T2>): Dictionary<T1,T2>; extensionmethod;
+begin
+  Result := new Dictionary<T1, T2>(self.Count);
+  foreach var kvp in self do
+    Result.Add(kvp.Key, kvp.Value);
+end;
+
 end.
