@@ -38,7 +38,7 @@
 
 
 2=\
-	Everything after needed operands - is comments:\
+	Everything after required operands - is comments:\
 	\
 	Halt comment\
 	Halt a lot of comments\
@@ -46,7 +46,9 @@
 	Halt "also single comment"\
 	Halt [and this too]\
 	\
-	SAC ignore them all, but single comments are a bit faster to read
+	You can also make comment on empty line, by placing whitespace before comment\
+	\
+	SAC ignore them all
 
 
 3=\

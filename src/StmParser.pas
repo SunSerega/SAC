@@ -1,18 +1,16 @@
 ﻿unit StmParser;
-//ToDo документация новых параметров
-//ToDo функционал новых параметров
 //ToDo в тестере сделать чтоб заменялся весь .sactd файл (вместо добавления в конце)
+
+//ToDo функционал параметра max_compile_time
 
 //ToDo перестановка переменных в следующий блок всё ещё неправильна. В перёд переставлять можно только если ничего тот блок не вызывает (кроме того, откуда эту переменную переместили)
 // - это в 2 местах одновременно надо исправлять
 
 //ToDo типы Ununwrapable[Jump/Call]If
 // - надо ибо сейчас в случае невозможности развернуть - остаётся огрызок, который в Calc делает кучу лишнего
+// - когда готово - можно будет добавить функционал jci_aggressive_unwrap
 
-//ToDo параметр для разрешения разворачивания: [> JumpIf ... "Loop" ... <]
-// - написать где то что возможно бесконечное разворачивание в определённых условиях
 
-//ToDo параметр для ограничения размера блока (обязательно с дефолтным значением)
 //ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
 //ToDo задокументировать возможность добавлять табы в начале каждой строчки
 //ToDo засовывать WW и WH в основные константы... наверное - не лучшая идея. Лучше хранить их в отдельном словаре
@@ -360,6 +358,12 @@ type
     
     public constructor(o: object; lbl: string) :=
     inherited Create(o, $'Label not found: {lbl}');
+    
+  end;
+  BlockTooBigException = class(FileCompilingException)
+    
+    public constructor(o: object; path: string; sz, limit: integer) :=
+    inherited Create(o, $'Block {path} had size of {sz}, which is too big (limit is {limit})');
     
   end;
   
@@ -5366,6 +5370,10 @@ begin
 //    Sleep(1000);
     
     {$region Init}
+    
+    foreach var bl in bls.Values do
+      if bl.stms.Count>settings.max_block_size then
+        raise new BlockTooBigException(nil, GetRelativePath(bl.scr.main_path, bl.fname+bl.lbl), bl.stms.Count, Settings.max_block_size);
     
     var done := new HashSet<StmBlock>;
     var not_all_waiting :=

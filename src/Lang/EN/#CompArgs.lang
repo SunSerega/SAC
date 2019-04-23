@@ -8,9 +8,6 @@ RunWithNewArgs				=Run
 	You can't press "Run" with !conf selected\
 	But you can copy command that includes !conf, for feture use
 
-!debug descr					=\
-	*reserved*
-
 !lib_m descr					=\
 	lib mode\
 	In this mode you can't run\
@@ -22,6 +19,50 @@ RunWithNewArgs				=Run
 	supressed mode\
 	In this mode - all the clicker command's, Susp and Halt are supressed\
 	You can't send nor resive key/mouse event's\
-	But if you try to send event - it would save, so you can read it later\
+	But if you try to send event (with something like KeyD)\
+	It would save, so you can read it later (with something like GetKey)\
 	Usefull for debug
 
+!debug descr				=\
+	Reserved. In greater future it supposed to turn on error context
+
+!max_block_size descr		=\
+	Maximum number of operators in single block\
+	Default value is =50000\
+	It's really NOT_recomendet to set it to high value\
+	Otherwise, in case of bug or jciauw being on - computer could freeze
+
+!max_compile_time descr		=\
+	Maximum time (in milliseconds) in which parser and optimizer should finish working\
+	Default value is =5000 (5 seconds)\
+	It's really NOT_recomendet to set it to high value\
+	Otherwise, in case of bug or jciauw being on - computer could freeze
+
+!jciauw descr				=\
+	Mode of aggressive JumpIf and CallIf unwraping\
+	In this mode this code:\
+	\
+	i=3\
+	#Loop\
+	Output i\
+	i=i-1\
+	JumpIf i < 1 null "#Loop"\
+	\
+	Would automaticly be optimized to:\
+	\
+	Output "3"\
+	Output "2"\
+	Output "1"\
+	\
+	But be carefull. This code:\
+	\
+	i=3\
+	#Loop\
+	Output i\
+	i=i-1\
+	JumpIf i = 0 null "#Loop"\
+	\
+	Would freeze and eat all RAM, freezing all computer\
+	That's because block "#Loop" can be infinetly unwraped\
+	2 previous parameters are helping with not_killing computer\
+	But finding error like this still can be hard

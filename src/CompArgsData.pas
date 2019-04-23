@@ -233,9 +233,9 @@ type
         UpdateValue;
         tb.SelectionStart := last_cursor_pos;
       except
-        on e: Exception do
+        on e2: Exception do
         begin
-          MessageBox.Show(e.ToString, 'Internal Error:');
+          MessageBox.Show(e2.ToString, 'Internal Error:');
           Halt;
         end;
       end;

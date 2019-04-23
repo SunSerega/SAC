@@ -6,10 +6,8 @@ NoLibHelp						=\
 	Start this .exe with Command line arguments, like this:\
 	"*folder_of_this_exe*\SAC.exe" "*YourScriptPath*\*YourScriptName*.sac"\
 	You can also specify arguments, after .sac file name\
-	Here is list of them:\
-	"!conf" - will start program to help add arguments\
-	"!lib_m" - script wouldn't start executing, but this would allow you to save multifile script to single .sac file\
-	"!susp" - in this (suppressed) mode clicker command's aren't influencing keyboard and mouse, usefull for debug\
+	You can see list of them and their descriptions by launching .sac file with "Configured Launch" button\
+	Or by adding "!conf" parameter\
 	Thats all for now, press Enter to exit
 
 LibView|CurrLib					=Folder: "{0}"
