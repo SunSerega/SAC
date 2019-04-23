@@ -5233,7 +5233,7 @@ type
       
     end;
     
-    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, StmBase>): sequence of ExprStmOptContainer;
+    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>): sequence of ExprStmOptContainer;
     begin
       foreach var ec in lst do
       begin
@@ -5243,13 +5243,13 @@ type
           continue;
         end;
         
-        var vuc := poped_by.FindVarUsages(ec.e.vname).Count;
+        var vu := poped_by.FindVarUsages(ec.e.vname).ToArray;
         if
-          (vuc=0) and not
+          (vu.Length=0) and not
           ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname))
         then continue;
         
-        if vuc=1 then var_once_used.Add(ec, poped_by);
+        if vu.Length=1 then var_once_used.Add(ec, vu[0]);
         
         done += ec;
         yield sequence GetVarChain(done, lst, ec.e, var_once_used);
@@ -5269,7 +5269,7 @@ type
 ///var_lst          : ExprStm's that are currently waiting to be placed somewhere
 ///allow_final_opt  : true if replacing unknown vars with null is allowed
 ///
-function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, integer>;   stm_lst: List<List<StmBase>>;   var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var_replacements: Dictionary<string, OptExprWrapper>;   allow_final_opt: boolean): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, integer>;   stm_lst: List<List<StmBase>>;   var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var_replacements: Dictionary<string, OptExprWrapper>;   allow_final_opt: boolean): GBCResT;
 begin
   var curr := bl;
   
@@ -5367,8 +5367,7 @@ begin
           begin
             
             curr_stms.Remove(ec.e);
-            var_once_used[ec].FindVarUsages(ec.e.vname)
-            .Single.ReplaceVar(ec.e.vname, ec.e.e);
+            var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
             
             var_once_used.Remove(ec);
           end;
@@ -5454,7 +5453,7 @@ function GetBlockChain(curr: StmBlock; allow_final_opt: boolean): List<StmBase>;
 begin
   var stm_lst := new List<List<StmBase>>;
   var var_lst := new List<ExprStmOptContainer>;
-  var var_once_used := new Dictionary<ExprStmOptContainer, StmBase>;
+  var var_once_used := new Dictionary<ExprStmOptContainer, OptExprWrapper>;
   var var_replacements := new Dictionary<string, OptExprWrapper>;
   
   var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,var_replacements, allow_final_opt);
@@ -5473,8 +5472,7 @@ begin
       foreach var ec in var_once_used.Keys do
       begin
         Result.Remove(ec.e);
-        var_once_used[ec].FindVarUsages(ec.e.vname)
-        .Single.ReplaceVar(ec.e.vname, ec.e.e);
+        var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
       end;
       
     end;
@@ -5681,17 +5679,6 @@ begin
         {$endregion nue}
         
         //Start checking
-        
-        {$region Only 1 use}
-        if (usages.Count = 1) and (pri = -1) and allow_final_opt.Contains(bl) and not nue then
-        begin
-          bl.stms.Remove(e);
-          
-          usages[0][1].ReplaceVar(e.vname, e.e);
-          
-          try_opt_again := true;
-        end else
-        {$endregion Only 1 use}
         
         {$region Move closer to first use}
         begin
