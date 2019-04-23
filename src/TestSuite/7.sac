@@ -1,0 +1,19 @@
+
+!StartPos
+Output 0
+Call "#1"
+Return
+
+#1
+Output 1
+Call "#2"
+Return
+
+#2
+Output 2
+Call "#3"
+Return
+
+#3
+Output 3
+Jump "#3"

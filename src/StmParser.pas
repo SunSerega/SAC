@@ -1,5 +1,8 @@
 ﻿unit StmParser;
+//ToDo пройтись отладчиком по всему что будет если разворачивать тот последний скрипт с перекликиванием области
 //ToDo в тестере сделать чтоб заменялся весь .sactd файл (вместо добавления в конце)
+
+//ToDo в тестере проверять состояние кода после каждой из 10 доп оптимизаций
 
 //ToDo функционал параметра max_compile_time
 
@@ -26,6 +29,7 @@
 //ToDo засовывать WW и WH в основные константы... наверное - не лучшая идея. Лучше хранить их в отдельном словаре
 //ToDo оператор Assert
 //ToDo операторы ReadText и Alert, работающие через месседж боксы
+//ToDo IFileRefStm и StmBase.GetAllFRefs существуют одновременно. А нужно только что то одно
 
 //ToDo защита GetBlockChain от бесконечного Call
 // - иначе может быть внутренняя StackOverflow оптимизатора
@@ -59,6 +63,7 @@
 // - с другой стороны, по хорошему надо написать .Net библиотеку для кликеров, ибо это всё всё равно баловство ради опыта и скриптов на 10-20 строк
 
 //ToDo Проверить issue:
+// - #1428
 // - #1502
 // - #1797
 
@@ -4014,7 +4019,7 @@ type
     begin
       
       if nCalledBlock is StaticStmBlockRef(var sbr) then
-        Result := new OperConstCall(sbr.bl, bl) else
+        Result := sbr.bl=nil?nil:new OperConstCall(sbr.bl, bl) else
       if CalledBlock=nCalledBlock then
         Result := self else
         Result := new OperCall(nCalledBlock, bl);
@@ -5211,46 +5216,108 @@ type
     GBCR_context_halt = $3,
     GBCR_nonconst_context_jump = $4
   );
+  
+  ExprStmOptContainer = class
+    
+    e: ExprStm;
+    used_vars := new HashSet<string>;
+    
+    constructor(e: ExprStm);
+    begin
+      self.e := e;
+      
+      self.used_vars += e.e.n_vars_names;
+      self.used_vars += e.e.s_vars_names;
+      self.used_vars += e.e.o_vars_names;
+      
+    end;
+    
+    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, StmBase>): sequence of ExprStmOptContainer;
+    begin
+      foreach var ec in lst do
+      begin
+        if done.Contains(ec) then
+        begin
+          if var_once_used<>nil then var_once_used.Remove(ec);
+          continue;
+        end;
+        
+        var vuc := poped_by.FindVarUsages(ec.e.vname).Count;
+        if
+          (vuc=0) and not
+          ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname))
+        then continue;
+        
+        if var_once_used<>nil then if vuc=1 then var_once_used.Add(ec, poped_by);
+        
+        done += ec;
+        yield sequence GetVarChain(done, lst, ec.e, var_once_used);
+        yield ec;
+        
+      end;
+    end;
+    
+    static procedure AddAllVarsChains(lst: List<ExprStmOptContainer>; stm_lst: List<StmBase>);
+    begin
+      var done := new HashSet<ExprStmOptContainer>;
+      
+      foreach var stm in stm_lst.ToArray do
+        foreach var ec in GetVarChain(done, lst, stm, nil) do
+          stm_lst += ec.e as StmBase; // ToDo #1428
+      
+    end;
+    
+  end;
 
-function GetBlockChain(org_bl, bl: StmBlock; bl_lst: List<StmBlock>; stm_lst: List<StmBase>; ind_lst: List<integer>; allow_final_opt: boolean): GBCResT;
+///Chains multiple blocks, optimizing operators and storing all found once in a single List
+///
+///org_bl           : original block from which all GetBlockChain recursion levels started
+///bl               : block from this GetBlockChain recursion level started. If OperCall found - this will be different from org_bl
+///prev_bls         : needed to find loops. Values are indeces in stm_lst. Needs to be fully copyed at recursive GetBlockChain call
+///stm_lst          : every sub list is taken from every block
+///var_lst          : ExprStm's that are currently waiting to be placed somewhere
+///allow_final_opt  : true if replacing unknown vars with null is allowed
+///
+function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, integer>;   stm_lst: List<List<StmBase>>;   var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var_replacements: Dictionary<string, OptExprWrapper>;   allow_final_opt: boolean): GBCResT;
 begin
   var curr := bl;
   
   var nvn := new HashSet<string>;
   var svn := new HashSet<string>;
-  var ovn := new HashSet<string>;
+  var ovn := allow_final_opt?new HashSet<string>:nil;
   
   while curr <> nil do
   begin
-    var dummy_container := new StmBlock;
-    dummy_container.fname := curr.fname;
-    dummy_container.lbl := curr.lbl;
-    dummy_container.scr := curr.scr;
-    dummy_container.next := curr.next;
-    
-    var pi := bl_lst.IndexOf(curr);
-    if pi <> -1 then
+    if prev_bls.ContainsKey(curr) then
     begin
-      var stm_ind := pi=0 ? 0 : ind_lst[pi-1];
+      var ind := prev_bls[curr];
       
-      if stm_ind <> 0 then
+      if stm_lst.Take(ind).Sum(l->l.Count)<>0 then
       begin
-        bl.next := bl_lst[pi];
-        stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
-        ind_lst.RemoveRange(pi, ind_lst.Count-pi);
+        org_bl.next := curr;
+        stm_lst.RemoveRange(ind, stm_lst.Count-ind);
         Result := GBCR_found_loop;
         exit;
       end else
       begin
+        org_bl.next := org_bl;
         Result := GBCR_all_loop;
         exit;
       end;
       
     end;
     
+    var dummy_container := new StmBlock;
+    dummy_container.fname := curr.fname;
+    dummy_container.lbl := curr.lbl;
+    dummy_container.scr := curr.scr;
+    dummy_container.next := curr.next;
+    
+    prev_bls.Add(curr, stm_lst.Count);
+    var curr_stms := new List<StmBase>;
+    stm_lst += curr_stms;
     
     
-    bl_lst.Add(curr);
     
     foreach var stm in curr.stms do
       if stm is OperReturn then
@@ -5261,95 +5328,151 @@ begin
       if stm is OperHalt then
       begin
         Result := GBCR_context_halt;
-        stm_lst += stm;
+        curr_stms += stm;
         exit;
       end else
       begin
-        //ToDo Debug
-//        if stm is OperJumpIf(var oji) then
-//           if oji.CalledBlock1 is StaticStmBlockRef(var ssbr) then
-//            if (ssbr.bl<>nil) and (ssbr.bl.lbl = '#ForXBreak') then
-//              if oji.e1.Calc(new Dictionary<string,real>,new Dictionary<string,string>) is real(var res) then
-//                if res=38 then
-//                begin
-//                  bl_lst := bl_lst;
-//                end;
+        //these things needs to be procesed:
+        //
+        //1. if something uses var from expr_lst
+        // - need to Pop that var from expr_lst
+        // - but not if it's used by other ExprStm
+        //
+        //2. if something overrides param of var from expr_lst
+        // - need to Pop that var from expr_lst
+        // - but not if it's used by other ExprStm
+        //
+        //3. if something overrides var from expr_lst
+        // - Remove var from expr_lst
+        // - If it's used by some other var from expr_lst - it's already isn't is the list, because of [2.]
+        //
+        //also:
+        //4. what if 1 vars are overriding it's own param?
+        //5. what if 2 vars are overriding each others params?
         
-        var opt :=
-          allow_final_opt?
-          stm.Copy(dummy_container).FinalOptimize(bl_lst, nvn,svn,ovn):
-          stm.Copy(dummy_container).Optimize(bl_lst, nvn,svn);
+        // [4.] and [5.] - ExprStmOptContainer.GetVarChain skips vars it has already found
         
-        if (opt is OperConstCall(var cc)) and (cc.CalledBlock=nil) then opt := nil;
+        var opt_stm := stm;
+        foreach var vname in var_replacements.Keys do
+          foreach var oew in opt_stm.FindVarUsages(vname) do
+            oew.ReplaceVar(vname, var_replacements[vname]);
         
-        if opt <> nil then
+        foreach var ec in var_once_used.Keys.ToArray do
+          if stm.FindVarUsages(ec.e.vname).Any then
+            var_once_used.Remove(ec);
+        
+        foreach var ec in var_once_used.Keys.ToArray do
+          if stm.DoesRewriteVar(ec.e.vname) then
+          begin
+            
+            var_once_used[ec].FindVarUsages(ec.e.vname)
+            .Single.ReplaceVar(ec.e.vname, ec.e.e);
+            
+            var_once_used.Remove(ec);
+          end;
+        
+        if opt_stm is ExprStm(var es) then
         begin
-          stm_lst += opt;
-          opt.bl := org_bl;
+          
+          if es.e.GetMain is IOptSimpleExpr then
+            var_replacements.Add(es.vname, es.e) else
+            var_lst += new ExprStmOptContainer(es);
+          
+        end else
+        begin
+          opt_stm := opt_stm.Copy(dummy_container);
+          opt_stm := allow_final_opt?
+            opt_stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
+            opt_stm.Optimize     (prev_bls.Keys, nvn,svn);
+          
+          if opt=nil then
+            if stm is IJumpOper then
+              break else
+              continue;
+          
+          opt_stm.bl := org_bl;
+          
+          var PopedVars := new HashSet<ExprStmOptContainer>;
+          
+          // [1.] + [2.]
+          foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
+          begin
+            
+            stm_lst += allow_final_opt?
+              ec.e.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
+              ec.e.Optimize     (prev_bls.Keys, nvn,svn);
+          end;
+          
+          var_lst.RemoveAll(ec->PopedVars.Contains(ec));
+          
+          stm_lst += opt_stm;
         end;
+        
+        // [3.]
+        var_lst.RemoveAll(ec->opt.DoesRewriteVar(ec.e.vname));
       end;
     
     
     
-    if stm_lst.Count <> 0 then
+    var last_stm := curr_stms.Count=0?nil:curr_stms[curr_stms.Count-1];
+    
+    if last_stm is OperConstCall(var occ) then
     begin
+      curr_stms.RemoveLast;
       
-      if stm_lst[stm_lst.Count-1] is OperConstCall(var occ) then
-      begin
-        var stm := stm_lst[stm_lst.Count-1];
-        stm_lst.RemoveLast;
-        ind_lst.Add(stm_lst.Count);
-        pi := ind_lst.Count;
+      var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, allow_final_opt);
+      case res of
+        GBCR_done: ;
         
-        case GetBlockChain(org_bl, occ.CalledBlock, bl_lst.ToList, stm_lst, ind_lst, allow_final_opt) of
-          
-          GBCR_done: ;
-          
-          GBCR_context_halt:
-          begin
-            Result := GBCR_context_halt;
-            exit;
-          end;
-          
-          GBCR_found_loop,
-          GBCR_nonconst_context_jump:
-          if ind_lst.Count < pi then
-          begin
-            Result := GBCR_found_loop;
-            exit;
-          end else
-          begin
-            
-            ind_lst.RemoveRange(pi, ind_lst.Count-pi);
-            var stm_ind := ind_lst[pi-1];
-            stm_lst.RemoveRange(stm_ind, stm_lst.Count-stm_ind);
-            
-            stm_lst += stm;
-            ind_lst[pi-1] += 1;
-            
-          end;
-          
-        end;
-        
-      end else
-      begin
-        ind_lst.Add(stm_lst.Count);
-        
-        if stm_lst[stm_lst.Count-1] is IJumpCallOper then
+        GBCR_context_halt,
+        GBCR_found_loop,
+        GBCR_nonconst_context_jump:
         begin
-          Result := GBCR_nonconst_context_jump;
+          Result := res;
           exit;
         end;
         
       end;
       
     end else
-      ind_lst.Add(stm_lst.Count);
+    
+    if last_stm is IJumpCallOper then
+    begin
+      Result := GBCR_nonconst_context_jump;
+      exit;
+    end;
     
     curr := dummy_container.next;
   end;
   
   Result := GBCR_done;
+end;
+
+function GetBlockChain(curr: StmBlock; allow_final_opt: boolean): List<StmBase>;
+begin
+  var stm_lst := new List<List<StmBase>>;
+  var var_lst := new List<ExprStmOptContainer>;
+  var var_once_used := new Dictionary<ExprStmOptContainer, StmBase>;
+  
+  var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,new Dictionary<string, OptExprWrapper>, allow_final_opt);
+  
+  Result := new List<List<StmBase>>(stm_lst.Sum(l->l.Count));
+  foreach var l in stm_lst do Result += l;
+  
+  case res of
+    
+    GBCR_done,
+    GBCR_context_halt,
+    GBCR_nonconst_context_jump:
+      curr.next := nil; // ToDo var_once_used
+    
+    GBCR_all_loop,
+    GBCR_found_loop:
+      ExprStmOptContainer.AddAllVarsChains(var_lst, Result);
+      
+    
+  end;
+  
 end;
 
 procedure Script.Optimize;
@@ -5431,21 +5554,7 @@ begin
       if curr=nil then continue;
       if not done.Add(curr) then continue;
       
-      var stms := new List<StmBase>;
-      
-      case GetBlockChain(curr,curr, new List<StmBlock>, stms, new List<integer>, allow_final_opt.Contains(curr)) of
-        
-        GBCR_done,
-        GBCR_context_halt,
-        GBCR_nonconst_context_jump:
-          curr.next := nil;
-        
-        GBCR_all_loop:
-          curr.next := curr;
-        
-        GBCR_found_loop: ;
-        
-      end;
+      var stms := GetBlockChain(curr, allow_final_opt.Contains(curr));
       
       try_opt_again :=
         try_opt_again or
@@ -5459,8 +5568,7 @@ begin
         
         foreach var ref in
           curr.GetAllFRefs
-          .Select(ref->ref as StaticStmBlockRef)
-          .Where(ref-> ref<>nil )
+          .OfType&<StaticStmBlockRef>
           .Select(ref->ref.bl)
         do
           waiting += ref;
@@ -5476,6 +5584,10 @@ begin
             bls.Remove(kvp.Key);
     
     {$endregion Block chaining}
+    
+    var ToDo_Main := 0;
+    //ToDo убрать, оно уже в блок чейнинге
+    // - но сначала, конечно, проверить чтоб все те же фичи были на месте
     
     {$region Variable optimizations}
     

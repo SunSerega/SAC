@@ -1,0 +1,10 @@
+
+GetKey x
+GetKey y
+
+x=y+1
+y=x+1
+
+KeyP 1
+
+KeyP x+y
