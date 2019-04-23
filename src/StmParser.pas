@@ -5246,7 +5246,7 @@ type
       begin
         if done.Contains(ec) then
         begin
-          if var_once_used<>nil then var_once_used.Remove(ec);
+          var_once_used.Remove(ec);
           continue;
         end;
         
@@ -5256,23 +5256,13 @@ type
           ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname))
         then continue;
         
-        if var_once_used<>nil then if vuc=1 then var_once_used.Add(ec, poped_by);
+        if vuc=1 then var_once_used.Add(ec, poped_by);
         
         done += ec;
         yield sequence GetVarChain(done, lst, ec.e, var_once_used);
         yield ec;
         
       end;
-    end;
-    
-    static procedure AddAllVarsChains(lst: List<ExprStmOptContainer>; stm_lst: List<StmBase>);
-    begin
-      var done := new HashSet<ExprStmOptContainer>;
-      
-      foreach var stm in stm_lst.ToArray do
-        foreach var ec in GetVarChain(done, lst, stm, nil) do
-          stm_lst += ec.e as StmBase; // ToDo #1428
-      
     end;
     
   end;
@@ -5483,7 +5473,7 @@ begin
     
     GBCR_all_loop,
     GBCR_found_loop:
-      ExprStmOptContainer.AddAllVarsChains(var_lst, Result);
+      Result.AddRange(var_lst.Select(ec->ec.e as StmBase));
     
   end;
   
