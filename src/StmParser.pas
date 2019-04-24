@@ -5130,16 +5130,16 @@ end;
 
 function StmBlock.ToString: string;
 begin
-  var bl := new StringBuilder;
+  var res := new StringBuilder;
   
   var last_stm: StmBase;
   var curr := self;
   repeat
     
-    bl += curr.GetBodyString;
+    res += curr.GetBodyString;
     if curr.stms.Count <> 0 then
     begin
-      bl += #10;
+      res += #10;
       last_stm := curr.stms[curr.stms.Count-1];
     end;
     
@@ -5150,14 +5150,14 @@ begin
   if (last_stm is ICallOper) or not (last_stm is IContextJumpOper) then
   begin
     
-    if next=nil then
-      bl += 'Return [Const]' else
-      bl += $'Jump "{Script.GetRelativePath(scr.main_path, next.fname+next.lbl)}" [Const]';
+    if curr=nil then
+      res += 'Return [Const]' else
+      res += $'Jump "{Script.GetRelativePath(scr.main_path, curr.fname+curr.lbl)}" [Const]';
     
-    bl += #10;
+    res += #10;
   end;
   
-  Result := bl.ToString;
+  Result := res.ToString;
 end;
 
 {$endregion StmBlock}
@@ -5284,10 +5284,16 @@ type
 ///
 ///org_bl           : original block from which all GetBlockChain recursion levels started
 ///bl               : block from this GetBlockChain recursion level started. If OperCall found - this will be different from org_bl
-///prev_bls         : needed to find loops. Values are indeces in stm_lst. Needs to be fully copyed at recursive GetBlockChain call
-///stm_lst          : every sub list is taken from every block
+///
+///prev_bls         : needed to backup everything when GBCR_found_loop
+///stm_lst          : every sub list is taken from every block. This is Output
+///
 ///var_lst          : ExprStm's that are currently waiting to be placed somewhere
-///allow_final_opt  : true if replacing unknown vars with null is allowed
+///var_once_used    : ExprStm's that has been only used once. if they are overriden before used again - they are replaced
+///var_replacements : ExprStm's that passed "is IOptSimpleExpr", and thus, can be replaced everywhere
+///
+///opt_proc         : Selector then uses FinalOtimize if posible. Otherwise it's same as mini_opt_proc
+///mini_opt_proc    : Selector then only does non-final Optimize
 ///
 function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
 begin
@@ -5438,17 +5444,31 @@ begin
     if last_stm is OperConstCall(var occ) then
     begin
       curr_stms.RemoveLast;
+      var backup := new OptBlockBackupData(
+        stm_lst.Count,
+        var_lst,
+        var_once_used,
+        var_replacements
+      );
       
       var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
       case res of
         GBCR_done: ;
         
-        GBCR_context_halt,
-        GBCR_found_loop,
-        GBCR_nonconst_context_jump:
+        GBCR_context_halt://ToDo all_loop here too
         begin
           Result := res;
           exit;
+        end;
+        
+        GBCR_found_loop,
+        GBCR_nonconst_context_jump:
+        begin
+          stm_lst.RemoveRange(backup.stm_lst_ind, stm_lst.Count-backup.stm_lst_ind);
+          var_lst := backup.var_lst;
+          var_once_used := backup.var_once_used;
+          var_replacements := backup.var_replacements;
+          curr_stms += last_stm;
         end;
         
       end;
@@ -5496,16 +5516,11 @@ begin
     
     GBCR_done,
     GBCR_context_halt:
-    begin
-      curr.next := nil;
-      
       foreach var ec in var_once_used.Keys do
       begin
         Result.Remove(ec.e);
         var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
       end;
-      
-    end;
     
     GBCR_all_loop,
     GBCR_found_loop,
@@ -5519,6 +5534,18 @@ begin
         var_replacements.Select(kvp->opt_proc(ExprStm.Create(kvp.Key, kvp.Value, curr, curr.scr)))
         
       );
+    
+  end;
+  
+  case res of
+    
+    GBCR_done,
+    GBCR_context_halt,
+    GBCR_nonconst_context_jump:
+      curr.next := nil;
+    
+    GBCR_all_loop,
+    GBCR_found_loop: ;
     
   end;
   
@@ -5546,7 +5573,7 @@ begin
 //    writeln('opt');
 //    writeln(self);
 //    writeln('-'*50);
-//    readln;
+////    readln;
 //    Sleep(1000);
     
     {$region Init}
@@ -5572,7 +5599,7 @@ begin
     );
     
     var new_dyn_refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
-    try_opt_again := (new_dyn_refs.Count <> 0) and not dyn_refs.SequenceEqual(new_dyn_refs);
+    try_opt_again := (new_dyn_refs.Count <> 0) and dyn_refs.Except(new_dyn_refs).Any;
     dyn_refs := new_dyn_refs;
     
     var allow_final_opt := new List<StmBlock>;
