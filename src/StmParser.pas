@@ -5258,6 +5258,26 @@ type
       end;
     end;
     
+    public function ToString: string; override :=
+    e.ToString;
+    
+  end;
+  
+  OptBlockBackupData = record
+    
+    stm_lst_ind: integer;
+    var_lst: List<ExprStmOptContainer>;
+    var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>;
+    var_replacements: Dictionary<string, OptExprWrapper>;
+    
+    constructor(stm_lst_ind: integer; var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var_replacements: Dictionary<string, OptExprWrapper>);
+    begin
+      self.stm_lst_ind := stm_lst_ind;
+      self.var_lst := var_lst.ToList;
+      self.var_once_used := var_once_used.ToDictionary;
+      self.var_replacements := var_replacements.ToDictionary;
+    end;
+    
   end;
 
 ///Chains multiple blocks, optimizing operators and storing all found once in a single List
@@ -5269,24 +5289,24 @@ type
 ///var_lst          : ExprStm's that are currently waiting to be placed somewhere
 ///allow_final_opt  : true if replacing unknown vars with null is allowed
 ///
-function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, integer>;   stm_lst: List<List<StmBase>>;   var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var_replacements: Dictionary<string, OptExprWrapper>;   allow_final_opt: boolean): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
 begin
   var curr := bl;
-  
-  var nvn := new HashSet<string>;
-  var svn := new HashSet<string>;
-  var ovn := allow_final_opt?new HashSet<string>:nil;
   
   while curr <> nil do
   begin
     if prev_bls.ContainsKey(curr) then
     begin
-      var ind := prev_bls[curr];
+      var bd := prev_bls[curr];
+      var ind := bd.stm_lst_ind;
       
       if stm_lst.Take(ind).Sum(l->l.Count)<>0 then
       begin
         org_bl.next := curr;
         stm_lst.RemoveRange(ind, stm_lst.Count-ind);
+        var_lst := bd.var_lst;
+        var_once_used := bd.var_once_used;
+        var_replacements := bd.var_replacements;
         Result := GBCR_found_loop;
         exit;
       end else
@@ -5304,7 +5324,15 @@ begin
     dummy_container.scr := curr.scr;
     dummy_container.next := curr.next;
     
-    prev_bls.Add(curr, stm_lst.Count);
+    prev_bls.Add(
+      curr,
+      new OptBlockBackupData(
+        stm_lst.Count,
+        var_lst,
+        var_once_used,
+        var_replacements
+      )
+    );
     var curr_stms := new List<StmBase>;
     stm_lst += curr_stms;
     
@@ -5355,7 +5383,7 @@ begin
           begin
             var oe := var_replacements[vname];
             var uv := oe.n_vars_names + oe.s_vars_names + oe.s_vars_names;
-            if (uv.Length=0) and uv.Any(vname2->opt_stm.DoesRewriteVar(vname2)) then
+            if uv.Any(vname2->opt_stm.DoesRewriteVar(vname2)) then
               curr_stms += new ExprStm(vname, oe, org_bl, org_bl.scr) as StmBase; // ToDo #1428
           end;
           
@@ -5374,6 +5402,7 @@ begin
         
         if opt_stm is ExprStm(var es) then
         begin
+          es := ExprStm(mini_opt_proc(es));
           
           if es.e.GetMain is IOptSimpleExpr then
             var_replacements.Add(es.vname, es.e) else
@@ -5381,36 +5410,25 @@ begin
           
         end else
         begin
-          opt_stm := opt_stm.Copy(dummy_container);
-          opt_stm := allow_final_opt?
-            opt_stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
-            opt_stm.Optimize     (prev_bls.Keys, nvn,svn);
-          
-          if opt_stm=nil then
-            if stm is IJumpOper then
-              break else
-              continue;
-          
-          opt_stm.bl := org_bl;
-          
-          var PopedVars := new HashSet<ExprStmOptContainer>;
           
           // [1.] + [2.]
+          var PopedVars := new HashSet<ExprStmOptContainer>;
           foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
-          begin
-            
-            curr_stms += allow_final_opt?
-              ec.e.FinalOptimize(prev_bls.Keys, nvn,svn,ovn):
-              ec.e.Optimize     (prev_bls.Keys, nvn,svn);
-          end;
-          
+            curr_stms += opt_proc(ec.e);
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
+          opt_stm := opt_stm.Copy(dummy_container);
+          opt_stm := opt_proc(opt_stm);
+          
+          if opt_stm=nil then continue;
+          
+          // [3.]
+          var_lst.RemoveAll(ec->opt_stm.DoesRewriteVar(ec.e.vname));
+          
+          opt_stm.bl := org_bl;
           curr_stms += opt_stm;
         end;
         
-        // [3.]
-        var_lst.RemoveAll(ec->opt_stm.DoesRewriteVar(ec.e.vname));
       end;
     
     
@@ -5421,7 +5439,7 @@ begin
     begin
       curr_stms.RemoveLast;
       
-      var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, allow_final_opt);
+      var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
       case res of
         GBCR_done: ;
         
@@ -5451,12 +5469,25 @@ end;
 
 function GetBlockChain(curr: StmBlock; allow_final_opt: boolean): List<StmBase>;
 begin
+  
+  var prev_bls := new Dictionary<StmBlock,OptBlockBackupData>;
   var stm_lst := new List<List<StmBase>>;
+  
   var var_lst := new List<ExprStmOptContainer>;
   var var_once_used := new Dictionary<ExprStmOptContainer, OptExprWrapper>;
   var var_replacements := new Dictionary<string, OptExprWrapper>;
   
-  var res := GetBlockChain(curr,curr, new Dictionary<StmBlock,integer>, stm_lst, var_lst,var_once_used,var_replacements, allow_final_opt);
+  var nvn := new HashSet<string>;
+  var svn := new HashSet<string>;
+  var ovn := allow_final_opt?new HashSet<string>:nil;
+  
+  var opt_proc, mini_opt_proc: StmBase->StmBase;
+  mini_opt_proc := stm->stm.Optimize(prev_bls.Keys, nvn,svn);
+  if allow_final_opt then
+    opt_proc := stm->stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn) else
+    opt_proc := mini_opt_proc;
+  
+  var res := GetBlockChain(curr,curr, prev_bls,stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
   
   Result := new List<StmBase>(stm_lst.Sum(l->l.Count));
   foreach var l in stm_lst do Result += l;
@@ -5464,8 +5495,7 @@ begin
   case res of
     
     GBCR_done,
-    GBCR_context_halt,
-    GBCR_nonconst_context_jump:
+    GBCR_context_halt:
     begin
       curr.next := nil;
       
@@ -5478,10 +5508,16 @@ begin
     end;
     
     GBCR_all_loop,
-    GBCR_found_loop:
-      Result.AddRange(
-        var_lst.Select(ec->ec.e as StmBase) +
-        var_replacements.Select(kvp->new ExprStm(kvp.Key, kvp.Value, curr, curr.scr) as StmBase)
+    GBCR_found_loop,
+    GBCR_nonconst_context_jump:
+      Result.InsertRange(
+        res=GBCR_nonconst_context_jump?
+          Result.Count-1:
+          Result.Count,
+        
+        var_lst.Select(ec->opt_proc(ec.e)) +
+        var_replacements.Select(kvp->opt_proc(ExprStm.Create(kvp.Key, kvp.Value, curr, curr.scr)))
+        
       );
     
   end;
@@ -5503,11 +5539,9 @@ begin
       SngDefConsts[key] := nil;//Они больше никогда не понадобятся. Но для ExecutingContext.SetVar надо всё же оставить ключи
   
   var try_opt_again := true;
-  var mini_opt := true;
   var dyn_refs := new List<StmBlockRef>;
-  while try_opt_again or mini_opt do
+  while try_opt_again do
   begin
-    mini_opt := try_opt_again;
     
 //    writeln('opt');
 //    writeln(self);
@@ -5522,15 +5556,14 @@ begin
         raise new BlockTooBigException(nil, GetRelativePath(bl.scr.main_path, bl.fname+bl.lbl), bl.stms.Count, Settings.max_block_size);
     
     var done := new HashSet<StmBlock>;
+    
     var not_all_waiting :=
       start_pos_def and
-      (
-        mini_opt or
-        bls.Values
+      bls.Values
         .Where(bl->bl.StartPos)
         .SelectMany(bl->bl.GetAllFRefs)
         .All(ref->ref is StaticStmBlockRef)
-      );
+      ;
     
     var waiting := new HashSet<StmBlock>(
       not_all_waiting?

@@ -3,11 +3,11 @@
  (file Main.sac)
 \#
 !StartPos [Const]
+GetKey 1 vn [Const]
+vs=Str(vn) Nums={vn}
 cn=5
 cs="RShift"
 co=null
-GetKey 1 vn [Const]
-vs=Str(vn) Nums={vn}
 JumpIf vn = 0 "Main.sac\#vo_str" "Main.sac\#vo_num" Nums={vn}
 
 \#vo_num

@@ -4,14 +4,17 @@ uses MiscData;
 
 //uses ВБФ;
 
+//ToDo тесты для Jump[If] посередине блока
+// - в блоке вызываемом Call и без
 
+//ToDo DynJump1 неправильно компилируется
 
 begin
   var ep: ExecParams;
   ep.SupprIO := true;
   
-  //var s := new Script('D:\Мои программы\SAC\src\TestSuite\TestExec\AllFuncs\Main.sac',ep);
-  var s := new Script('D:\Мои программы\SAC Client\Lib\Полезности\RW установка мебели\Main.sac',ep);
+  var s := new Script('D:\Мои программы\SAC\src\TestSuite\TestComp\VarMove2\Main.sac',ep); //ToDo переключить на следующий тест
+  //var s := new Script('D:\Мои программы\SAC Client\Lib\Полезности\RW установка мебели\Main.sac',ep);
   //var s := new Script('0\2.sac', ep);
   
   //SaveObj('test.bin',s);
