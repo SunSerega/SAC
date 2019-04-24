@@ -5,16 +5,15 @@
 !StartPos [Const]
 KeyP 1 [Const]
 KeyP 2 [Const]
+Jump "F2.sac\#lbl1" [Const]
+
+ (file F2.sac)
+\#lbl1
 Sleep 10 [Const]
 KeyP 3 [Const]
-Jump "Main.sac\#lbl1" [Const]
-
-\#lbl1
 KeyP 4 [Const]
 KeyP 5 [Const]
-Sleep 10 [Const]
-KeyP 3 [Const]
-Jump "Main.sac\#lbl1" [Const]
+Jump "F2.sac\#lbl1" [Const]
 
 #ExpOtp
 %aborted

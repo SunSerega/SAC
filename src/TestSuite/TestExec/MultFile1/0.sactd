@@ -4,24 +4,7 @@
 \#
 !StartPos [Const]
 Sleep 10 [Const]
-n=(n+1-n) Objs={n}
-n=(n+2-n) Objs={n, n}
-n=(n+3-n) Objs={n, n}
-n=(n+4-n) Objs={n}
-n=(n+5-n) Objs={n, n}
 Jump "Main.sac\#" [Const]
 
 #ExpOtp
 %aborted
-
- #ExpOptCode
- (file Main.sac)
-\#
-!StartPos [Const]
-Sleep 10 [Const]
-n=(n+1-n) Objs={n}
-n=(n+2-n) Objs={n}
-n=(n+3-n) Objs={n}
-n=(n+4-n) Objs={n}
-n=(n+5-n) Objs={n}
-Jump "Main.sac\#" [Const]
