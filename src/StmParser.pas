@@ -617,9 +617,9 @@ type
       var NumChecks := oes.SelectMany(oe->oe.NumChecks.Keys).ToList;
       var StrChecks := oes.SelectMany(oe->oe.StrChecks.Keys).ToList;
       
-      var n_vars_names := oes.SelectMany(oe->oe.n_vars_names).ToList;
-      var s_vars_names := oes.SelectMany(oe->oe.s_vars_names).ToList;
-      var o_vars_names := oes.SelectMany(oe->oe.o_vars_names).ToList;
+      var n_vars_names := oes.SelectMany(oe->oe.n_vars_names).ToHashSet.ToList;
+      var s_vars_names := oes.SelectMany(oe->oe.s_vars_names).ToHashSet.ToList;
+      var o_vars_names := oes.SelectMany(oe->oe.o_vars_names).ToHashSet.ToList;
       
       
       
@@ -5222,6 +5222,7 @@ type
     
     e: ExprStm;
     used_vars := new HashSet<string>;
+    param_overriten := false;
     
     constructor(e: ExprStm);
     begin
@@ -5237,19 +5238,20 @@ type
     begin
       foreach var ec in lst do
       begin
-        if done.Contains(ec) then
-        begin
-          var_once_used.Remove(ec);
-          continue;
-        end;
-        
         var vu := poped_by.FindVarUsages(ec.e.vname).ToArray;
         if
           (vu.Length=0) and not
           ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname))
         then continue;
         
-        if vu.Length=1 then var_once_used.Add(ec, vu[0]);
+        if done.Contains(ec) then
+        begin
+          var_once_used.Remove(ec);
+          continue;
+        end;
+        
+        if (vu.Length=1) and not ec.param_overriten then var_once_used.Add(ec, vu[0]);
+        
         
         done += ec;
         yield sequence GetVarChain(done, lst, ec.e, var_once_used);
@@ -5378,6 +5380,22 @@ begin
         // [4.] and [5.] - ExprStmOptContainer.GetVarChain skips vars it has already found
         
         var opt_stm := stm;
+        
+        foreach var ec in var_lst do
+          if (not ec.param_overriten) and ec.used_vars.Any(opt_stm.DoesRewriteVar) then
+            ec.param_overriten := true;
+        
+        foreach var ec in var_once_used.Keys.ToArray do
+          if stm.FindVarUsages(ec.e.vname).Any then
+            var_once_used.Remove(ec) else
+          begin
+            
+            curr_stms.Remove(ec.e);
+            var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
+            
+            var_once_used.Remove(ec);
+          end;
+        
         foreach var vname in var_replacements.Keys.ToArray do
         begin
           
@@ -5390,21 +5408,13 @@ begin
             var oe := var_replacements[vname];
             var uv := oe.n_vars_names + oe.s_vars_names + oe.s_vars_names;
             if uv.Any(vname2->opt_stm.DoesRewriteVar(vname2)) then
+            begin
               curr_stms += new ExprStm(vname, oe, org_bl, org_bl.scr) as StmBase; // ToDo #1428
+              var_replacements.Remove(vname);
+            end;
           end;
           
         end;
-        
-        foreach var ec in var_once_used.Keys.ToArray do
-          if stm.FindVarUsages(ec.e.vname).Any then
-            var_once_used.Remove(ec) else
-          begin
-            
-            curr_stms.Remove(ec.e);
-            var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
-            
-            var_once_used.Remove(ec);
-          end;
         
         if opt_stm is ExprStm(var es) then
         begin
@@ -5420,7 +5430,17 @@ begin
           // [1.] + [2.]
           var PopedVars := new HashSet<ExprStmOptContainer>;
           foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
+          begin
             curr_stms += opt_proc(ec.e);
+            
+            foreach var kvp in var_replacements.ToArray do
+              if
+                kvp.Value.n_vars_names.Any(vname->ec.e.vname=vname) or
+                kvp.Value.s_vars_names.Any(vname->ec.e.vname=vname) or
+                kvp.Value.o_vars_names.Any(vname->ec.e.vname=vname)
+              then var_replacements.Remove(kvp.Key);
+            
+          end;
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
           opt_stm := opt_stm.Copy(dummy_container);
@@ -5573,7 +5593,7 @@ begin
 //    writeln('opt');
 //    writeln(self);
 //    writeln('-'*50);
-////    readln;
+//    readln;
 //    Sleep(1000);
     
     {$region Init}

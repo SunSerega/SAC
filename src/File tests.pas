@@ -9,11 +9,13 @@ uses MiscData;
 
 //ToDo проверка версии либов
 
+//ToDo TestExec\MultiFile1 - для 2, 3 и 5 в o_vars_names по 2 одинаковых имени
+
 begin
   var ep: ExecParams;
   ep.SupprIO := true;
   
-  var s := new Script('D:\Мои программы\SAC\src\TestSuite\TestComp\DynJump1\Main.sac',ep);
+  var s := new Script('D:\Мои программы\SAC\src\TestSuite\TestComp\VarReplace1\Main.sac',ep);
   //var s := new Script('D:\Мои программы\SAC Client\Lib\Полезности\RW установка мебели\Main.sac',ep);
   //var s := new Script('0\2.sac', ep);
   
