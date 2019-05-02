@@ -2756,9 +2756,9 @@ type
     
     public function FinalOptimize(gnvn, gsvn, govn: HashSet<string>): OptExprWrapper;
     
-    public procedure ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string);
+    public function ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string): OptExprWrapper;
     
-    public procedure ReplaceVar(vn: string; oe: OptExprWrapper) :=
+    public function ReplaceVar(vn: string; oe: OptExprWrapper) :=
     ReplaceVar(vn, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
     
     public function DoesUseVar(vn: string) :=
@@ -3967,15 +3967,14 @@ function OptExprWrapper.Optimize(gnvn, gsvn: HashSet<string>): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   
-  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
-  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
+  foreach var vname in gnvn do if StrChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
+  foreach var vname in gsvn do if NumChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
   
   var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   
-  var lnvn := new HashSet<string>;
-  var lsvn := new HashSet<string>;
-  var lovn := new HashSet<string>;
+  foreach var vname in gnvn do nNumChecks.Remove(vname);
+  foreach var vname in gsvn do nStrChecks.Remove(vname);
   
   var anvn := n_vars_names.ToHashSet;
   var asvn := s_vars_names.ToHashSet;
@@ -3983,19 +3982,19 @@ begin
   
   foreach var vname in gnvn do
   begin
-    if asvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     anvn.Add(vname);
-    nNumChecks.Remove(vname);
   end;
   
   foreach var vname in gsvn do
   begin
-    if anvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     asvn.Add(vname);
-    nStrChecks.Remove(vname);
   end;
+  
+  var lnvn := new HashSet<string>;
+  var lsvn := new HashSet<string>;
+  var lovn := new HashSet<string>;
   
   Main.DeduseVarsTypes(
     anvn,asvn,aovn,
@@ -4004,18 +4003,6 @@ begin
     true, true,
     nNumChecks, nStrChecks
   );
-  
-  foreach var vname in nNumChecks.Keys do
-  begin
-    gnvn.Add(vname);
-    gsvn.Remove(vname);
-  end;
-  
-  foreach var vname in nStrChecks.Keys do
-  begin
-    gnvn.Remove(vname);
-    gsvn.Add(vname);
-  end;
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
   var s_vars := ArrFill(lsvn.Count, '');
@@ -4052,13 +4039,8 @@ function OptExprWrapper.FinalOptimize(gnvn, gsvn, govn: HashSet<string>): OptExp
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   
-  
-  
-  if n_vars_names.Any(vn->gsvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(string), typeof(real));
-  //if n_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(object), typeof(real));
-  
-  if s_vars_names.Any(vn->gnvn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(real), typeof(string));
-  //if s_vars_names.Any(vn->govn.Contains(vn)) then raise new ConflictingExprTypesException(typeof(object), typeof(string));
+  foreach var vname in gnvn do if StrChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
+  foreach var vname in gsvn do if NumChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
   
   var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
   var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
@@ -4069,6 +4051,7 @@ begin
   var lnvn := new HashSet<string>;
   var lsvn := new HashSet<string>;
   var lovn := new HashSet<string>;
+  
   Main.DeduseVarsTypes(
     gnvn,gsvn,govn,
     gnvn,gsvn,govn,
@@ -4076,20 +4059,6 @@ begin
     true, true,
     nNumChecks, nStrChecks
   );
-  
-  foreach var vname in nNumChecks.Keys do
-  begin
-    gnvn.Add(vname);
-    gsvn.Remove(vname);
-    govn.Remove(vname);
-  end;
-  
-  foreach var vname in nStrChecks.Keys do
-  begin
-    gnvn.Remove(vname);
-    gsvn.Add(vname);
-    govn.Remove(vname);
-  end;
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
   var s_vars := ArrFill(lsvn.Count, '');
@@ -4122,14 +4091,19 @@ begin
   
 end;
 
-procedure OptExprWrapper.ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string);
+function OptExprWrapper.ReplaceVar(vn: string; oe: OptExprBase; envn, esvn, eovn: array of string): OptExprWrapper;
 begin
   var Main := GetMain.UnFixVarExprs(n_vars_names, s_vars_names, o_vars_names);
   Main := Main.ReplaceVar(vn, oe.UnFixVarExprs(envn,esvn,eovn) as OptExprBase);
   
-  var lnvn := new HashSet<string>;
-  var lsvn := new HashSet<string>;
-  var lovn := new HashSet<string>;
+  foreach var vname in envn do if StrChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
+  foreach var vname in esvn do if NumChecks.ContainsKey(vname) then raise new ConflictingExprTypesException(nil,nil);
+  
+  var nNumChecks := NumChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
+  var nStrChecks := StrChecks.ToDictionary(kvp->kvp.Key, kvp->ExprContextArea(nil));
+  
+  foreach var vname in envn do nNumChecks.Remove(vname);
+  foreach var vname in esvn do nStrChecks.Remove(vname);
   
   var anvn := n_vars_names.ToHashSet;
   var asvn := s_vars_names.ToHashSet;
@@ -4137,14 +4111,12 @@ begin
   
   foreach var vname in envn do
   begin
-    if asvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     anvn.Add(vname);
   end;
   
   foreach var vname in esvn do
   begin
-    if anvn.Contains(vname) then raise new ConflictingExprTypesException(nil, nil);
     aovn.Remove(vname);
     asvn.Add(vname);
   end;
@@ -4153,15 +4125,18 @@ begin
     if not(
       anvn.Contains(vname) or
       asvn.Contains(vname)
-    ) then
-      aovn += vname;
+    ) then aovn += vname;
+  
+  var lnvn := new HashSet<string>;
+  var lsvn := new HashSet<string>;
+  var lovn := new HashSet<string>;
   
   Main.DeduseVarsTypes(
     anvn,asvn,aovn,
-    new HashSet<string>, new HashSet<string>, new HashSet<string>,
+    envn.ToHashSet,esvn.ToHashSet,eovn.ToHashSet,
     lnvn,lsvn,lovn,
     true, true,
-    NumChecks, StrChecks
+    nNumChecks, nStrChecks
   );
   
   var n_vars := ArrFill(lnvn.Count, 0.0);
@@ -4175,19 +4150,21 @@ begin
   Main := Main.FixVarExprs(n_vars, s_vars, o_vars, n_vars_names, s_vars_names, o_vars_names);
   Main := Main.Optimize(n_vars_names,s_vars_names,o_vars_names);
   
-  SetMain(Main as OptExprBase);
+  Result := GetOptInst(Main, nNumChecks,nStrChecks);
+  if Result=self then exit;
   
   
   
-  self.n_vars_names := n_vars_names;
-  self.s_vars_names := s_vars_names;
-  self.o_vars_names := o_vars_names;
+  Result.NumChecks := nNumChecks;
+  Result.StrChecks := nStrChecks;
   
-  self.n_vars := n_vars;
-  self.s_vars := s_vars;
-  self.o_vars := o_vars;
+  Result.n_vars_names := n_vars_names;
+  Result.s_vars_names := s_vars_names;
+  Result.o_vars_names := o_vars_names;
   
-  
+  Result.n_vars := n_vars;
+  Result.s_vars := s_vars;
+  Result.o_vars := o_vars;
   
   Main.ClampLists;
   
@@ -4202,7 +4179,7 @@ type
     
     static FuncTypes := new Dictionary<string, Func<array of OptExprBase,IOptFuncExpr>>;
     
-    var_names := new List<string>;
+    var_names := new HashSet<string>;
     
     static constructor;
     begin

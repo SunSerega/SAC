@@ -1,10 +1,16 @@
 ﻿unit StmParser;
+//ToDo Jump и Call тоже не разворачивать во время оптимизации оператора, если виден цикл
+// - это позволит сильно упростить код GetBlockChain
+// - обдумать ещё, не сломает ли это что то другое
+
+//ToDo всё же добавить ConstJump и убрать тот костыль с dummy_container
+// - и .Copy тогда не нужно
+
+//ToDo заменить FindVarUsages на VarUseCount, теперь точно, раз ReplaceVar возвращает новый экземпляр
 //ToDo пройтись отладчиком по всему что будет если разворачивать тот последний скрипт с перекликиванием области
 //ToDo в тестере сделать чтоб заменялся весь .sactd файл (вместо добавления в конце)
-
 //ToDo в тестере проверять состояние кода после каждой из 10 доп оптимизаций
-
-//ToDo функционал параметра max_compile_time
+//ToDo функционал параметра max_compile_time (в ScriptExecutor)
 
 
 
@@ -576,6 +582,11 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; virtual :=
     Optimize(prev_bls, nvn,svn);
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; virtual := self;
+    
+    public function ReplaceVar(vname: string; oe: OptExprWrapper) :=
+    ReplaceVar(vname, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
+    
     public function FindVarUsages(vn: string): sequence of OptExprWrapper :=
     GetAllExprs.Where(oe->oe.DoesUseVar(vn));
     
@@ -735,59 +746,45 @@ type
       
     end;
     
-    public function Simplify(ne: OptExprWrapper): StmBase;
+    public function Simplify(ne: OptExprWrapper; nvn,svn,ovn: HashSet<string>): StmBase;
     begin
-      
       if e=ne then
         Result := self else
         Result := new ExprStm(vname, ne, bl, scr);
+      
+      if nvn=nil then exit;
+      
+      var main := ne.GetMain;
+      if main is OptNExprBase then
+      begin
+        nvn.Add(vname);
+        svn.Remove(vname);
+        if ovn<>nil then ovn.Remove(vname);
+      end else
+      if main is OptSExprBase then
+      begin
+        nvn.Remove(vname);
+        svn.Add(vname);
+        if ovn<>nil then ovn.Remove(vname);
+      end else
+      begin
+        nvn.Remove(vname);
+        svn.Remove(vname);
+        if ovn<>nil then ovn.Add(vname);
+      end;
       
     end;
     
     public procedure CheckSngDef; override;
     
-    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override;
-    begin
-      Result := Simplify(e.Optimize(nvn,svn));
-      var main := ExprStm(Result).e.GetMain;
-      
-      if main is OptNExprBase then
-      begin
-        nvn.Add(vname);
-        svn.Remove(vname);
-      end else
-      if main is OptSExprBase then
-      begin
-        nvn.Remove(vname);
-        svn.Add(vname);
-      end else;
-      
-    end;
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
+    Simplify(e.Optimize(nvn,svn), nvn,svn,nil);
     
-    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override;
-    begin
-      Result := Simplify(e.FinalOptimize(nvn,svn,ovn));
-      var main := ExprStm(Result).e.GetMain;
-      
-      if main is OptNExprBase then
-      begin
-        nvn.Add(vname);
-        svn.Remove(vname);
-        ovn.Remove(vname);
-      end else
-      if main is OptSExprBase then
-      begin
-        nvn.Remove(vname);
-        svn.Add(vname);
-        ovn.Remove(vname);
-      end else
-      begin
-        nvn.Remove(vname);
-        svn.Remove(vname);
-        ovn.Add(vname);
-      end;
-      
-    end;
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
+    Simplify(e.Optimize(nvn,svn), nvn,svn,ovn);
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(self.e.ReplaceVar(vname, oe, envn,esvn,eovn), nil,nil,nil);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     new OptExprWrapper[](e);
@@ -1056,7 +1053,8 @@ type
       
     end;
     
-    public procedure ReplaceAllConstsFor(oe: OptExprWrapper);
+    public function ReplaceAllConstsFor(stm: StmBase): StmBase;
+    public function ReplaceAllConstsFor(oe: OptExprWrapper): OptExprWrapper;
     
     public procedure Optimize;
     
@@ -1251,6 +1249,7 @@ type
     
     public function Optimize(nvn,svn: HashSet<string>): InputNValue; virtual := self;
     public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputNValue; virtual := self;
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): InputNValue; virtual := self;
     
     public function GetAllExprs: sequence of OptExprWrapper; virtual :=
     new OptExprWrapper[0];
@@ -1319,6 +1318,9 @@ type
     public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputNValue; override :=
     Simplify(OptNExprWrapper(oe.FinalOptimize(nvn,svn,ovn)));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): InputNValue; override :=
+    Simplify(OptNExprWrapper(self.oe.ReplaceVar(vname, oe, envn,esvn,eovn)));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     new OptExprWrapper[](oe);
     
@@ -1352,6 +1354,7 @@ type
     
     public function Optimize(nvn,svn: HashSet<string>): InputSValue; virtual := self;
     public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; virtual := self;
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): InputSValue; virtual := self;
     
     public function GetAllExprs: sequence of OptExprWrapper; virtual :=
     new OptExprWrapper[0];
@@ -1420,6 +1423,9 @@ type
     public function FinalOptimize(nvn,svn,ovn: HashSet<string>): InputSValue; override :=
     Simplify(OptSExprWrapper(oe.FinalOptimize(nvn,svn,ovn)));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): InputSValue; override :=
+    Simplify(OptSExprWrapper(self.oe.ReplaceVar(vname, oe, envn,esvn,eovn)));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     new OptExprWrapper[](oe);
     
@@ -1456,6 +1462,7 @@ type
     
     public function Optimize(scr: Script; nvn,svn: HashSet<string>): StmBlockRef; virtual := self;
     public function FinalOptimize(scr: Script; nvn,svn,ovn: HashSet<string>): StmBlockRef; virtual := self;
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBlockRef; virtual := self;
     
     public function GetAllExprs: sequence of OptExprWrapper; virtual :=
     new OptExprWrapper[0];
@@ -1548,7 +1555,7 @@ type
     
     public function Simplify(scr: Script; ns: InputSValue): StmBlockRef;
     begin
-      if ns is SInputSValue then
+      if (scr<>nil) and (ns is SInputSValue) then
       begin
         self.s := ns;
         Result := new StaticStmBlockRef(self.GetBlock(scr));
@@ -1566,6 +1573,9 @@ type
     
     public function FinalOptimize(scr: Script; nvn,svn,ovn: HashSet<string>): StmBlockRef; override :=
     Simplify(scr, s.FinalOptimize(nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBlockRef; override :=
+    Simplify(nil, s.ReplaceVar(vname, oe, envn,esvn,eovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     s.GetAllExprs;
@@ -1856,6 +1866,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
     
@@ -1959,6 +1972,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
@@ -2064,6 +2080,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
@@ -2177,6 +2196,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), dp.FinalOptimize(nvn,svn,ovn), stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn), dp.ReplaceVar(vname, oe, envn,esvn,eovn), stm->stm);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs() + dp.GetAllExprs;//ToDo #1797
@@ -2539,6 +2561,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
     
@@ -2655,6 +2680,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
     
@@ -2770,6 +2798,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn));
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
@@ -2896,6 +2927,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), dp.FinalOptimize(nvn,svn,ovn), stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn));
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn), dp.ReplaceVar(vname, oe, envn,esvn,eovn), stm->stm);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs() + dp.GetAllExprs;//ToDo #1797
@@ -3231,6 +3265,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(x.FinalOptimize(nvn,svn,ovn), y.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(x.ReplaceVar(vname, oe, envn,esvn,eovn), y.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     x.GetAllExprs() + y.GetAllExprs;//ToDo #1797
     
@@ -3342,6 +3379,8 @@ type
         Result := self else
         Result := new OperGetKey(nkk, vname, bl);
       
+      if nvn=nil then exit;
+      
       nvn.Add(vname);
       svn.Remove(vname);
       if ovn<>nil then ovn.Remove(vname);
@@ -3353,6 +3392,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), nvn,svn,ovn);
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn), nil,nil,nil);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
@@ -3466,6 +3508,8 @@ type
         Result := self else
         Result := new OperGetKeyTrigger(nkk, vname, bl);
       
+      if nvn=nil then exit;
+      
       nvn.Add(vname);
       svn.Remove(vname);
       if ovn<>nil then ovn.Remove(vname);
@@ -3477,6 +3521,9 @@ type
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(kk.FinalOptimize(nvn,svn,ovn), nvn,svn,ovn);
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(kk.ReplaceVar(vname, oe, envn,esvn,eovn), nil,nil,nil);
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     kk.GetAllExprs;
@@ -3678,6 +3725,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.FinalOptimize(scr, nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(CalledBlock.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     CalledBlock.GetAllExprs;
     
@@ -3804,6 +3854,7 @@ type
     public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
       var AllLiteral :=
+        (prev_bls <> nil) and
         (ne1.GetMain() is IOptLiteralExpr) and
         (ne2.GetMain() is IOptLiteralExpr);
       
@@ -3841,6 +3892,14 @@ type
       e1.FinalOptimize(nvn,svn,ovn),e2.FinalOptimize(nvn,svn,ovn),
       CalledBlock1.FinalOptimize(scr, nvn,svn,ovn),CalledBlock2.FinalOptimize(scr, nvn,svn,ovn),
       stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn)
+    );
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(
+      nil,
+      e1.ReplaceVar(vname, oe, envn,esvn,eovn),e2.ReplaceVar(vname, oe, envn,esvn,eovn),
+      CalledBlock1.ReplaceVar(vname, oe, envn,esvn,eovn),CalledBlock2.ReplaceVar(vname, oe, envn,esvn,eovn),
+      stm->stm
     );
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -4033,6 +4092,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(CalledBlock.FinalOptimize(scr, nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(CalledBlock.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     CalledBlock.GetAllExprs;
     
@@ -4157,6 +4219,7 @@ type
     public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
       var AllLiteral :=
+        (prev_bls <> nil) and
         (ne1.GetMain() is IOptLiteralExpr) and
         (ne2.GetMain() is IOptLiteralExpr);
       
@@ -4194,6 +4257,14 @@ type
       e1.FinalOptimize(nvn,svn,ovn),e2.FinalOptimize(nvn,svn,ovn),
       CalledBlock1.FinalOptimize(scr, nvn,svn,ovn),CalledBlock2.FinalOptimize(scr, nvn,svn,ovn),
       stm->stm.FinalOptimize(prev_bls, nvn,svn,ovn)
+    );
+    
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(
+      nil,
+      e1.ReplaceVar(vname, oe, envn,esvn,eovn),e2.ReplaceVar(vname, oe, envn,esvn,eovn),
+      CalledBlock1.ReplaceVar(vname, oe, envn,esvn,eovn),CalledBlock2.ReplaceVar(vname, oe, envn,esvn,eovn),
+      stm->stm
     );
     
     public function GetAllExprs: sequence of OptExprWrapper; override :=
@@ -4520,6 +4591,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(l.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(l.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     l.GetAllExprs;
     
@@ -4675,6 +4749,9 @@ type
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
     Simplify(otp.FinalOptimize(nvn,svn,ovn));
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
+    Simplify(otp.ReplaceVar(vname, oe, envn,esvn,eovn));
+    
     public function GetAllExprs: sequence of OptExprWrapper; override :=
     otp.GetAllExprs;
     
@@ -4769,7 +4846,7 @@ type
           OptExprWrapper.FromExpr(e, oe->OptExprBase.AsStrExpr(oe))
         ;
         
-        bl.scr.ReplaceAllConstsFor(oe);
+        oe := bl.scr.ReplaceAllConstsFor(oe);
         var main := oe.Optimize(new HashSet<string>, new HashSet<string>).GetMain;
         if not (main is IOptLiteralExpr) then raise new ConstExprExpectedException(ss[1], main);
         
@@ -5189,18 +5266,40 @@ begin
   
 end;
 
-procedure Script.ReplaceAllConstsFor(oe: OptExprWrapper) :=
-foreach var c: KeyValuePair<string, object> in SngDefConsts do
+function Script.ReplaceAllConstsFor(stm: StmBase): StmBase;
 begin
   
-  var le: OptExprBase;
-  if c.Value is real    then le := new OptNLiteralExpr(real(c.Value)) else
-  if c.Value is string  then le := new OptSLiteralExpr(string(c.Value)) else
-  if c.Value = nil      then le := new OptNullLiteralExpr else
-  raise new WrongConstTypeException(nil);
+  foreach var c: KeyValuePair<string, object> in SngDefConsts do
+  begin
+    
+    var le: OptExprBase;
+    if c.Value is real    then le := new OptNLiteralExpr(real(c.Value)) else
+    if c.Value is string  then le := new OptSLiteralExpr(string(c.Value)) else
+    if c.Value = nil      then le := new OptNullLiteralExpr else
+    raise new WrongConstTypeException(nil);
+    
+    stm := stm.ReplaceVar(c.Key, le, new string[0], new string[0], new string[0]);
+  end;
   
-  oe.ReplaceVar(c.Key, le, new string[0], new string[0], new string[0]);
+  Result := stm;
+end;
+
+function Script.ReplaceAllConstsFor(oe: OptExprWrapper): OptExprWrapper;
+begin
   
+  foreach var c: KeyValuePair<string, object> in SngDefConsts do
+  begin
+    
+    var le: OptExprBase;
+    if c.Value is real    then le := new OptNLiteralExpr(real(c.Value)) else
+    if c.Value is string  then le := new OptSLiteralExpr(string(c.Value)) else
+    if c.Value = nil      then le := new OptNullLiteralExpr else
+    raise new WrongConstTypeException(nil);
+    
+    oe := oe.ReplaceVar(c.Key, le, new string[0], new string[0], new string[0]);
+  end;
+  
+  Result := oe;
 end;
 
 {$endregion Script}
@@ -5234,7 +5333,7 @@ type
       
     end;
     
-    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>): sequence of ExprStmOptContainer;
+    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, StmBase>): sequence of ExprStmOptContainer;
     begin
       foreach var ec in lst do
       begin
@@ -5250,7 +5349,7 @@ type
           continue;
         end;
         
-        if (vu.Length=1) and not ec.param_overriten then var_once_used.Add(ec, vu[0]);
+        if (vu.Length=1) and not ec.param_overriten then var_once_used.Add(ec, poped_by);
         
         
         done += ec;
@@ -5258,6 +5357,40 @@ type
         yield ec;
         
       end;
+    end;
+    
+    static function GetFinalVarChain(stms: List<StmBase>; vars: sequence of ExprStm; opt_proc: StmBase->StmBase): sequence of StmBase;
+    begin
+      var left := vars.ToLinkedList;
+      var last := new List<StmBase>;
+      
+      while left.Count<>0 do
+      begin
+        var nan_new := true;
+        
+        var curr := left.First;
+        while curr<>nil do
+        begin
+          var next := curr.Next;
+          
+          foreach var stm in stms do
+            if stm.FindVarUsages(curr.Value.vname).Any then
+            begin
+              var opt := opt_proc(curr.Value);
+              last += opt;
+              left.Remove(curr.Value);
+              nan_new := false;
+            end;
+          stms += last;
+          yield sequence last;
+          last.Clear;
+          
+          curr := next;
+        end;
+        
+        if nan_new then break;
+      end;
+      
     end;
     
     public function ToString: string; override :=
@@ -5269,10 +5402,10 @@ type
     
     stm_lst_ind: integer;
     var_lst: List<ExprStmOptContainer>;
-    var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>;
+    var_once_used: Dictionary<ExprStmOptContainer, StmBase>;
     var_replacements: Dictionary<string, OptExprWrapper>;
     
-    constructor(stm_lst_ind: integer; var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var_replacements: Dictionary<string, OptExprWrapper>);
+    constructor(stm_lst_ind: integer; var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var_replacements: Dictionary<string, OptExprWrapper>);
     begin
       self.stm_lst_ind := stm_lst_ind;
       self.var_lst := var_lst.ToList;
@@ -5297,7 +5430,7 @@ type
 ///opt_proc         : Selector then uses FinalOtimize if posible. Otherwise it's same as mini_opt_proc
 ///mini_opt_proc    : Selector then only does non-final Optimize
 ///
-function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, OptExprWrapper>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
 begin
   var curr := bl;
   
@@ -5308,7 +5441,12 @@ begin
       var bd := prev_bls[curr];
       var ind := bd.stm_lst_ind;
       
-      if stm_lst.Take(ind).Sum(l->l.Count)<>0 then
+      if (stm_lst.Take(ind).Sum(l->l.Count)=0) and (bd.var_lst.Count=0) and (bd.var_replacements.Count=0) then
+      begin
+        org_bl.next := org_bl;
+        Result := GBCR_all_loop;
+        exit;
+      end else
       begin
         org_bl.next := curr;
         stm_lst.RemoveRange(ind, stm_lst.Count-ind);
@@ -5316,11 +5454,6 @@ begin
         var_once_used := bd.var_once_used;
         var_replacements := bd.var_replacements;
         Result := GBCR_found_loop;
-        exit;
-      end else
-      begin
-        org_bl.next := org_bl;
-        Result := GBCR_all_loop;
         exit;
       end;
       
@@ -5332,15 +5465,7 @@ begin
     dummy_container.scr := curr.scr;
     dummy_container.next := curr.next;
     
-    prev_bls.Add(
-      curr,
-      new OptBlockBackupData(
-        stm_lst.Count,
-        var_lst,
-        var_once_used,
-        var_replacements
-      )
-    );
+    prev_bls.Add(curr, new OptBlockBackupData);
     var curr_stms := new List<StmBase>;
     stm_lst += curr_stms;
     
@@ -5388,10 +5513,35 @@ begin
         foreach var ec in var_once_used.Keys.ToArray do
           if stm.FindVarUsages(ec.e.vname).Any then
             var_once_used.Remove(ec) else
+          if stm.DoesRewriteVar(ec.e.vname) then
           begin
+            var search_state := 0;
+            var rstm := var_once_used[ec];
+            var estm := ec.e;
             
-            curr_stms.Remove(ec.e);
-            var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
+            for var ind1 := stm_lst.Count-1 downto 0 do
+              if search_state=2 then break else
+                for var ind2 := stm_lst[ind1].Count-1 downto 0 do
+                  case search_state of
+                    
+                    0:
+                    if stm_lst[ind1][ind2] = rstm then
+                    begin
+                      stm_lst[ind1][ind2] := rstm.ReplaceVar(estm.vname, estm.e);
+                      search_state := 1;
+                    end;
+                    
+                    1:
+                    if stm_lst[ind1][ind2] = estm then
+                    begin
+                      stm_lst[ind1].RemoveAt(ind2);
+                      search_state := 2;
+                      break;
+                    end;
+                    
+                  end;
+            
+            if search_state<>2 then raise new System.InvalidOperationException('Error replacing var');
             
             var_once_used.Remove(ec);
           end;
@@ -5399,8 +5549,7 @@ begin
         foreach var vname in var_replacements.Keys.ToArray do
         begin
           
-          foreach var oew in opt_stm.FindVarUsages(vname) do
-            oew.ReplaceVar(vname, var_replacements[vname]);
+          opt_stm := opt_stm.ReplaceVar(vname, var_replacements[vname]);
           
           if opt_stm.DoesRewriteVar(vname) then
             var_replacements.Remove(vname) else
@@ -5501,6 +5650,12 @@ begin
       exit;
     end;
     
+    prev_bls[curr] := new OptBlockBackupData(
+      stm_lst.Count-1,
+      var_lst,
+      var_once_used,
+      var_replacements
+    );
     curr := dummy_container.next;
   end;
   
@@ -5514,7 +5669,7 @@ begin
   var stm_lst := new List<List<StmBase>>;
   
   var var_lst := new List<ExprStmOptContainer>;
-  var var_once_used := new Dictionary<ExprStmOptContainer, OptExprWrapper>;
+  var var_once_used := new Dictionary<ExprStmOptContainer, StmBase>;
   var var_replacements := new Dictionary<string, OptExprWrapper>;
   
   var nvn := new HashSet<string>;
@@ -5539,10 +5694,10 @@ begin
       foreach var ec in var_once_used.Keys do
       begin
         Result.Remove(ec.e);
-        var_once_used[ec].ReplaceVar(ec.e.vname, ec.e.e);
+        var rstm := var_once_used[ec];
+        Result[Result.LastIndexOf(rstm)] := rstm.ReplaceVar(ec.e.vname, ec.e.e);
       end;
     
-    GBCR_all_loop,
     GBCR_found_loop,
     GBCR_nonconst_context_jump:
       Result.InsertRange(
@@ -5554,6 +5709,16 @@ begin
         var_replacements.Select(kvp->opt_proc(ExprStm.Create(kvp.Key, kvp.Value, curr, curr.scr)))
         
       );
+    
+    GBCR_all_loop:
+      Result.AddRange(ExprStmOptContainer.GetFinalVarChain(
+        Result,
+        
+        var_lst.Select(ec->ec.e) +
+        var_replacements.Select(kvp->new ExprStm(kvp.Key, kvp.Value, curr, curr.scr)),
+        
+        opt_proc
+      ));
     
   end;
   
@@ -5577,9 +5742,7 @@ begin
 //  writeln('-'*50);
   
   foreach var bl: StmBlock in bls.Values do
-    foreach var stm in bl.stms do
-      foreach var oe in stm.GetAllExprs do
-        self.ReplaceAllConstsFor(oe);
+    bl.stms.Transform(stm->self.ReplaceAllConstsFor(stm));
   
   if not settings.lib_mode then
     foreach var key in SngDefConsts.Keys.ToArray do
