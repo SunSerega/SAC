@@ -1,11 +1,4 @@
 ﻿unit StmParser;
-//ToDo Jump и Call тоже не разворачивать во время оптимизации оператора, если виден цикл
-// - это позволит сильно упростить код GetBlockChain
-// - обдумать ещё, не сломает ли это что то другое
-
-//ToDo всё же добавить ConstJump и убрать тот костыль с dummy_container
-// - и .Copy тогда не нужно
-
 //ToDo заменить FindVarUsages на VarUseCount, теперь точно, раз ReplaceVar возвращает новый экземпляр
 //ToDo пройтись отладчиком по всему что будет если разворачивать тот последний скрипт с перекликиванием области
 //ToDo в тестере сделать чтоб заменялся весь .sactd файл (вместо добавления в конце)
@@ -18,10 +11,6 @@
 // - вперёд переставлять можно только если ничего тот блок не вызывает, кроме того, откуда эту переменную переместили
 
 
-
-//ToDo типы Ununwrapable[Jump/Call]If
-// - надо ибо сейчас в случае невозможности развернуть - остаётся огрызок, который в Calc делает кучу лишнего
-// - когда готово - можно будет добавить функционал jci_aggressive_unwrap
 
 //ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
 //ToDo задокументировать возможность добавлять табы в начале каждой строчки
@@ -555,34 +544,49 @@ type
   
   StmBase = abstract class
     
-    private static nfi := new System.Globalization.NumberFormatInfo;
-    private static tps_lst := new List<System.Type>;
+    {$region field's}
     
     public bl: StmBlock;
     public scr: Script;
     
+    {$endregion field's}
     
+    {$region implemented by all}
     
     public function GetCalc: sequence of Action<ExecutingContext>; abstract;
+    
+    public function IsSame(stm: StmBase): boolean; abstract;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    
+    {$endregion overriden by all}
+    
+    {$region overriden if optimizable}
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; virtual := self;
+    
+    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; virtual := Optimize(prev_bls, nvn,svn);
+    
+    {$endregion overriden optimizable}
+    
+    {$region overriden if use expr}
     
     public function GetAllExprs: sequence of OptExprWrapper; virtual :=
     new OptExprWrapper[0];
     
+    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; virtual := self;
     
+    {$endregion overriden if use expr}
     
-    ///Only creates new instance for stms that can change container when optimized (like when Jump becomes [Const])
-    public function Copy(container: StmBlock): StmBase; virtual := self;
-    
-    public function IsSame(stm: StmBase): boolean; abstract;
+    {$region overriden if change var value}
     
     public procedure CheckSngDef; virtual := exit;
     
-    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; virtual := self;
+    public function DoesRewriteVar(vn: string): boolean; virtual := false;
     
-    public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; virtual :=
-    Optimize(prev_bls, nvn,svn);
+    {$endregion overriden if change var value}
     
-    public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; virtual := self;
+    {$region not virtual}
     
     public function ReplaceVar(vname: string; oe: OptExprWrapper) :=
     ReplaceVar(vname, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
@@ -593,12 +597,11 @@ type
     public procedure ResetExprDelegats :=
     foreach var oe in GetAllExprs do oe.ResetCalc;
     
-    public function DoesRewriteVar(vn: string): boolean; virtual := false;
+    {$endregion not virtual}
     
+    {$region static}
     
-    
-    
-    public static function FromString(bl: StmBlock; s: string; par: array of string): StmBase;
+    private static nfi := new System.Globalization.NumberFormatInfo;
     
     public static function ObjToStr(o: object) :=
     OptExprBase.ObjToStr(o);
@@ -614,13 +617,9 @@ type
       Result := integer(i);
     end;
     
-    
-    
-    public procedure Save(bw: System.IO.BinaryWriter); abstract;
+    public static function FromString(bl: StmBlock; s: string; par: array of string): StmBase;
     
     public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): StmBase;
-    
-    
     
     public static procedure AddVarTypesComments(res: StringBuilder; oes: sequence of OptExprWrapper);
     begin
@@ -710,6 +709,10 @@ type
     
     public static procedure AddVarTypesComments(res: StringBuilder; params oes: array of OptExprWrapper) :=
     AddVarTypesComments(res, oes.AsEnumerable);
+    
+    public static function CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean;
+    
+    {$endregion static}
     
   end;
   ExprStm = sealed class(StmBase)
@@ -1611,24 +1614,16 @@ type
   end;
   
   ///Everything that changes execution point at runtime (Jump, Call, Return, Halt, ...)
-  IContextJumpOper = interface
-    
-  end;
+  IContextJumpOper = interface end;
   
   ///Only Jump and Call operators
-  IJumpCallOper = interface(IContextJumpOper)
-    
-  end;
+  IJumpCallOper = interface(IContextJumpOper) end;
   
   ///Only Jump operators
-  IJumpOper = interface(IJumpCallOper)
-    
-  end;
+  IJumpOper = interface(IJumpCallOper) end;
   
   ///Only Call operators
-  ICallOper = interface(IJumpCallOper)
-    
-  end;
+  ICallOper = interface(IJumpCallOper) end;
   
   {$endregion interface's}
   
@@ -3666,7 +3661,345 @@ type
   
   {$endregion Other simulators}
   
+  {$region ExecutingContext chandgers}
+  
+  OperSusp = sealed class(OperStmBase)
+    
+    private static procedure Calc(ec: ExecutingContext) :=
+    if ec.scr.susp_called = nil then
+      System.Threading.Thread.CurrentThread.Suspend else
+      ec.scr.susp_called();
+    
+    
+    
+    public constructor := exit;
+    
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperSusp;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(1));
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](Calc);
+    
+    public function ToString: string; override :=
+    $'Susp [Const]';
+    
+  end;
+  OperReturn = sealed class(OperStmBase, IContextJumpOper)
+    
+    public constructor := exit;
+    
+    public constructor(bl: StmBlock);
+    begin
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperReturn;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(2));
+    end;
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override;
+    begin
+      bl.next := nil;
+      Result := nil;
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[0];
+    
+    public function ToString: string; override :=
+    $'Return [Const]';
+    
+  end;
+  OperHalt = sealed class(OperStmBase, IContextJumpOper)
+    
+    private static procedure Calc(ec: ExecutingContext) :=
+    Halt;
+    
+    private static procedure CalcSuppr(ec: ExecutingContext) :=
+    if ec.scr.otp<>nil then ec.scr.otp('%halted');
+    
+    
+    
+    public constructor := exit;
+    
+    public function IsSame(stm: StmBase): boolean; override :=
+    stm is OperHalt;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(4));
+      bw.Write(byte(3));
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
+    
+    public function ToString: string; override :=
+    $'Halt [Const]';
+    
+  end;
+  
+  {$endregion ExecutingContext chandgers}
+  
   {$region Jump/Call}
+  
+  OperConstJump = sealed class(OperStmBase, IJumpOper, IFileRefStm)
+    
+    public CalledBlock: StmBlock;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.next := self.CalledBlock;
+    end;
+    
+    
+    
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
+    
+    public constructor(CalledBlock, bl: StmBlock);
+    begin
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstJump;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock = nstm.CalledBlock;
+      
+    end;
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
+    CalledBlock=nil?new OperReturn(self.bl) as StmBase:self;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte($80 or 1));
+      CalledBlock.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
+    begin
+      var res := new OperConstJump;
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < bls.Length then
+          res.CalledBlock := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
+      Result := res;
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Jump {StaticStmBlockRef.Create(CalledBlock).ToString} [Const]';
+    
+  end;
+  OperWrapedJump = sealed class(OperStmBase, IJumpOper, IFileRefStm)
+    
+    public CalledBlock: StmBlock;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.next := self.CalledBlock;
+    end;
+    
+    
+    
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
+    
+    public constructor(CalledBlock, bl: StmBlock);
+    begin
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperWrapedJump;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock = nstm.CalledBlock;
+      
+    end;
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
+    CalledBlock=nil?new OperReturn(self.bl) as StmBase:
+    CheckCanUnwrapJumpCall_If(prev_bls.ToList,new StaticStmBlockRef(CalledBlock))?new OperConstJump(CalledBlock, self.bl):
+      self as StmBase;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte($80 or 1));
+      CalledBlock.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
+    begin
+      var res := new OperWrapedJump;
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < bls.Length then
+          res.CalledBlock := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
+      Result := res;
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Wrapped]';
+    
+  end;
+  OperConstCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
+    
+    public CalledBlock: StmBlock;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.Push(ec.next);
+      ec.next := self.CalledBlock;
+    end;
+    
+    
+    
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
+    
+    public constructor(CalledBlock, bl: StmBlock);
+    begin
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperConstCall;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock = nstm.CalledBlock;
+      
+    end;
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
+    CalledBlock=nil?nil:self;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte($80 or 3));
+      CalledBlock.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
+    begin
+      var res := new OperConstCall;
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < bls.Length then
+          res.CalledBlock := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
+      Result := res;
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Const]';
+    
+  end;
+  OperWrapedCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
+    
+    public CalledBlock: StmBlock;
+    
+    private procedure Calc(ec: ExecutingContext);
+    begin
+      ec.Push(ec.next);
+      ec.next := self.CalledBlock;
+    end;
+    
+    
+    
+    public function GetRefs: sequence of StmBlockRef :=
+    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
+    
+    public constructor(CalledBlock, bl: StmBlock);
+    begin
+      self.CalledBlock := CalledBlock;
+      self.bl := bl;
+      self.scr := bl.scr;
+    end;
+    
+    public function IsSame(stm: StmBase): boolean; override;
+    begin
+      var nstm := stm as OperWrapedCall;
+      if nstm=nil then exit;
+      
+      Result := self.CalledBlock = nstm.CalledBlock;
+      
+    end;
+    
+    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
+    CalledBlock=nil?nil:
+    CheckCanUnwrapJumpCall_If(prev_bls.ToList,new StaticStmBlockRef(CalledBlock))?new OperConstCall(CalledBlock, self.bl):
+      self as StmBase;
+    
+    public procedure Save(bw: System.IO.BinaryWriter); override;
+    begin
+      inherited Save(bw);
+      bw.Write(byte(5));
+      bw.Write(byte($80 or 3));
+      CalledBlock.SaveId(bw);
+    end;
+    
+    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
+    begin
+      var res := new OperWrapedCall;
+      var n := br.ReadInt32;
+      if n <> -1 then
+        if cardinal(n) < bls.Length then
+          res.CalledBlock := bls[n] else
+          raise new InvalidStmBlIdException(n, bls.Length);
+      Result := res;
+    end;
+    
+    public function GetCalc: sequence of Action<ExecutingContext>; override :=
+    new Action<ExecutingContext>[](self.Calc);
+    
+    public function ToString: string; override :=
+    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Wrapped]';
+    
+  end;
   
   OperJump = sealed class(OperStmBase, IJumpOper, IFileRefStm)
     
@@ -3696,9 +4029,6 @@ type
       self.scr := bl.scr;
     end;
     
-    public function Copy(container: StmBlock): StmBase; override :=
-    new OperJump(CalledBlock, container);
-    
     public function IsSame(stm: StmBase): boolean; override;
     begin
       var nstm := stm as OperJump;
@@ -3712,7 +4042,7 @@ type
     begin
       
       if nCalledBlock is StaticStmBlockRef(var sbr) then
-        bl.next := sbr.bl else
+        Result := OperConstJump.Create(sbr.bl, self.bl).Optimize(nil,nil,nil) else
       if CalledBlock=nCalledBlock then
         Result := self else
         Result := new OperJump(nCalledBlock, bl);
@@ -3734,7 +4064,7 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
-      bw.Write(byte(4));
+      bw.Write(byte(5));
       bw.Write(byte(1));
       CalledBlock.Save(bw);
     end;
@@ -3817,9 +4147,6 @@ type
       self.scr := bl.scr;
     end;
     
-    public function Copy(container: StmBlock): StmBase; override :=
-    new OperJumpIf(e1.Copy,e2.Copy, compr, CalledBlock1,CalledBlock2, container);
-    
     public function IsSame(stm: StmBase): boolean; override;
     begin
       var nstm := stm as OperJumpIf;
@@ -3849,33 +4176,37 @@ type
         end;
     end;
     
-    public function CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean;
-    
     public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
-      var AllLiteral :=
+      if
         (prev_bls <> nil) and
         (ne1.GetMain() is IOptLiteralExpr) and
-        (ne2.GetMain() is IOptLiteralExpr);
-      
-      var OnlyCaledBlock :=
-        AllLiteral?nil:
+        (ne2.GetMain() is IOptLiteralExpr)
+      then
+      begin
+        var nCalledBlock :=
           comp_obj(ne1.GetMain.GetRes(), ne2.GetMain.GetRes())?
               nCalledBlock1:
               nCalledBlock2;
-      
-      if
-        AllLiteral and
-        CheckCanUnwrapJumpCall_If(prev_bls, OnlyCaledBlock)
-      then
-        Result := optf(new OperJump(OnlyCaledBlock, bl)) else
-      if
-        (e1=ne1) and (e2=ne2) and
-        (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
-      then
-        Result := self else
-        Result := new OperJumpIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, bl);
-      
+        
+        if
+          (nCalledBlock is StaticStmBlockRef(var sbr)) and
+          not scr.settings.jci_aggressive_unwrap
+        then
+          Result := optf(new OperWrapedJump(sbr.bl, self.bl)) else
+          Result := optf(new OperJump(nCalledBlock, self.bl));
+        
+      end else
+      begin
+        
+        if
+          (e1=ne1) and (e2=ne2) and
+          (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
+        then
+          Result := self else
+          Result := new OperJumpIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, self.bl);
+        
+      end;
     end;
     
     public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
@@ -3908,7 +4239,7 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
-      bw.Write(byte(4));
+      bw.Write(byte(5));
       bw.Write(byte(2));
       e1.Save(bw);
       bw.Write(byte(compr));
@@ -3978,72 +4309,13 @@ type
     end;
     
   end;
-  
-  OperConstCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
-    
-    public CalledBlock: StmBlock;
-    
-    private procedure Calc(ec: ExecutingContext);
-    begin
-      ec.Push(bl.next);
-      ec.next := self.CalledBlock;
-    end;
-    
-    
-    
-    public function GetRefs: sequence of StmBlockRef :=
-    new StmBlockRef[](new StaticStmBlockRef(CalledBlock));
-    
-    public constructor(CalledBlock, bl: StmBlock);
-    begin
-      self.CalledBlock := CalledBlock;
-      self.bl := bl;
-      self.scr := bl.scr;
-    end;
-    
-    public function IsSame(stm: StmBase): boolean; override;
-    begin
-      var nstm := stm as OperConstCall;
-      if nstm=nil then exit;
-      
-      Result := self.CalledBlock = nstm.CalledBlock;
-      
-    end;
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      inherited Save(bw);
-      bw.Write(byte(4));
-      bw.Write(byte($80 or 3));
-      CalledBlock.SaveId(bw);
-    end;
-    
-    public static function Load(br: System.IO.BinaryReader; bls: array of StmBlock): OperStmBase;
-    begin
-      var res := new OperConstCall;
-      var n := br.ReadInt32;
-      if n <> -1 then
-        if cardinal(n) < bls.Length then
-          res.CalledBlock := bls[n] else
-          raise new InvalidStmBlIdException(n, bls.Length);
-      Result := res;
-    end;
-    
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](self.Calc);
-    
-    public function ToString: string; override :=
-    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Const]';
-    
-  end;
-  
   OperCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
     
     public CalledBlock: StmBlockRef;
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(bl.next);
+      ec.Push(ec.next);
       ec.next := self.CalledBlock.GetBlock(ec.scr);
     end;
     
@@ -4101,7 +4373,7 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
-      bw.Write(byte(4));
+      bw.Write(byte(5));
       bw.Write(byte(3));
       CalledBlock.Save(bw);
     end;
@@ -4141,13 +4413,13 @@ type
     
     private procedure Calc(ec: ExecutingContext);
     begin
-      ec.Push(bl.next);
+      ec.Push(ec.next);
       var res1 := e1.Calc(ec.nvs, ec.svs);
       var res2 := e2.Calc(ec.nvs, ec.svs);
       ec.next :=
         comp_obj(res1,res2)?
-        CalledBlock1.GetBlock(ec.scr):
-        CalledBlock2.GetBlock(ec.scr);
+          CalledBlock1.GetBlock(ec.scr):
+          CalledBlock2.GetBlock(ec.scr);
     end;
     
     
@@ -4214,33 +4486,37 @@ type
       self.scr := bl.scr;
     end;
     
-    public function CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean;
-    
     public function Simplify(prev_bls: sequence of StmBlock; ne1,ne2: OptExprWrapper; nCalledBlock1,nCalledBlock2: StmBlockRef; optf: StmBase->StmBase): StmBase;
     begin
-      var AllLiteral :=
+      if
         (prev_bls <> nil) and
         (ne1.GetMain() is IOptLiteralExpr) and
-        (ne2.GetMain() is IOptLiteralExpr);
-      
-      var OnlyCaledBlock :=
-        AllLiteral?nil:
+        (ne2.GetMain() is IOptLiteralExpr)
+      then
+      begin
+        var nCalledBlock :=
           comp_obj(ne1.GetMain.GetRes(), ne2.GetMain.GetRes())?
               nCalledBlock1:
               nCalledBlock2;
-      
-      if
-        AllLiteral and
-        CheckCanUnwrapJumpCall_If(prev_bls, OnlyCaledBlock)
-      then
-        Result := optf(new OperCall(OnlyCaledBlock, bl)) else
-      if
-        (e1=ne1) and (e2=ne2) and
-        (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
-      then
-        Result := self else
-        Result := new OperCallIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, bl);
-      
+        
+        if
+          (nCalledBlock is StaticStmBlockRef(var sbr)) and
+          not scr.settings.jci_aggressive_unwrap
+        then
+          Result := optf(new OperWrapedCall(sbr.bl, self.bl)) else
+          Result := optf(new OperCall(nCalledBlock, self.bl));
+        
+      end else
+      begin
+        
+        if
+          (e1=ne1) and (e2=ne2) and
+          (CalledBlock1=nCalledBlock1) and (CalledBlock2=nCalledBlock2)
+        then
+          Result := self else
+          Result := new OperCallIf(ne1,ne2, compr, nCalledBlock1,nCalledBlock2, self.bl);
+        
+      end;
     end;
     
     public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override :=
@@ -4273,7 +4549,7 @@ type
     public procedure Save(bw: System.IO.BinaryWriter); override;
     begin
       inherited Save(bw);
-      bw.Write(byte(4));
+      bw.Write(byte(5));
       bw.Write(byte(4));
       e1.Save(bw);
       bw.Write(byte(compr));
@@ -4345,95 +4621,6 @@ type
   end;
   
   {$endregion Jump/Call}
-  
-  {$region ExecutingContext chandgers}
-  
-  OperSusp = sealed class(OperStmBase)
-    
-    private static procedure Calc(ec: ExecutingContext) :=
-    if ec.scr.susp_called = nil then
-      System.Threading.Thread.CurrentThread.Suspend else
-      ec.scr.susp_called();
-    
-    
-    
-    public constructor := exit;
-    
-    public function IsSame(stm: StmBase): boolean; override :=
-    stm is OperSusp;
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      inherited Save(bw);
-      bw.Write(byte(5));
-      bw.Write(byte(1));
-    end;
-    
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](Calc);
-    
-    public function ToString: string; override :=
-    $'Susp [Const]';
-    
-  end;
-  OperReturn = sealed class(OperStmBase, IContextJumpOper)
-    
-    public constructor := exit;
-    
-    public function IsSame(stm: StmBase): boolean; override :=
-    stm is OperReturn;
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      inherited Save(bw);
-      bw.Write(byte(5));
-      bw.Write(byte(2));
-    end;
-    
-    public function Optimize(prev_bls: sequence of StmBlock; nvn,svn: HashSet<string>): StmBase; override;
-    begin
-      bl.next := nil;
-      Result := nil;
-    end;
-    
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[0];
-    
-    public function ToString: string; override :=
-    $'Return [Const]';
-    
-  end;
-  OperHalt = sealed class(OperStmBase, IContextJumpOper)
-    
-    private static procedure Calc(ec: ExecutingContext) :=
-    Halt;
-    
-    private static procedure CalcSuppr(ec: ExecutingContext) :=
-    if ec.scr.otp<>nil then ec.scr.otp('%halted');
-    
-    
-    
-    public constructor := exit;
-    
-    public function IsSame(stm: StmBase): boolean; override :=
-    stm is OperHalt;
-    
-    public procedure Save(bw: System.IO.BinaryWriter); override;
-    begin
-      inherited Save(bw);
-      bw.Write(byte(5));
-      bw.Write(byte(3));
-    end;
-    
-    public function GetCalc: sequence of Action<ExecutingContext>; override :=
-    new Action<ExecutingContext>[](scr.SupprIO=nil?Calc:CalcSuppr);
-    
-    public function ToString: string; override :=
-    $'Halt [Const]';
-    
-  end;
-  
-  {$endregion ExecutingContext chandgers}
   
   {$region Misc}
   
@@ -5147,7 +5334,7 @@ end;
 
 {$region [Jump/Call]If unwraping}
 
-function GCheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean;
+static function StmBase.CheckCanUnwrapJumpCall_If(prev_bls: List<StmBlock>; ref: StmBlockRef): boolean;
 begin
   if (ref is StaticStmBlockRef(var ssbr)) then
   begin
@@ -5161,17 +5348,11 @@ begin
       prev_bls += ssbr.bl;
       
       foreach var nref in ifrs.GetRefs do
-        Result := Result and GCheckCanUnwrapJumpCall_If(prev_bls, nref);
+        Result := Result and CheckCanUnwrapJumpCall_If(prev_bls, nref);
       
     end;
   end;
 end;
-
-function OperJumpIf.CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean :=
-GCheckCanUnwrapJumpCall_If(prev_bls.ToList, ref);
-
-function OperCallIf.CheckCanUnwrapJumpCall_If(prev_bls: sequence of StmBlock; ref: StmBlockRef): boolean :=
-GCheckCanUnwrapJumpCall_If(prev_bls.ToList, ref);
 
 {$endregion [Jump/Call]If unwraping}
 
@@ -5459,12 +5640,6 @@ begin
       
     end;
     
-    var dummy_container := new StmBlock;
-    dummy_container.fname := curr.fname;
-    dummy_container.lbl := curr.lbl;
-    dummy_container.scr := curr.scr;
-    dummy_container.next := curr.next;
-    
     prev_bls.Add(curr, new OptBlockBackupData);
     var curr_stms := new List<StmBase>;
     stm_lst += curr_stms;
@@ -5592,7 +5767,6 @@ begin
           end;
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
-          opt_stm := opt_stm.Copy(dummy_container);
           opt_stm := opt_proc(opt_stm);
           
           if opt_stm=nil then continue;
@@ -5604,11 +5778,20 @@ begin
           curr_stms += opt_stm;
         end;
         
+        if opt_stm is IContextJumpOper then break;
       end;
+    
+    var next := curr.next;
     
     
     
     var last_stm := curr_stms.Count=0?nil:curr_stms[curr_stms.Count-1];
+    
+    if last_stm is OperConstJump(var ocj) then
+    begin
+      curr_stms.RemoveLast;
+      next := ocj.CalledBlock;
+    end else
     
     if last_stm is OperConstCall(var occ) then
     begin
@@ -5624,7 +5807,8 @@ begin
       case res of
         GBCR_done: ;
         
-        GBCR_context_halt://ToDo all_loop here too
+        GBCR_all_loop,
+        GBCR_context_halt:
         begin
           Result := res;
           exit;
@@ -5650,13 +5834,16 @@ begin
       exit;
     end;
     
+    
+    
     prev_bls[curr] := new OptBlockBackupData(
       stm_lst.Count-1,
       var_lst,
       var_once_used,
       var_replacements
     );
-    curr := dummy_container.next;
+    
+    curr := next;
   end;
   
   Result := GBCR_done;
@@ -5946,12 +6133,9 @@ begin
     4:
     case t2 of
       
-      1: Result := OperJump.Load(br, bls);
-      2: Result := OperJumpIf.Load(br, bls);
-      3: Result := OperCall.Load(br, bls);
-      4: Result := OperCallIf.Load(br, bls);
-      
-      $80 or 3: Result := OperConstCall.Load(br, bls);
+      1: Result := OperSusp.Create;
+      2: Result := OperReturn.Create;
+      3: Result := OperHalt.Create;
       
       else raise new InvalidOperTException(t1,t2);
     end;
@@ -5959,9 +6143,15 @@ begin
     5:
     case t2 of
       
-      1: Result := OperSusp.Create;
-      2: Result := OperReturn.Create;
-      3: Result := OperHalt.Create;
+      1: Result := OperJump.Load(br, bls);
+      2: Result := OperJumpIf.Load(br, bls);
+      3: Result := OperCall.Load(br, bls);
+      4: Result := OperCallIf.Load(br, bls);
+      
+      $80 or 1: Result := OperConstJump.Load(br, bls);
+      $80 or 2: Result := OperWrapedJump.Load(br, bls);
+      $80 or 3: Result := OperConstCall.Load(br, bls);
+      $80 or 4: Result := OperWrapedCall.Load(br, bls);
       
       else raise new InvalidOperTException(t1,t2);
     end;

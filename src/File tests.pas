@@ -7,8 +7,6 @@ uses MiscData;
 //ToDo тесты для Jump[If] посередине блока
 // - в блоке вызываемом Call и без
 
-//ToDo проверка версии либов
-
 //ToDo сейчас - переделать .ReplaceVar
 
 begin
