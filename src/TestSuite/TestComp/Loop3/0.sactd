@@ -1,0 +1,11 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+x=6
+Jump "Main.sac\#Loop" [Const]
+
+\#Loop
+Output Str(x) Objs={x}
+x=(x+1) Objs={x}
+Jump "Main.sac\#Loop" [Const]

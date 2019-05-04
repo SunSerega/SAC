@@ -5544,6 +5544,7 @@ type
     begin
       var left := vars.ToLinkedList;
       var last := new List<StmBase>;
+//      var res := new List<StmBase>;
       
       while left.Count<>0 do
       begin
@@ -5563,6 +5564,7 @@ type
               nan_new := false;
             end;
           stms += last;
+//          res += last;
           yield sequence last;
           last.Clear;
           
@@ -5640,9 +5642,18 @@ begin
       
     end;
     
-    prev_bls.Add(curr, new OptBlockBackupData);
+    prev_bls.Add(curr,
+      new OptBlockBackupData(
+        stm_lst.Count,
+        var_lst,
+        var_once_used,
+        var_replacements
+      )
+    );
     var curr_stms := new List<StmBase>;
     stm_lst += curr_stms;
+    
+    var next := curr.next;
     
     
     
@@ -5774,74 +5785,62 @@ begin
           // [3.]
           var_lst.RemoveAll(ec->opt_stm.DoesRewriteVar(ec.e.vname));
           
-          opt_stm.bl := org_bl;
-          curr_stms += opt_stm;
+          
+          
+          if opt_stm is OperConstJump(var ocj) then
+          begin
+            next := ocj.CalledBlock;
+            break;
+          end else
+          
+          if opt_stm is OperConstCall(var occ) then
+          begin
+            var backup := new OptBlockBackupData(
+              stm_lst.Count,
+              var_lst,
+              var_once_used,
+              var_replacements
+            );
+            
+            var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
+            case res of
+              GBCR_done: ;
+              
+              GBCR_all_loop,
+              GBCR_context_halt:
+              begin
+                Result := res;
+                exit;
+              end;
+              
+              GBCR_found_loop,
+              GBCR_nonconst_context_jump:
+              begin
+                stm_lst.RemoveRange(backup.stm_lst_ind, stm_lst.Count-backup.stm_lst_ind);
+                var_lst := backup.var_lst;
+                var_once_used := backup.var_once_used;
+                var_replacements := backup.var_replacements;
+                curr_stms += opt_stm;
+              end;
+              
+            end;
+            
+          end else
+          
+          if opt_stm is IJumpCallOper then
+          begin
+            curr_stms += opt_stm;
+            Result := GBCR_nonconst_context_jump;
+            exit;
+          end else
+            
+            curr_stms += opt_stm;
+          
         end;
         
-        if opt_stm is IContextJumpOper then break;
       end;
     
-    var next := curr.next;
     
-    
-    
-    var last_stm := curr_stms.Count=0?nil:curr_stms[curr_stms.Count-1];
-    
-    if last_stm is OperConstJump(var ocj) then
-    begin
-      curr_stms.RemoveLast;
-      next := ocj.CalledBlock;
-    end else
-    
-    if last_stm is OperConstCall(var occ) then
-    begin
-      curr_stms.RemoveLast;
-      var backup := new OptBlockBackupData(
-        stm_lst.Count,
-        var_lst,
-        var_once_used,
-        var_replacements
-      );
-      
-      var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
-      case res of
-        GBCR_done: ;
-        
-        GBCR_all_loop,
-        GBCR_context_halt:
-        begin
-          Result := res;
-          exit;
-        end;
-        
-        GBCR_found_loop,
-        GBCR_nonconst_context_jump:
-        begin
-          stm_lst.RemoveRange(backup.stm_lst_ind, stm_lst.Count-backup.stm_lst_ind);
-          var_lst := backup.var_lst;
-          var_once_used := backup.var_once_used;
-          var_replacements := backup.var_replacements;
-          curr_stms += last_stm;
-        end;
-        
-      end;
-      
-    end else
-    
-    if last_stm is IJumpCallOper then
-    begin
-      Result := GBCR_nonconst_context_jump;
-      exit;
-    end;
-    
-    
-    
-    prev_bls[curr] := new OptBlockBackupData(
-      stm_lst.Count-1,
-      var_lst,
-      var_once_used,
-      var_replacements
-    );
     
     curr := next;
   end;
@@ -5899,7 +5898,7 @@ begin
     
     GBCR_all_loop:
       Result.AddRange(ExprStmOptContainer.GetFinalVarChain(
-        Result,
+        Result.ToList,
         
         var_lst.Select(ec->ec.e) +
         var_replacements.Select(kvp->new ExprStm(kvp.Key, kvp.Value, curr, curr.scr)),

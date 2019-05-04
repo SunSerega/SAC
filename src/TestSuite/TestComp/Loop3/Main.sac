@@ -1,0 +1,8 @@
+
+x=5
+x=x+1
+
+#Loop
+Output x
+x=x+1
+Jump "#Loop"

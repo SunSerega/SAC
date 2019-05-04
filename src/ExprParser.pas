@@ -2,6 +2,13 @@
 
 //ToDo а что если убрать IOptExpr? Оно вроде давно утратило своё предназначение
 
+//ToDo в DeduseVarsTypes OPlus можно превращать в NPlus, но не SPlus (результат будет не тот)
+// - так же с остальными
+// - это позволит перемещать DeflyNum внуть выражений, в итоге получая ошибку или удаляя DeflyNum до завершения оптимизации
+
+//ToDo в DeduseVarsTypes надо передавать метод вызывающий ошибку
+// - иначе получается внутренняя "не совместимые типы"
+
 //ToDo Контекст ошибок
 
 //ToDo срочно - DeflyNum должно показывать имя файла, всё выражение и часть вызывающую ошибку! В тест сьюте тест неправильный из за этого
@@ -2512,7 +2519,7 @@ type
         
         lovn.Remove(name); lnvn.Add(name);
         if aovn.Remove(name) then anvn.Add(name);
-        if govn.Remove(name) then gnvn.Add(name);
+        if (govn=nil) or govn.Remove(name) then gnvn.Add(name);
         
       end else
       if asvn.Contains(name) or (aovn.Contains(name) and not CB_N) then
@@ -2523,7 +2530,7 @@ type
         
         lovn.Remove(name); lsvn.Add(name);
         if aovn.Remove(name) then asvn.Add(name);
-        if govn.Remove(name) then gsvn.Add(name);
+        if (govn=nil) or govn.Remove(name) then gsvn.Add(name);
         
       end else
       if aovn.Contains(name) then
@@ -2541,16 +2548,8 @@ type
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is UnOptVarExpr(var noe)) and (noe.name=self.name);
     
-    public function ToString(nvn, svn, ovn: array of string): string; override;
-    begin
-      var sb := new StringBuilder;
-      
-      sb += '(%UnFixed+';
-      sb += name;
-      sb += ')';
-      
-      Result := sb.ToString;
-    end;
+    public function ToString(nvn, svn, ovn: array of string): string; override :=
+    $'(%UnFixed+{name})';
     
   end;
   OptNVarExpr = sealed class(OptNExprBase, IOptVarExpr)
@@ -3998,7 +3997,7 @@ begin
   
   Main.DeduseVarsTypes(
     anvn,asvn,aovn,
-    gnvn,gsvn,new HashSet<string>,
+    gnvn,gsvn,nil,
     lnvn,lsvn,lovn,
     true, true,
     nNumChecks, nStrChecks
