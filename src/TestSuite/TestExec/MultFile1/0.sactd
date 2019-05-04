@@ -3,8 +3,13 @@
  (file Main.sac)
 \#
 !StartPos [Const]
+n=2
+Jump "F2.sac\#lbl1" [Const]
+
+ (file F2.sac)
+\#lbl1
 Sleep 10 [Const]
-Jump "Main.sac\#" [Const]
+Jump "F2.sac\#lbl1" [Const]
 
 #ExpOtp
 %aborted

@@ -784,7 +784,7 @@ type
     Simplify(e.Optimize(nvn,svn), nvn,svn,nil);
     
     public function FinalOptimize(prev_bls: sequence of StmBlock; nvn,svn,ovn: HashSet<string>): StmBase; override :=
-    Simplify(e.Optimize(nvn,svn), nvn,svn,ovn);
+    Simplify(e.FinalOptimize(nvn,svn,ovn), nvn,svn,ovn);
     
     public function ReplaceVar(vname: string; oe: OptExprBase; envn,esvn,eovn: array of string): StmBase; override :=
     Simplify(self.e.ReplaceVar(vname, oe, envn,esvn,eovn), nil,nil,nil);
@@ -5586,13 +5586,17 @@ type
   OptBlockBackupData = record
     
     stm_lst_ind: integer;
+    nvn,svn,ovn: array of string;
     var_lst: List<ExprStmOptContainer>;
     var_once_used: Dictionary<ExprStmOptContainer, StmBase>;
     var_replacements: Dictionary<string, OptExprWrapper>;
     
-    constructor(stm_lst_ind: integer; var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var_replacements: Dictionary<string, OptExprWrapper>);
+    constructor(stm_lst_ind: integer; nvn,svn,ovn: HashSet<string>; var_lst: List<ExprStmOptContainer>; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var_replacements: Dictionary<string, OptExprWrapper>);
     begin
       self.stm_lst_ind := stm_lst_ind;
+      self.nvn := nvn.ToArray;
+      self.svn := svn.ToArray;
+      self.ovn := ovn?.ToArray;
       self.var_lst := var_lst.ToList;
       self.var_once_used := var_once_used.ToDictionary;
       self.var_replacements := var_replacements.ToDictionary;
@@ -5617,13 +5621,13 @@ type
 ///opt_proc         : Selector then uses FinalOtimize if posible. Otherwise it's same as mini_opt_proc
 ///mini_opt_proc    : Selector then only does non-final Optimize
 ///
-function GetBlockChain(org_bl, bl: StmBlock;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock;   var nvn: HashSet<string>;var svn: HashSet<string>;var ovn: HashSet<string>;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
 begin
   var curr := bl;
   
   while curr <> nil do
   begin
-    {$region Chech loop}
+    {$region Check loop}
     
     if prev_bls.ContainsKey(curr) then
     begin
@@ -5639,6 +5643,9 @@ begin
       begin
         org_bl.next := curr;
         stm_lst.RemoveRange(ind, stm_lst.Count-ind);
+        nvn := bd.nvn.ToHashSet;
+        svn := bd.svn.ToHashSet;
+        ovn := bd.ovn?.ToHashSet;
         var_lst := bd.var_lst;
         var_once_used := bd.var_once_used;
         var_replacements := bd.var_replacements;
@@ -5648,13 +5655,14 @@ begin
       
     end;
     
-    {$endregion Chech loop}
+    {$endregion Check loop}
     
     {$region Init}
     
     prev_bls.Add(curr,
       new OptBlockBackupData(
         stm_lst.Count,
+        nvn,svn,ovn,
         var_lst,
         var_once_used,
         var_replacements
@@ -5835,12 +5843,13 @@ begin
           begin
             var backup := new OptBlockBackupData(
               stm_lst.Count,
+              nvn,svn,ovn,
               var_lst,
               var_once_used,
               var_replacements
             );
             
-            var res := GetBlockChain(org_bl,occ.CalledBlock, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
+            var res := GetBlockChain(org_bl,occ.CalledBlock, nvn,svn,ovn, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
             case res of
               GBCR_done: ;
               
@@ -5855,6 +5864,9 @@ begin
               GBCR_nonconst_context_jump:
               begin
                 stm_lst.RemoveRange(backup.stm_lst_ind, stm_lst.Count-backup.stm_lst_ind);
+                nvn := backup.nvn.ToHashSet;
+                svn := backup.svn.ToHashSet;
+                ovn := backup.ovn?.ToHashSet;
                 var_lst := backup.var_lst;
                 var_once_used := backup.var_once_used;
                 var_replacements := backup.var_replacements;
@@ -5893,7 +5905,7 @@ begin
   Result := GBCR_done;
 end;
 
-function GetBlockChain(curr: StmBlock; allow_final_opt: boolean): List<StmBase>;
+function GetBlockChain(curr: StmBlock; allow_final_opt: boolean; waiting: HashSet<StmBlock>): List<StmBase>;
 begin
   
   var prev_bls := new Dictionary<StmBlock,OptBlockBackupData>;
@@ -5913,7 +5925,7 @@ begin
     opt_proc := stm->stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn) else
     opt_proc := mini_opt_proc;
   
-  var res := GetBlockChain(curr,curr, prev_bls,stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
+  var res := GetBlockChain(curr,curr, nvn,svn,ovn, prev_bls,stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
   
   Result := new List<StmBase>(stm_lst.Sum(l->l.Count));
   foreach var l in stm_lst do Result += l;
@@ -5960,8 +5972,10 @@ begin
     GBCR_nonconst_context_jump:
       curr.next := nil;
     
-    GBCR_all_loop,
-    GBCR_found_loop: ;
+    GBCR_all_loop: ;
+    
+    GBCR_found_loop:
+      waiting += curr.next;
     
   end;
   
@@ -5980,7 +5994,7 @@ begin
       SngDefConsts[key] := nil; // Они больше никогда не понадобятся. Но для ExecutingContext.SetVar надо всё же оставить ключи
   
   var try_opt_again := true;
-  var dyn_refs := new List<StmBlockRef>;
+  var dyn_refs := new List<DynamicStmBlockRef>;
   while try_opt_again do
   begin
     
@@ -5998,33 +6012,34 @@ begin
     
     var done := new HashSet<StmBlock>;
     
+    var no_dyn_refs := not
+      (start_pos_def?bls.Values.Where(bl->bl.StartPos):bls.Values)
+      .SelectMany(bl->bl.GetAllFRefs)
+      .Any(ref->ref is DynamicStmBlockRef);
+    
     var not_all_waiting :=
-      start_pos_def and
-      bls.Values
-        .Where(bl->bl.StartPos)
-        .SelectMany(bl->bl.GetAllFRefs)
-        .All(ref->ref is StaticStmBlockRef)
-      ;
+      start_pos_def or
+      not no_dyn_refs;
     
     var waiting := new HashSet<StmBlock>(
-      not_all_waiting?
+      start_pos_def?
       bls.Values.Where(bl->bl.StartPos):
       bls.Values
     );
     
-    var new_dyn_refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).Where(ref->ref is DynamicStmBlockRef).ToList;
+    var new_dyn_refs := bls.Values.SelectMany(bl->bl.GetAllFRefs).OfType&<DynamicStmBlockRef>.ToList;
     try_opt_again := (new_dyn_refs.Count <> 0) and dyn_refs.Except(new_dyn_refs).Any;
     dyn_refs := new_dyn_refs;
     
     var allow_final_opt := new List<StmBlock>;
-    if dyn_refs.Count=0 then
+    if no_dyn_refs then
     begin
       allow_final_opt.AddRange(waiting);
       
       foreach var bl in waiting do
       begin
         foreach var ref in bl.GetAllFRefs do
-          allow_final_opt.Remove(StaticStmBlockRef(ref).bl);
+          allow_final_opt.Remove((ref as StaticStmBlockRef).bl);
         allow_final_opt.Remove(bl.next);
       end;
       
@@ -6041,7 +6056,7 @@ begin
       if curr=nil then continue;
       if not done.Add(curr) then continue;
       
-      var stms := GetBlockChain(curr, allow_final_opt.Contains(curr));
+      var stms := GetBlockChain(curr, allow_final_opt.Contains(curr), waiting);
       
       try_opt_again :=
         try_opt_again or
@@ -6064,11 +6079,10 @@ begin
       end;
     end;
     
-    if not settings.lib_mode then
-      if not done.Any(bl->bl.GetAllFRefs.Any(ref->ref is DynamicStmBlockRef)) then
-        foreach var kvp in bls.ToList do
-          if not done.Contains(kvp.Value) then
-            bls.Remove(kvp.Key);
+    if no_dyn_refs and not settings.lib_mode then
+      foreach var kvp in bls.ToList do
+        if not done.Contains(kvp.Value) then
+          bls.Remove(kvp.Key);
     
     {$endregion Block chaining}
     
