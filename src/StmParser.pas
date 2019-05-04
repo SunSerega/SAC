@@ -5489,6 +5489,8 @@ end;
 
 {$region Script optimization}
 
+{$region Misc types}
+
 type
   GBCResT = (
     GBCR_done = $0,
@@ -5598,6 +5600,8 @@ type
     
   end;
 
+{$endregion Misc types}
+
 ///Chains multiple blocks, optimizing operators and storing all found once in a single List
 ///
 ///org_bl           : original block from which all GetBlockChain recursion levels started
@@ -5619,6 +5623,8 @@ begin
   
   while curr <> nil do
   begin
+    {$region Chech loop}
+    
     if prev_bls.ContainsKey(curr) then
     begin
       var bd := prev_bls[curr];
@@ -5642,6 +5648,10 @@ begin
       
     end;
     
+    {$endregion Chech loop}
+    
+    {$region Init}
+    
     prev_bls.Add(curr,
       new OptBlockBackupData(
         stm_lst.Count,
@@ -5655,9 +5665,12 @@ begin
     
     var next := curr.next;
     
+    {$endregion Init}
     
+    {$region Optimize all}
     
     foreach var stm in curr.stms do
+      {$region Handle context exit}
       if stm is OperReturn then
       begin
         Result := GBCR_done;
@@ -5669,7 +5682,12 @@ begin
         curr_stms += stm;
         exit;
       end else
+      {$endregion Handle context exit}
       begin
+        var opt_stm := stm;
+        
+        {$region Handle prev vars}
+        
         //these things needs to be procesed:
         //
         //1. if something uses var from expr_lst
@@ -5685,16 +5703,20 @@ begin
         // - If it's used by some other var from expr_lst - it's already isn't is the list, because of [2.]
         //
         //also:
-        //4. what if 1 vars are overriding it's own param?
+        //4. what if 1 var is overriding it's own param?
         //5. what if 2 vars are overriding each others params?
         
         // [4.] and [5.] - ExprStmOptContainer.GetVarChain skips vars it has already found
         
-        var opt_stm := stm;
+        {$region var_lst}
         
         foreach var ec in var_lst do
           if (not ec.param_overriten) and ec.used_vars.Any(opt_stm.DoesRewriteVar) then
             ec.param_overriten := true;
+        
+        {$endregion var_lst}
+        
+        {$region var_once_used}
         
         foreach var ec in var_once_used.Keys.ToArray do
           if stm.FindVarUsages(ec.e.vname).Any then
@@ -5732,6 +5754,10 @@ begin
             var_once_used.Remove(ec);
           end;
         
+        {$endregion var_once_used}
+        
+        {$region var_replacements}
+        
         foreach var vname in var_replacements.Keys.ToArray do
         begin
           
@@ -5751,6 +5777,10 @@ begin
           
         end;
         
+        {$endregion var_replacements}
+        
+        {$endregion Handle prev vars}
+        
         if opt_stm is ExprStm(var es) then
         begin
           es := ExprStm(mini_opt_proc(es));
@@ -5762,7 +5792,8 @@ begin
         end else
         begin
           
-          // [1.] + [2.]
+          {$region [1.], [2.]}
+          
           var PopedVars := new HashSet<ExprStmOptContainer>;
           foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
           begin
@@ -5778,20 +5809,27 @@ begin
           end;
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
-          opt_stm := opt_proc(opt_stm);
+          {$endregion [1.], [2.]}
           
+          opt_stm := opt_proc(opt_stm);
           if opt_stm=nil then continue;
           
           // [3.]
           var_lst.RemoveAll(ec->opt_stm.DoesRewriteVar(ec.e.vname));
           
+          {$region Handle context jumps}
           
+          {$region OperConstJump}
           
           if opt_stm is OperConstJump(var ocj) then
           begin
             next := ocj.CalledBlock;
             break;
           end else
+          
+          {$endregion OperConstJump}
+          
+          {$region OperConstCall}
           
           if opt_stm is OperConstCall(var occ) then
           begin
@@ -5827,20 +5865,27 @@ begin
             
           end else
           
+          {$endregion OperConstCall}
+          
+          {$region other (non const) IJumpCallOper}
+          
           if opt_stm is IJumpCallOper then
           begin
             curr_stms += opt_stm;
             Result := GBCR_nonconst_context_jump;
             exit;
           end else
-            
-            curr_stms += opt_stm;
+          
+          {$endregion other (non const) IJumpCallOper}
+          
+          {$endregion Handle context jumps}
+            curr_stms += opt_stm; // no context jump
           
         end;
         
       end;
     
-    
+    {$endregion Optimize all}
     
     curr := next;
   end;
@@ -5932,7 +5977,7 @@ begin
   
   if not settings.lib_mode then
     foreach var key in SngDefConsts.Keys.ToArray do
-      SngDefConsts[key] := nil;//Они больше никогда не понадобятся. Но для ExecutingContext.SetVar надо всё же оставить ключи
+      SngDefConsts[key] := nil; // Они больше никогда не понадобятся. Но для ExecutingContext.SetVar надо всё же оставить ключи
   
   var try_opt_again := true;
   var dyn_refs := new List<StmBlockRef>;
