@@ -1,0 +1,44 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos [Const]
+MouseP 1 [Const]
+Sleep 20 [Const]
+GetMousePos mx my [Const]
+MousePos (mx+-49) my Nums={mx, my}
+y=4
+x=38
+Jump "Main.sac\#ForX" [Wrapped]
+
+\#ForX
+MouseP 1 [Const]
+Sleep 20 [Const]
+GetMousePos mx my [Const]
+MousePos (mx+-49) my Nums={mx, my}
+x=(x-1) Objs={x}
+JumpIf x < 1 "Main.sac\#ForXBreak" "Main.sac\#ForX" Objs={x}
+
+\#ForXBreak
+y=(y-1) Objs={y}
+JumpIf y < 1 "Main.sac\#ResetAll" "Main.sac\#ForYReset" Objs={y}
+
+\#ForYReset
+GetMousePos mx my [Const]
+MousePos (mx+1911) (my+-49) Nums={mx, my}
+MouseP 1 [Const]
+Sleep 20 [Const]
+GetMousePos mx my [Const]
+MousePos (mx+-49) my Nums={mx, my}
+x=38
+Jump "Main.sac\#ForX" [Wrapped]
+
+\#ResetAll
+Susp [Const]
+MouseP 1 [Const]
+Sleep 20 [Const]
+GetMousePos mx my [Const]
+MousePos (mx+-49) my Nums={mx, my}
+y=4
+x=38
+Jump "Main.sac\#ForX" [Wrapped]

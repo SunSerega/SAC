@@ -1,0 +1,22 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos [Const]
+Output "1" [Const]
+Output "3" [Const]
+Output "5" [Const]
+Return [Const]
+
+\#2
+!StartPos [Const]
+Output "2" [Const]
+Output "3" [Const]
+Output "4" [Const]
+Return [Const]
+
+#ExpOtp
+1
+3
+5
+%stoped

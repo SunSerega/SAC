@@ -1,0 +1,20 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+Output "0" [Const]
+Output "2" [Const]
+Return [Const]
+
+\#1
+Output "1" [Const]
+Return [Const]
+
+\#2
+Output "2" [Const]
+Return [Const]
+
+#ExpOtp
+0
+2
+%stoped

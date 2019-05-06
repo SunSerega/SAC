@@ -1,0 +1,14 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+!StartPos [Const]
+Output "0" [Const]
+Output "1" [Const]
+Output "2" [Const]
+Call "Main.sac\#3" [Const]
+Return [Const]
+
+\#3
+Output "3" [Const]
+Jump "Main.sac\#3" [Const]

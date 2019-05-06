@@ -1,6 +1,6 @@
 
-GetKey x
-GetKey y
+GetKey 1 x
+GetKey 1 y
 
 x=y+1
 y=x+1

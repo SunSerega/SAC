@@ -1,0 +1,23 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+Output "5" [Const]
+x=4
+Jump "Main.sac\#Loop" [Wrapped]
+
+\#Loop
+Output Str(x) Objs={x}
+x=(x-1) Objs={x}
+JumpIf x = 0 "Main.sac\#LoopBreak" "Main.sac\#Loop" Objs={x}
+
+\#LoopBreak
+Return [Const]
+
+#ExpOtp
+5
+4
+3
+2
+1
+%stoped

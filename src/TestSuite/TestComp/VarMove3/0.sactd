@@ -1,0 +1,10 @@
+﻿
+#ExpOptCode
+ (file Main.sac)
+\#
+GetKey 1 x [Const]
+GetKey 1 y [Const]
+KeyP 1 [Const]
+x=(y+1) Nums={y}
+KeyP (x+x+1) Nums={x}
+Return [Const]

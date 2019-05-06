@@ -515,6 +515,9 @@ type
     function ReplaceVar(vn: string; oe: OptExprBase): IOptExpr;
     procedure DeduseVarsTypes(anvn,asvn,aovn, gnvn,gsvn,govn, lnvn,lsvn,lovn: HashSet<string>; CB_N, CB_S: boolean; NumChecks, StrChecks: Dictionary<string, ExprContextArea>);
     function IsSame(oe: IOptExpr): boolean;
+    function NVarUseCount(id: integer): integer;
+    function SVarUseCount(id: integer): integer;
+    function OVarUseCount(id: integer): integer;
     
     function Optimize(nvn, svn, ovn: array of string): IOptExpr;
     procedure SetWrapper(wrapper: OptExprWrapper);
@@ -563,7 +566,7 @@ type
     public function GetResType: System.Type; abstract;
     
     protected function TransformAllSubExprs(f: IOptExpr->IOptExpr): IOptExpr; virtual := self;
-    protected procedure ExecuteOnEverySubExpr(p: IOptExpr->()); virtual;
+    protected procedure ExecuteOnEverySubExpr(p: IOptExpr->());
     begin
       TransformAllSubExprs(
         oe->
@@ -572,6 +575,18 @@ type
           Result := oe;
         end
       );
+    end;
+    protected function SelectAllSubExprs<T>(f: IOptExpr->T): List<T>;
+    begin
+      var res := new List<T>;
+      TransformAllSubExprs(
+        oe->
+        begin
+          res += f(oe);
+          Result := oe;
+        end
+      );
+      Result := res;
     end;
     
     
@@ -612,6 +627,15 @@ type
     end;
     
     public function IsSame(oe: IOptExpr): boolean; abstract;
+    
+    public function NVarUseCount(id: integer): integer; virtual :=
+    SelectAllSubExprs(oe->oe.NVarUseCount(id)).Sum;
+    
+    public function SVarUseCount(id: integer): integer; virtual :=
+    SelectAllSubExprs(oe->oe.SVarUseCount(id)).Sum;
+    
+    public function OVarUseCount(id: integer): integer; virtual :=
+    SelectAllSubExprs(oe->oe.OVarUseCount(id)).Sum;
     
     public procedure Save(bw: System.IO.BinaryWriter); virtual :=
     raise new SaveNotImplementedException(self);
@@ -2577,6 +2601,9 @@ type
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptNVarExpr(var noe)) and (noe.id=self.id);
     
+    public function NVarUseCount(id: integer): integer; override :=
+    integer(self.id = id);
+    
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
     
@@ -2624,6 +2651,9 @@ type
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptSVarExpr(var noe)) and (noe.id=self.id);
     
+    public function SVarUseCount(id: integer): integer; override :=
+    integer(self.id = id);
+    
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
     
@@ -2670,6 +2700,9 @@ type
     
     public function IsSame(oe: IOptExpr): boolean; override :=
     (oe is OptOVarExpr(var noe)) and (noe.id=self.id);
+    
+    public function OVarUseCount(id: integer): integer; override :=
+    integer(self.id = id);
     
     public function GetCalc: sequence of Action0; override :=
     new Action0[](self.Calc);
@@ -2760,10 +2793,32 @@ type
     public function ReplaceVar(vn: string; oe: OptExprWrapper) :=
     ReplaceVar(vn, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
     
-    public function DoesUseVar(vn: string) :=
-      n_vars_names.Contains(vn) or
-      s_vars_names.Contains(vn) or
-      o_vars_names.Contains(vn);
+    public function VarUseCount(vn: string): integer;
+    begin
+      var ind: integer;
+      
+      ind := n_vars_names.IndexOf(vn);
+      if ind<>-1 then
+      begin
+        Result := GetMain.NVarUseCount(ind);
+        exit;
+      end;
+      
+      ind := s_vars_names.IndexOf(vn);
+      if ind<>-1 then
+      begin
+        Result := GetMain.SVarUseCount(ind);
+        exit;
+      end;
+      
+      ind := o_vars_names.IndexOf(vn);
+      if ind<>-1 then
+      begin
+        Result := GetMain.OVarUseCount(ind);
+        exit;
+      end;
+      
+    end;
     
     public procedure ResetCalc;
     begin

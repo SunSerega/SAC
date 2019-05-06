@@ -1,0 +1,24 @@
+
+!StartPos
+#1
+Output 1
+x=3
+Jump "#3"
+
+#2
+!StartPos
+Output 2
+x=5
+Jump "#3"
+
+#3
+Output 3
+JumpIf x = 5 "#4" "#5" //при трансформации - этот оператор будет и в #1, и в #2, надо чтоб next обоих правильно менялся
+
+#4
+Output 4
+Return
+
+#5
+Output 5
+Return

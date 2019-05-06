@@ -1,5 +1,4 @@
 ﻿unit StmParser;
-//ToDo заменить FindVarUsages на VarUseCount, теперь точно, раз ReplaceVar возвращает новый экземпляр
 //ToDo пройтись отладчиком по всему что будет если разворачивать тот последний скрипт с перекликиванием области
 //ToDo в тестере сделать чтоб заменялся весь .sactd файл (вместо добавления в конце)
 //ToDo в тестере проверять состояние кода после каждой из 10 доп оптимизаций
@@ -12,6 +11,8 @@
 
 
 
+//ToDo GetKey и т.п. можно убирать если их переменная не используется/перезаписана сразу
+//ToDo параметр для устоновки комбинации клавишь запуска скрипта
 //ToDo добавить в SAC защиту от багов. Если компилируется долго или ошибка - его всё должно обрабатывать
 //ToDo задокументировать возможность добавлять табы в начале каждой строчки
 //ToDo засовывать WW и WH в основные константы... наверное - не лучшая идея. Лучше хранить их в отдельном словаре
@@ -347,8 +348,8 @@ type
   end;
   EntryPointNotFoundException = class(FileCompilingException)
     
-    public constructor(o: object) :=
-    inherited Create(o, $'Entry point "{o}" not found');
+    public constructor(ep: string) :=
+    inherited Create(ep, $'Entry point "{ep}" not found');
     
   end;
   CanOnlyStartFromStartPosException = class(FileCompilingException)
@@ -591,8 +592,8 @@ type
     public function ReplaceVar(vname: string; oe: OptExprWrapper) :=
     ReplaceVar(vname, oe.GetMain, oe.n_vars_names, oe.s_vars_names, oe.o_vars_names);
     
-    public function FindVarUsages(vn: string): sequence of OptExprWrapper :=
-    GetAllExprs.Where(oe->oe.DoesUseVar(vn));
+    public function VarUseCount(vn: string): integer :=
+    GetAllExprs.Sum(oe->oe.VarUseCount(vn));
     
     public procedure ResetExprDelegats :=
     foreach var oe in GetAllExprs do oe.ResetCalc;
@@ -1073,7 +1074,7 @@ type
       if settings.lib_mode then raise new CannotExecInLibModeException(nil);
       
       if not entry_point.Contains('#') then entry_point += '#';
-      if not bls.ContainsKey(entry_point) then raise new EntryPointNotFoundException(nil);
+      if not bls.ContainsKey(entry_point) then raise new EntryPointNotFoundException(entry_point);
       var ec := new ExecutingContext(self, bls[entry_point], 10000);
       if start_pos_def and not ec.curr.StartPos then raise new CanOnlyStartFromStartPosException(nil);
       while ec.ExecuteNext do;
@@ -3856,7 +3857,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(5));
-      bw.Write(byte($80 or 1));
+      bw.Write(byte($80 or 2));
       CalledBlock.SaveId(bw);
     end;
     
@@ -3875,7 +3876,7 @@ type
     new Action<ExecutingContext>[](self.Calc);
     
     public function ToString: string; override :=
-    $'Call {StaticStmBlockRef.Create(CalledBlock).ToString} [Wrapped]';
+    $'Jump {StaticStmBlockRef.Create(CalledBlock).ToString} [Wrapped]';
     
   end;
   OperConstCall = sealed class(OperStmBase, ICallOper, IFileRefStm)
@@ -3978,7 +3979,7 @@ type
     begin
       inherited Save(bw);
       bw.Write(byte(5));
-      bw.Write(byte($80 or 3));
+      bw.Write(byte($80 or 4));
       CalledBlock.SaveId(bw);
     end;
     
@@ -5503,12 +5504,14 @@ type
   ExprStmOptContainer = class
     
     e: ExprStm;
+    chain_pos: integer;
     used_vars := new HashSet<string>;
     param_overriten := false;
     
-    constructor(e: ExprStm);
+    constructor(e: ExprStm; chain_pos: integer);
     begin
       self.e := e;
+      self.chain_pos := chain_pos;
       
       self.used_vars += e.e.n_vars_names;
       self.used_vars += e.e.s_vars_names;
@@ -5516,30 +5519,37 @@ type
       
     end;
     
-    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, StmBase>): sequence of ExprStmOptContainer;
+    static function GetVarChain(done: HashSet<ExprStmOptContainer>; lst: List<ExprStmOptContainer>; poped_by: StmBase; var_once_used: Dictionary<ExprStmOptContainer, StmBase>; chain_pos: integer): sequence of ExprStmOptContainer;
     begin
+//      var res := new List<ExprStmOptContainer>;
+      
       foreach var ec in lst do
       begin
-        var vu := poped_by.FindVarUsages(ec.e.vname).ToArray;
-        if
-          (vu.Length=0) and not
-          ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname))
-        then continue;
+        if ec.e=poped_by then continue;
+        if ec.chain_pos>chain_pos then break;
+        var vuc := poped_by.VarUseCount(ec.e.vname);
         
-        if done.Contains(ec) then
+        if ec.used_vars.Any(pname->poped_by.DoesRewriteVar(pname)) then
+          ec.param_overriten := true else
+        if vuc=0 then
+          continue;
+        
+        if not done.Add(ec) then
         begin
           var_once_used.Remove(ec);
           continue;
         end;
         
-        if (vu.Length=1) and not ec.param_overriten then var_once_used.Add(ec, poped_by);
+        if (vuc=1) and not ec.param_overriten then var_once_used.Add(ec, poped_by);
         
-        
-        done += ec;
-        yield sequence GetVarChain(done, lst, ec.e, var_once_used);
+//        res.AddRange( GetVarChain(done, lst, ec.e, var_once_used, ec.chain_pos) );
+//        res += ec;
+        yield sequence GetVarChain(done, lst, ec.e, var_once_used, ec.chain_pos);
         yield ec;
         
       end;
+      
+//      Result := res;
     end;
     
     static function GetFinalVarChain(stms: List<StmBase>; vars: sequence of ExprStm; opt_proc: StmBase->StmBase): sequence of StmBase;
@@ -5558,16 +5568,18 @@ type
           var next := curr.Next;
           
           foreach var stm in stms do
-            if stm.FindVarUsages(curr.Value.vname).Any then
+            if stm.VarUseCount(curr.Value.vname) <> 0 then
             begin
               var opt := opt_proc(curr.Value);
               last += opt;
               left.Remove(curr.Value);
               nan_new := false;
             end;
-          stms += last;
+          
 //          res += last;
           yield sequence last;
+          
+          stms += last;
           last.Clear;
           
           curr := next;
@@ -5576,6 +5588,7 @@ type
         if nan_new then break;
       end;
       
+//      Result := res;
     end;
     
     public function ToString: string; override :=
@@ -5610,6 +5623,7 @@ type
 ///
 ///org_bl           : original block from which all GetBlockChain recursion levels started
 ///bl               : block from this GetBlockChain recursion level started. If OperCall found - this will be different from org_bl
+///chain_pos        : number of stm's which has been already processed. Used by vars to determin order in GetVarChain
 ///
 ///prev_bls         : needed to backup everything when GBCR_found_loop
 ///stm_lst          : every sub list is taken from every block. This is Output
@@ -5621,7 +5635,7 @@ type
 ///opt_proc         : Selector then uses FinalOtimize if posible. Otherwise it's same as mini_opt_proc
 ///mini_opt_proc    : Selector then only does non-final Optimize
 ///
-function GetBlockChain(org_bl, bl: StmBlock;   var nvn: HashSet<string>;var svn: HashSet<string>;var ovn: HashSet<string>;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
+function GetBlockChain(org_bl, bl: StmBlock; var chain_pos: integer;   var nvn: HashSet<string>; var svn: HashSet<string>; var ovn: HashSet<string>;   prev_bls: Dictionary<StmBlock, OptBlockBackupData>; stm_lst: List<List<StmBase>>;   var var_lst: List<ExprStmOptContainer>; var var_once_used: Dictionary<ExprStmOptContainer, StmBase>; var var_replacements: Dictionary<string, OptExprWrapper>;   opt_proc, mini_opt_proc: StmBase->StmBase): GBCResT;
 begin
   var curr := bl;
   
@@ -5675,7 +5689,7 @@ begin
     
     {$endregion Init}
     
-    {$region Optimize all}
+    {$region Optimize all stm's}
     
     foreach var stm in curr.stms do
       {$region Handle context exit}
@@ -5692,6 +5706,7 @@ begin
       end else
       {$endregion Handle context exit}
       begin
+        chain_pos += 1;
         var opt_stm := stm;
         
         {$region Handle prev vars}
@@ -5727,14 +5742,18 @@ begin
         {$region var_once_used}
         
         foreach var ec in var_once_used.Keys.ToArray do
-          if stm.FindVarUsages(ec.e.vname).Any then
+          if opt_stm.VarUseCount(ec.e.vname) <> 0 then
             var_once_used.Remove(ec) else
-          if stm.DoesRewriteVar(ec.e.vname) then
+          if opt_stm.DoesRewriteVar(ec.e.vname) then
           begin
-            var search_state := 0;
-            var rstm := var_once_used[ec];
             var estm := ec.e;
+            var rstm := var_once_used[ec];
+            var opt_rstm := rstm?.ReplaceVar(ec.e.vname, ec.e.e);
+            foreach var key in var_once_used.Keys.ToArray do if var_once_used[key]=estm then var_once_used[key] := opt_rstm;
+            var_once_used.Remove(ec);
+            if opt_rstm=nil then continue;
             
+            var search_state := 0;
             for var ind1 := stm_lst.Count-1 downto 0 do
               if search_state=2 then break else
                 for var ind2 := stm_lst[ind1].Count-1 downto 0 do
@@ -5743,7 +5762,7 @@ begin
                     0:
                     if stm_lst[ind1][ind2] = rstm then
                     begin
-                      stm_lst[ind1][ind2] := rstm.ReplaceVar(estm.vname, estm.e);
+                      stm_lst[ind1][ind2] := opt_rstm;
                       search_state := 1;
                     end;
                     
@@ -5756,10 +5775,8 @@ begin
                     end;
                     
                   end;
-            
             if search_state<>2 then raise new System.InvalidOperationException('Error replacing var');
             
-            var_once_used.Remove(ec);
           end;
         
         {$endregion var_once_used}
@@ -5795,7 +5812,7 @@ begin
           
           if es.e.GetMain is IOptSimpleExpr then
             var_replacements.Add(es.vname, es.e) else
-            var_lst += new ExprStmOptContainer(es);
+            var_lst += new ExprStmOptContainer(es, chain_pos);
           
         end else
         begin
@@ -5803,9 +5820,17 @@ begin
           {$region [1.], [2.]}
           
           var PopedVars := new HashSet<ExprStmOptContainer>;
-          foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used) do
+          var added_oess := new List<StmBase>;
+          foreach var ec in ExprStmOptContainer.GetVarChain(PopedVars, var_lst, opt_stm, var_once_used, chain_pos) do
           begin
-            curr_stms += opt_proc(ec.e);
+            var oes := opt_proc(ec.e);
+            
+            foreach var key in var_once_used.Keys.ToArray do
+              if var_once_used[key] = ec.e then
+                var_once_used[key] := oes;
+            
+            curr_stms += oes;
+            added_oess += oes;
             
             foreach var kvp in var_replacements.ToArray do
               if
@@ -5817,9 +5842,17 @@ begin
           end;
           var_lst.RemoveAll(ec->PopedVars.Contains(ec));
           
+          foreach var ec in added_oess do
+            foreach var key in var_once_used.Keys.ToArray do
+              if not PopedVars.Contains(key) then
+                if ec.VarUseCount(key.e.vname) <> 0 then
+                  var_once_used.Remove(key);
+          
           {$endregion [1.], [2.]}
           
+          var pre_opt_stm := opt_stm;
           opt_stm := opt_proc(opt_stm);
+          foreach var key in var_once_used.Keys.ToArray do if (var_once_used[key]=stm) or (var_once_used[key]=pre_opt_stm) then var_once_used[key] := opt_stm;
           if opt_stm=nil then continue;
           
           // [3.]
@@ -5849,7 +5882,7 @@ begin
               var_replacements
             );
             
-            var res := GetBlockChain(org_bl,occ.CalledBlock, nvn,svn,ovn, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
+            var res := GetBlockChain(org_bl,occ.CalledBlock,chain_pos, nvn,svn,ovn, prev_bls.ToDictionary, stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
             case res of
               GBCR_done: ;
               
@@ -5897,7 +5930,7 @@ begin
         
       end;
     
-    {$endregion Optimize all}
+    {$endregion Optimize all stm's}
     
     curr := next;
   end;
@@ -5910,6 +5943,7 @@ begin
   
   var prev_bls := new Dictionary<StmBlock,OptBlockBackupData>;
   var stm_lst := new List<List<StmBase>>;
+  var chain_pos := 0;
   
   var var_lst := new List<ExprStmOptContainer>;
   var var_once_used := new Dictionary<ExprStmOptContainer, StmBase>;
@@ -5925,7 +5959,7 @@ begin
     opt_proc := stm->stm.FinalOptimize(prev_bls.Keys, nvn,svn,ovn) else
     opt_proc := mini_opt_proc;
   
-  var res := GetBlockChain(curr,curr, nvn,svn,ovn, prev_bls,stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
+  var res := GetBlockChain(curr,curr, chain_pos, nvn,svn,ovn, prev_bls,stm_lst, var_lst,var_once_used,var_replacements, opt_proc,mini_opt_proc);
   
   Result := new List<StmBase>(stm_lst.Sum(l->l.Count));
   foreach var l in stm_lst do Result += l;
@@ -5934,11 +5968,14 @@ begin
     
     GBCR_done,
     GBCR_context_halt:
-      foreach var ec in var_once_used.Keys do
+      foreach var ec in var_once_used.Keys.ToArray do
       begin
         Result.Remove(ec.e);
         var rstm := var_once_used[ec];
-        Result[Result.LastIndexOf(rstm)] := rstm.ReplaceVar(ec.e.vname, ec.e.e);
+        var opt_rstm := rstm?.ReplaceVar(ec.e.vname, ec.e.e);
+        foreach var key in var_once_used.Keys.ToArray do if var_once_used[key]=ec.e then var_once_used[key] := opt_rstm;
+        if rstm=nil then continue;
+        Result[Result.LastIndexOf(rstm)] := opt_rstm;
       end;
     
     GBCR_found_loop,

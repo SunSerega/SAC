@@ -221,7 +221,7 @@ type
         if exp_opt_code=nil then
         begin
           lock self do System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
-          writeln($'Warning! .sactd updated for {curr_dir}');
+          writeln($'Warning! .sactd updated for {curr_dir}{#10}');
           exp_opt_code := opt_code;
         end else
         if opt_code <> exp_opt_code then
@@ -230,7 +230,7 @@ type
             DialogResult.Yes:
             begin
               lock self do System.IO.File.AppendAllText(sfn, #10' #ExpOptCode'#10 + opt_code + #10);
-              writeln($'%Warning! .sactd updated for {curr_dir}');
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
               exp_opt_code := opt_code;
             end;
             
@@ -358,7 +358,7 @@ type
         if exp_exec_err='' then
         begin
           lock self do System.IO.File.AppendAllText(sfn, #10' #ExpExecErr'#10 + err_text + #10);
-          writeln($'Warning! .sactd updated for {curr_dir}');
+          writeln($'Warning! .sactd updated for {curr_dir}{#10}');
         end else
         if exp_exec_err<>err_text then
         case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'exp:'#10 + exp_exec_err + #10#10#10'got:'#10 + err_text + #10#10#10'error:'#10 + e.ToString + #10#10#10'Add this to expected errors?', $'Wrong error text', MessageBoxButtons.YesNoCancel) of
@@ -393,7 +393,7 @@ type
         if exp_otp=nil then
         begin
           lock self do System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10);
-          writeln($'Warning! .sactd updated for {curr_dir}');
+          writeln($'Warning! .sactd updated for {curr_dir}{#10}');
         end else
         if otp_str <> exp_otp then
           case MessageBox.Show(curr_dir + ':'#10#10'src:'#10 + ReadAllText(curr_dir + '\' + main_fname).Trim(#10) + #10#10#10'code:'#10 + exp_opt_code + #10#10#10'exp:'#10 + exp_otp + #10#10#10'got:'#10 + otp_str + #10#10#10'Update expected output?', $'Wrong output', MessageBoxButtons.YesNoCancel) of
@@ -401,7 +401,7 @@ type
             DialogResult.Yes:
             begin
               lock self do System.IO.File.AppendAllText(sfn, #10' #ExpOtp'#10 + otp_str + #10);
-              writeln($'%Warning! .sactd updated for {curr_dir}');
+              writeln($'%Warning! .sactd updated for {curr_dir}{#10}');
             end;
             
             DialogResult.Cancel: Halt;
