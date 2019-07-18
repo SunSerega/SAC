@@ -5912,6 +5912,15 @@ begin
           
           {$endregion OperConstCall}
           
+          {$region OperCallIf}
+          
+          if opt_stm is OperCallIf then
+          begin
+            curr_stms += opt_stm;
+          end else
+          
+          {$endregion OperCallIf}
+          
           {$region other (non const) IJumpCallOper}
           
           if opt_stm is IJumpCallOper then

@@ -1,7 +1,7 @@
 ﻿unit CompArgsData;
 
 //ToDo проверить issue
-// - #???1 (http://forum.mmcs.sfedu.ru/t/versiya-pascalabc-net-3-4/2303/178?u=sun_serega)
+// - #2046 (http://forum.mmcs.sfedu.ru/t/versiya-pascalabc-net-3-4/2303/178?u=sun_serega)
 
 interface
 
@@ -317,7 +317,7 @@ begin
       end;
       
     except
-      on _CompArgException do;
+      on ee: _CompArgException do; //ToDo #2046
     end;
     
     ArgBox.UpdatePosAll;
